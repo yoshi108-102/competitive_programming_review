@@ -66,6 +66,23 @@ EC2にIAMロールをアタッチ → EC2上のコードが自動で一時認証
 | 認証情報 | 永続的なアクセスキー | 一時的な認証情報 |
 | 推奨度 | 非推奨（Identity Centerへ移行） | 推奨 |
 
+## IAM Identity Center vs IAMロールの違い
+
+この2つは目的が違い、競合するものではなく組み合わせて使う。
+
+| | IAM Identity Center | IAMロール |
+|---|---|---|
+| 何を管理 | **誰が**AWSにアクセスできるか | **何が**できるか |
+| 対象 | 人間 | 人間、サービス、両方 |
+| 認証情報 | ブラウザログイン → 一時トークン | 一時的な認証情報を自動発行 |
+| 単体で使える？ | ×（ロールとの組み合わせが必要） | ○（LambdaなどサービスはロールだけでOK） |
+
+Identity Center = 「会社の入館証」（誰がビルに入れるか）
+IAMロール = 「部屋の鍵」（何の部屋にアクセスできるか）
+
+人間の場合: Identity Centerでログイン → IAMロールを引き受ける → 権限に応じた操作
+サービスの場合: IAMロールだけ（Lambda等はログイン不要、ロールを直接引き受ける）
+
 ## 参考資料
 
 - [Security best practices in IAM - AWS公式](https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html)
