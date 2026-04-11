@@ -13,6 +13,7 @@ DynamoDBのテーブルを3つ（users, submissions, problems）Terraformで定�
 
 - [DynamoDB キー設計 vs RDB 比較リファレンス](reference/dynamodb-keys-vs-rdb.md) — 詳細比較、Web検索ソース付き
 - [Terraform 基礎リファレンス](reference/terraform-basics.md) — HCL構文、variable/output/resource、backend、モジュール連携
+- [AWS認証のベストプラクティス](reference/aws-authentication.md) — IAM Identity Center、IAMロール、アクセスキーの比較
 
 ## 振り返り
 
