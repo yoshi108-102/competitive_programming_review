@@ -1,0 +1,142 @@
+# Terraform 既存コード解説
+
+既存の Terraform コードをブロックごとに解説する。
+基礎知識は [Terraform基礎リファレンス](reference/terraform-basics.md) を参照。
+
+---
+
+## terraform/main.tf
+
+### terraform ブロック — Terraform自体の設定
+
+```hcl
+terraform {
+  required_version = ">= 1.5.0"
+```
+Terraform 1.5.0 以上でないと動かない。チームでバージョン違いによる問題を防ぐ。
+
+```hcl
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+```
+AWS用プロバイダ（AWSのAPIを呼ぶプラグイン）を使う。`~> 5.0` は 5.x 系を使い、6.0以上は不可。→ [リファレンス: プロバイダとは](reference/terraform-basics.md)
+
+```hcl
+  backend "s3" {
+    bucket         = "atcoder-review-tfstate"
+    key            = "terraform.tfstate"
+    region         = "ap-northeast-1"
+    dynamodb_table = "atcoder-review-tflock"
+    encrypt        = true
+  }
+}
+```
+Terraformの状態ファイルをS3に保存する設定。`dynamodb_table` は同時実行を防ぐロック。→ [リファレンス: backend "s3" の詳細](reference/terraform-basics.md)
+
+### provider ブロック — AWS接続設定
+
+```hcl
+provider "aws" {
+  region = var.aws_region
+```
+どのAWSリージョンにリソースを作るか。`var.aws_region` = `"ap-northeast-1"`（東京）。→ [リファレンス: variableの参照](reference/terraform-basics.md)
+
+```hcl
+  default_tags {
+    tags = {
+      Project     = "atcoder-review"
+      ManagedBy   = "terraform"
+      Environment = var.environment
+    }
+  }
+}
+```
+このproviderで作る全リソースに自動でタグを付与する。AWSコンソールやコスト管理で「何のリソースか」を識別するためのラベル。→ [リファレンス: タグとは](reference/terraform-basics.md)
+
+---
+
+## terraform/variables.tf
+
+```hcl
+variable "aws_region" {
+  description = "AWS region"
+  type        = string
+  default     = "ap-northeast-1"
+}
+```
+東京リージョン。`main.tf` で `var.aws_region` として参照。→ [リファレンス: variableブロック](reference/terraform-basics.md)
+
+```hcl
+variable "environment" {
+  description = "Environment name"
+  type        = string
+  default     = "prod"
+}
+```
+環境名。リソース名やタグに使われる。dev/stagingを作る場合はここを変える。
+
+```hcl
+variable "project_name" {
+  description = "Project name used for resource naming"
+  type        = string
+  default     = "atcoder-review"
+}
+```
+リソース名のプレフィックス。`"${var.project_name}-users-${var.environment}"` → `"atcoder-review-users-prod"` になる。
+
+---
+
+## terraform/modules.tf
+
+```hcl
+module "cognito" {
+  source = "./modules/cognito"
+
+  project_name = var.project_name
+  environment  = var.environment
+}
+```
+cognitoモジュールを呼び出し、変数を渡す。→ [リファレンス: モジュール間の連携](reference/terraform-basics.md)
+
+```hcl
+module "api_gateway" {
+  source = "./modules/api_gateway"
+
+  project_name          = var.project_name
+  environment           = var.environment
+  cognito_user_pool_arn = module.cognito.user_pool_arn
+}
+```
+api_gatewayモジュールを呼び出し。`module.cognito.user_pool_arn` でcognitoモジュールの出力を参照し、API GatewayのCognito認証に使う。
+
+---
+
+## terraform/outputs.tf
+
+```hcl
+output "cognito_user_pool_id" {
+  description = "Cognito User Pool ID"
+  value       = module.cognito.user_pool_id
+}
+
+output "cognito_user_pool_client_id" {
+  description = "Cognito User Pool Client ID"
+  value       = module.cognito.user_pool_client_id
+}
+
+output "api_gateway_url" {
+  description = "API Gateway invoke URL"
+  value       = module.api_gateway.api_url
+}
+```
+`terraform apply` 後にターミナルに表示される値。フロントの `.env.local` に設定するCognito IDやAPI URLをここから取得する。`terraform output api_gateway_url` でコマンドからも取得可能。
+
+---
+
+## 質疑応答
+
+（以下に追記）
