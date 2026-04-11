@@ -160,3 +160,19 @@ output "api_gateway_url" {
 
 → 詳細は [リファレンス: AWS認証のベストプラクティス](reference/aws-authentication.md) 参照
 → IAMの基礎（ユーザー/ロール/ポリシーの違い等）は [リファレンス: IAM概要](reference/iam-overview.md) 参照
+
+### Q2: IAM Identity Center vs IAMロールの違いは？
+
+Identity Center = 「誰がAWSにアクセスできるか」の管理（ログインの仕組み）。IAMロール = 「何ができるか」の定義（権限セット）。この2つは競合せず組み合わせて使う。
+
+→ [リファレンス: IAM Identity Center vs IAMロール](reference/aws-authentication.md)
+
+### Q3: IAMユーザーのキーを短期にすればIdentity Centerは不要では？
+
+IAMユーザーのアクセスキーは仕組み上、永続でしか発行できない（AWS初期設計、後方互換性のため変更不可）。STS AssumeRoleで一時キーは作れるが、それを呼ぶために永続キーが必要（鶏と卵）。Identity Centerは「永続キーを一切使わずにログインする方法」。
+
+### Q4: ~/.aws/credentials が諸悪の根源か？
+
+ファイル自体が悪いのではなく「永続キーしか発行できないIAMユーザーの設計」が根本原因。Identity Centerでも `~/.aws/sso/cache/` に一時トークンがキャッシュされるが、数時間で無効になるため漏洩リスクが限定的。
+
+→ [リファレンス: なぜIAMユーザーキーの短期化ではダメなのか](reference/aws-authentication.md)

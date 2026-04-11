@@ -117,6 +117,21 @@ Identity Centerは「永続キーを使わないログイン方法」:
 - 退職者のアクセスを会社のID基盤で即無効化（IAMユーザーだと各AWSアカウントで個別削除が必要）
 - 1回のログインで複数AWSアカウント（dev/staging/prod）にアクセス
 
+### なぜIAMユーザーのキーに「自動期限切れ」を追加しなかったのか
+
+IAMユーザーのアクセスキーは2006年のAWS初期からある仕組み。API用のパスワードとして設計された（Webサービスのパスワードに有効期限がないのと同じ発想）。
+
+既存キーに有効期限を後付けすると、世界中の本番システムで使われているキーが突然期限切れになり大規模障害が発生する（後方互換性を壊せない）。だから既存の仕組みは変えず、別の仕組み（STS + Identity Center）を作った。
+
+### ~/.aws/credentials は諸悪の根源か？
+
+ファイル自体が悪いのではなく「永続キーしか発行できないIAMユーザーの設計」が根本原因。
+
+- `~/.aws/credentials`（IAMユーザー）: 永続キーを平文保存 → 盗まれたら永遠に有効
+- `~/.aws/sso/cache/`（Identity Center）: 一時トークンをキャッシュ → 盗まれても数時間で無効
+
+ファイルに保存する点は同じだが、中身の寿命が決定的に違う。
+
 ## 参考資料
 
 - [Security best practices in IAM - AWS公式](https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html)
