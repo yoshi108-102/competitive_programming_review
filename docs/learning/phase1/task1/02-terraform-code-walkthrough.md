@@ -159,3 +159,4 @@ output "api_gateway_url" {
 「IAMロールが非推奨」ではなく、「IAMユーザーの長期アクセスキーが非推奨」。IAMロール（一時認証情報）は今も推奨。
 
 → 詳細は [リファレンス: AWS認証のベストプラクティス](reference/aws-authentication.md) 参照
+→ IAMの基礎（ユーザー/ロール/ポリシーの違い等）は [リファレンス: IAM概要](reference/iam-overview.md) 参照
