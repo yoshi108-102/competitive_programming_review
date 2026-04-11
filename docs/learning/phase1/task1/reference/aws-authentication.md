@@ -83,6 +83,26 @@ IAMロール = 「部屋の鍵」（何の部屋にアクセスできるか）
 人間の場合: Identity Centerでログイン → IAMロールを引き受ける → 権限に応じた操作
 サービスの場合: IAMロールだけ（Lambda等はログイン不要、ロールを直接引き受ける）
 
+### Identity Center の本質は「認証の一元管理」
+
+Identity Centerは単なる「短期アクセスキー発行機」ではなく、3つの役割を持つ:
+
+1. **認証**: 「この人は本当に田中さんか？」を確認（会社のID基盤と連携、MFA強制）
+2. **ロール割り当て**: 「田中さんにはこのPermission Set（ロール）を使わせる」を管理
+3. **一時認証情報の発行**: 上記2つを通過したら自動発行（結果として短期キーになる）
+
+具体的な流れ（例: EC2を作りたい場合）:
+
+```
+① Identity Center でログイン → 「田中さんであること」確認
+② Permission Set の選択 → 「田中さんは InfraAdminRole を使える」と判断
+   → InfraAdminRole の中身: ec2:RunInstances を Allow
+③ 一時認証情報が発行 → InfraAdminRole の権限付き → EC2作成が可能
+④ 数時間後に期限切れ → 再ログイン必要
+```
+
+Identity Centerがなかった時代はIAMユーザーにアクセスキーを発行して直接権限を付けていた。Identity Centerにより「ログインの仕組み」と「権限の定義」が分離され、セキュリティが向上。
+
 ## 参考資料
 
 - [Security best practices in IAM - AWS公式](https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html)
