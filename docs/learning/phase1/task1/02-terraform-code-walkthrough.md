@@ -171,7 +171,13 @@ Identity Center = 「誰がAWSにアクセスできるか」の管理（ログ�
 
 IAMユーザーのアクセスキーは仕組み上、永続でしか発行できない（AWS初期設計、後方互換性のため変更不可）。STS AssumeRoleで一時キーは作れるが、それを呼ぶために永続キーが必要（鶏と卵）。Identity Centerは「永続キーを一切使わずにログインする方法」。
 
-### Q4: ~/.aws/credentials が諸悪の根源か？
+### Q4: Identity Centerの役割が結局わからない
+
+**AWSにアクセスするための認証サーバー。** 「永続キーを発行せずに、ブラウザログインで一時キーを渡す仕組み」。IAMユーザー方式は「鍵を渡す」、Identity Center方式は「毎回本人確認して一時的な鍵を作る」。
+
+→ [リファレンス: Identity Centerの役割](reference/aws-authentication.md)
+
+### Q5: ~/.aws/credentials が諸悪の根源か？
 
 ファイル自体が悪いのではなく「永続キーしか発行できないIAMユーザーの設計」が根本原因。Identity Centerでも `~/.aws/sso/cache/` に一時トークンがキャッシュされるが、数時間で無効になるため漏洩リスクが限定的。
 
