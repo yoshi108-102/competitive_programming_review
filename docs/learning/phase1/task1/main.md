@@ -14,6 +14,7 @@ DynamoDBのテーブルを3つ（users, submissions, problems）Terraformで定�
 - [06. DynamoDBモジュール実装の設計判断ログ](06-dynamodb-module-implementation.md) — Step1〜6の設計判断まとめ、適用された原則（YAGNI、明示性、最小公開）
 - [07. Terraform Bootstrapの鶏と卵問題](07-terraform-bootstrap.md) — init失敗の原因、Bootstrapパターン、prevent_destroy、use_lockfile移行
 - [08. Terraform 状態ロック機構](08-terraform-state-locking.md) — tflockテーブルの役割、Conditional Write、stuck lock、force-unlock、use_lockfile方式
+- [09. DynamoDB = 分散ハッシュテーブルという視点](09-dynamodb-as-hashtable.md) — DHTメンタルモデル、Dynamo論文、PK部分一致不可の原理、SKがソート可能型のみの理由、PK/SK非対称性、Inverted GSI
 
 ## リファレンス
 
@@ -21,6 +22,7 @@ DynamoDBのテーブルを3つ（users, submissions, problems）Terraformで定�
 - [Terraform 基礎リファレンス](reference/terraform-basics.md) — HCL構文、variable/output/resource、backend、モジュール連携
 - [AWS認証のベストプラクティス](reference/aws-authentication.md) — IAM Identity Center、IAMロール、アクセスキーの比較
 - [IAM概要](reference/iam-overview.md) — ユーザー/グループ/ロール/ポリシー、ARN、信頼ポリシー、最小権限の原則
+- [Dynamo論文と分散ハッシュテーブル](reference/dynamo-paper-dht.md) — SOSP 2007論文、Consistent Hashing、Vector Clock、Quorum、Gossip、Dynamo vs DynamoDB
 
 ## 振り返り（クイズ形式）
 
