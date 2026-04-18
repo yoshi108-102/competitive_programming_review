@@ -182,3 +182,11 @@ IAMユーザーのアクセスキーは仕組み上、永続でしか発行で�
 ファイル自体が悪いのではなく「永続キーしか発行できないIAMユーザーの設計」が根本原因。Identity Centerでも `~/.aws/sso/cache/` に一時トークンがキャッシュされるが、数時間で無効になるため漏洩リスクが限定的。
 
 → [リファレンス: なぜIAMユーザーキーの短期化ではダメなのか](reference/aws-authentication.md)
+
+## 関連
+
+- [03-module-design-patterns.md](03-module-design-patterns.md) - モジュール分割の流派（AWSサービス単位 vs 機能単位 vs 階層ハイブリッド）
+- [06-dynamodb-module-implementation.md](06-dynamodb-module-implementation.md) - Task 1 DynamoDBモジュール実装時の設計判断
+- [reference/terraform-basics.md](reference/terraform-basics.md) - Terraform 基礎リファレンス（HCL構文、variable/output/resource）
+- [reference/aws-authentication.md](reference/aws-authentication.md) - AWS認証のベストプラクティス
+- [reference/iam-overview.md](reference/iam-overview.md) - IAM概要（ユーザー/ロール/ポリシー/ARN）

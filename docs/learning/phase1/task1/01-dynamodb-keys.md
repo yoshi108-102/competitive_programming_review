@@ -163,3 +163,10 @@ RDBでもDynamoDBでも主キーは必須だが、違いは:
 - **DynamoDB**: PK（とSK）が唯一の高速な検索手段。それ以外にはGSIが必要
 
 PK/SKはDynamoDB独自の用語だが、やっていることは「主キーの指定」。DynamoDBでは主キーの重要性がRDBより遥かに高いため、専用の名前で強調されている。
+
+## 関連
+
+- [04-dynamodb-item-design.md](04-dynamodb-item-design.md) - スキーマレスとアイテム設計（attribute宣言、Python例、Single Table Design）
+- [05-user-id-identity.md](05-user-id-identity.md) - user_id = Cognito sub の区別
+- [06-dynamodb-module-implementation.md](06-dynamodb-module-implementation.md) - Task 1 実装の設計判断ログ
+- [reference/dynamodb-keys-vs-rdb.md](reference/dynamodb-keys-vs-rdb.md) - DynamoDB vs RDB 詳細比較（Web検索ソース付き）
