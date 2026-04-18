@@ -89,8 +89,11 @@ cd frontend
 
 # .env.local を作成（最初の1回のみ）
 cat > .env.local <<EOF
-NEXT_PUBLIC_COGNITO_USER_POOL_ID=ap-northeast-1_4E9Glk5W7
-NEXT_PUBLIC_COGNITO_USER_POOL_CLIENT_ID=62eag7d103e67okjg8lkjunhuf
+# 実際の値は `terraform output` から取得する（秘匿情報ではないがリポジトリに直書きしない）
+#   terraform -chdir=../terraform output cognito_user_pool_id
+#   terraform -chdir=../terraform output cognito_user_pool_client_id
+NEXT_PUBLIC_COGNITO_USER_POOL_ID=ap-northeast-1_XXXXXXXXX
+NEXT_PUBLIC_COGNITO_USER_POOL_CLIENT_ID=XXXXXXXXXXXXXXXXXXXXXXXXXX
 EOF
 
 npm run dev

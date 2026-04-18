@@ -21,11 +21,16 @@ venv/
 *.tfstate
 *.tfstate.backup
 *.tfplan
-.terraform.lock.hcl
+# Note: .terraform.lock.hcl はコミット推奨（プロバイダーバージョン固定）のため ignore しない
+
+# Terraform variables (may contain secrets, env-specific values)
+*.tfvars
+!*.tfvars.example
 
 # Environment variables
 .env
 .env.*
+!.env.local.example
 
 # IDE
 .vscode/
@@ -37,3 +42,7 @@ Thumbs.db
 
 # AWS
 .aws-sam/
+
+# Claude / Superpowers ephemeral state
+.superpowers/
+.claude/settings.local.json
