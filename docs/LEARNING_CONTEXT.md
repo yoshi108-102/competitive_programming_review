@@ -26,7 +26,7 @@ Phase 1 実装計画: `plans/phase1-mvp-implementation.md`
 
 ## 現在の進捗
 
-**Phase 1 / Task 2: Backend — Python 環境セットアップ** の学習段階。
+**Phase 1 / Task 3: Backend — shared/response.py (APIレスポンスヘルパー)** の学習段階。
 
 ### Task 1 完了（2026-04-18 採点済み）
 
@@ -39,14 +39,29 @@ Task 1「Terraform DynamoDBモジュール」で習得:
 
 振り返り採点結果: Q5(b) default の使い分け（ルート側）、Q6(b) ARN の構成要素 が **要復習** → `docs/learning/review-queue.md` に記録済み。
 
-### Task 2 概要
+### Task 2 完了（2026-04-18、振り返りは Task 3/4 と統合予定）
 
-`backend/requirements.txt`、`backend/requirements-dev.txt`、`backend/tests/conftest.py` を整備し、**Lambda向けPython開発環境 + moto によるDynamoDBモック**をセットアップする。コード自体は少ないが、以下の新概念に触れる:
+Task 2「Backend — Python 環境セットアップ」で習得:
+- **moto ライブラリ**: AWS を丸ごとローカルでエミュレート、性能計測以外の全機能テストに使える
+- **`AWS_ACCESS_KEY_ID="testing"` の正体**: boto3 の認証チェック回避 + 本物AWS 誤叩き事故防止
+- **2段階 fixture 設計**: `aws_env`（monkeypatch で環境変数注入）→ `dynamodb_tables`（`with mock_aws()` + yield でテーブル準備）
+- **環境変数経由でテーブル名を渡す設計**: Lambda 本番では Terraform、ローカルでは monkeypatch
 
-- **moto**: AWSサービスをローカルで完全エミュレーションするライブラリ
-- **pytest fixture**: テスト用の前提条件を関数として定義する仕組み
-- **monkeypatch**: 環境変数・関数をテスト中だけ差し替えるpytest機能
-- **venv**: Pythonの仮想環境（プロジェクトごとに依存を隔離）
+実装内容: `backend/pyproject.toml` (uv ベース、元計画の requirements.txt から変更)、`shared/lambdas/tests/__init__.py`、`conftest.py` (2段階fixture)。
+
+振り返りは **pytest を実際に書く Task (Task 3 or Task 4) とまとめて実施**する方針。
+
+### Task 3 概要
+
+`backend/shared/response.py` を作成。全 Lambda ハンドラーが共通で使う**APIレスポンス整形ヘルパー**。
+
+- `success(data, meta, status_code)`: `{ data, meta }` 形式の成功レスポンス
+- `error(code, message, status_code)`: `{ error: { code, message } }` 形式のエラーレスポンス
+
+主な学習ポイント:
+- **Lambda + API Gateway 統合**の「特殊な返り値の形」（statusCode / headers / body）
+- **CORS ヘッダ**の意味と必要性（`Access-Control-Allow-Origin` 等）
+- **`json.dumps(..., default=str)`** の役割（Decimal や datetime の JSON 変換）
 
 ## タスクごとの学習フロー
 
