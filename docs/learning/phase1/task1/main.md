@@ -12,6 +12,8 @@ DynamoDBのテーブルを3つ（users, submissions, problems）Terraformで定�
 - [04. DynamoDBのアイテム設計](04-dynamodb-item-design.md) — スキーマレスの制約と自由度、attribute宣言、Python(boto3)例、Single Table Design
 - [05. ユーザーIDの正体](05-user-id-identity.md) — user_id = Cognito sub、AtCoder handleとの区別、命名判断
 - [06. DynamoDBモジュール実装の設計判断ログ](06-dynamodb-module-implementation.md) — Step1〜6の設計判断まとめ、適用された原則（YAGNI、明示性、最小公開）
+- [07. Terraform Bootstrapの鶏と卵問題](07-terraform-bootstrap.md) — init失敗の原因、Bootstrapパターン、prevent_destroy、use_lockfile移行
+- [08. Terraform 状態ロック機構](08-terraform-state-locking.md) — tflockテーブルの役割、Conditional Write、stuck lock、force-unlock、use_lockfile方式
 
 ## リファレンス
 
