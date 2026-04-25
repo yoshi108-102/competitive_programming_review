@@ -13,7 +13,7 @@ Lambda + API Gateway 統合で必要となる「特殊な返り値の形」を�
 
 ## 目次
 
-（解説が進んだら /learning-flow:topic で追加）
+- [01. Lambda の HTTP レスポンス形式と CORS / SOP の関係](01-lambda-response-format-and-cors.md) — Lambda Proxy Integration = HTTP レスポンス、CORS/SOP、iframe、Clickjacking、CSRF、徳丸本との接続
 
 ## 振り返り
 
