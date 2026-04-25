@@ -548,6 +548,9 @@ iframe は「ページ内ブラウザ」で、独立した `window` / `document`
 - 議論・Q&A: [reference/cors-error-server-side-visibility.md](reference/cors-error-server-side-visibility.md) — CORS エラー時にサーバ（CloudWatch）に届いているのか
 - 議論・Q&A: [reference/cors-only-blocks-reads-not-writes.md](reference/cors-only-blocks-reads-not-writes.md) — CORS は「読み取り」しか防がない / CSRF は別の層
 - 議論・Q&A: [reference/samesite-cookie-and-csrf-defense.md](reference/samesite-cookie-and-csrf-defense.md) — SameSite Cookie の Lax デフォルト化 / Site vs Origin / JWT 方式との比較
+- 議論・Q&A: [reference/why-cors-exists-three-actors.md](reference/why-cors-exists-three-actors.md) — 「自分で許可して自分で防ぐ」ではない / サーバ・ブラウザ・ユーザーの3者構造
+- 議論・Q&A: [reference/cors-rules-are-universal-not-per-site.md](reference/cors-rules-are-universal-not-per-site.md) — Preflight = ハンドシグナル / ブラウザのCORSルールはサイト独立のホワイトリスト方式
+- 議論・Q&A: [reference/preflight-bypass-via-simple-post.md](reference/preflight-bypass-via-simple-post.md) — シンプル POST で preflight を回避する設計のトレードオフ / 主防御は別の層
 - 次のトピック候補（未作成）: `json.dumps(..., default=str)` の役割（DynamoDB の Decimal / datetime 対応）、`{ data, meta }` 統一形式の設計思想
 - 関連する将来 Task: Task 9 (Lambda モジュール) で API Gateway 統合設定、Phase 5 (CloudFront/WAF) でオリジン限定と CSP
 

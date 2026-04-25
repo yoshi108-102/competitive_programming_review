@@ -2,10 +2,11 @@
 教材用の最小サンプル。Task 3 の lesson 進行に合わせて段階的に肉付けしていく。
 本実装は backend/shared/response.py に別途書く（このファイルは消してOK）。
 
-今のステップ: B-2「CORS ヘッダ4種を追加」
-  - Access-Control-Allow-Origin: どのオリジンからの読み取りを許可
-  - Access-Control-Allow-Headers: どのカスタムヘッダを使ってよいか
-  - Access-Control-Allow-Methods: どのメソッドを許可するか（preflight 用）
+今のステップ: B-3「Preflight (OPTIONS) と CORS ヘッダの関係」
+  - Authorization 付き fetch は preflight (OPTIONS) が発動する
+  - preflight は「Origin × Method × Headers」の3軸で許可確認
+  - OPTIONS 自体は API Gateway が処理（Lambda には届かない設計）
+  - Allow-Methods に OPTIONS を含めるのは preflight 通過のため（慣習）
 """
 
 import json

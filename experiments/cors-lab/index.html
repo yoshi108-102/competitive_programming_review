@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>CORS lab</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; max-width: 760px; margin: 24px auto; padding: 0 12px; }
+  h1 { font-size: 18px; }
+  h3 { margin-top: 24px; }
+  .row { display: flex; align-items: center; gap: 12px; margin: 6px 0; }
+  .row button { width: 220px; }
+  .hint { color: #555; font-size: 12px; }
+  #log, #diag-log { background: #111; color: #0f0; padding: 8px 12px; min-height: 120px;
+         white-space: pre-wrap; font: 12px/1.5 ui-monospace, monospace; }
+  .ok { color: #6f6; } .err { color: #f77; } .warn { color: #fc6; } .note { color: #9cf; }
+  small { color: #777; }
+  .diag {
+    border: 1px solid #d33; padding: 8px 12px; margin-bottom: 16px;
+    background: #fff5f5;
+  }
+  .diag h2 { margin: 0 0 6px 0; font-size: 15px; color: #b00; }
+  #env { font: 11px/1.5 ui-monospace, monospace; color: #555;
+         background: #f6f6f6; padding: 6px 10px; margin-top: 24px; }
+</style>
+</head>
+<body>
+<h1>CORS lab — frontend</h1>
+<p><small>
+  Front: <code>http://localhost:5500</code> &nbsp;|&nbsp;
+  API: <code>http://localhost:8000</code> &nbsp;|&nbsp;
+  <b>Open DevTools (Console + Network) — that is the real observation surface.</b>
+</small></p>
+
+<div class="diag">
+  <h2>Diagnostics — まずここから</h2>
+  <p style="margin:4px 0 8px 0; font-size:12px;">
+    全ボタンが <code>Failed to fetch</code> のとき、TCP到達性 / CORS拒否 / DNS解決 / fetch実装 を切り分ける。
+    <br>
+    <code>/healthz</code> は CORS_MODE に関係なく常に緩めの応答を返すコントロール用エンドポイント。
+  </p>
+  <button id="diag-run">Run diagnostics</button>
+  <h3 style="margin-top:14px;">診断ログ</h3>
+  <div id="diag-log"></div>
+</div>
+
+<div class="row">
+  <button id="b1">1. Simple GET</button>
+  <span class="hint">no preflight. Allow-Origin の有無/一致だけで決まる。</span>
+</div>
+<div class="row">
+  <button id="b2">2. Custom-header GET</button>
+  <span class="hint">X-My-Header を付与 → preflight 必須。Allow-Headers が無いと落ちる。</span>
+</div>
+<div class="row">
+  <button id="b3">3. Simple POST (text/plain)</button>
+  <span class="hint">preflight 回避。レスポンスは読めなくてもサーバには届く（ログ参照）。</span>
+</div>
+<div class="row">
+  <button id="b4">4. POST with JSON</button>
+  <span class="hint">Content-Type: application/json で preflight 必須。失敗時は副作用も起きない。</span>
+</div>
+<div class="row">
+  <button id="b5">5. GET with credentials</button>
+  <span class="hint">credentials:'include'。credentials-bug モード（* + true）で拒否される。</span>
+</div>
+
+<h3>画面ログ（参考）</h3>
+<div id="log"></div>
+
+<div id="env"></div>
+
+<script>
+const API = "http://localhost:8000/probe";
+const HEALTHZ_BASE = "/healthz";
+const logEl = document.getElementById("log");
+const diagEl = document.getElementById("diag-log");
+
+function _append(target, line, cls = "") {
+  const span = document.createElement("span");
+  if (cls) span.className = cls;
+  span.textContent = line + "\n";
+  target.appendChild(span);
+}
+function log(line, cls = "") { _append(logEl, line, cls); }
+function dlog(line, cls = "") {
+  _append(diagEl, line, cls);
+  // mirror to browser console for copy/paste
+  if (cls === "err") console.warn("[diag]", line);
+  else console.log("[diag]", line);
+}
+
+// ---------- error classification ----------
+// Best-effort: the browser deliberately hides CORS detail from JS, so we can
+// only guess. The hint is meant to nudge — confirm in DevTools Network panel.
+function classifyError(e, ctx = {}) {
+  const name = e && e.name;
+  const msg = (e && e.message) || "";
+  // TypeError + "Failed to fetch" is the universal "something below the
+  // response layer went wrong" — could be CORS *or* connection.
+  if (name === "TypeError") {
+    if (ctx.noCorsAlsoFailed === true) {
+      return "hint: no-cors でも落ちている → CORS ではなく接続層 (TCP/DNS/拡張/Firewall) の可能性が高い";
+    }
+    if (ctx.noCorsAlsoFailed === false) {
+      return "hint: no-cors では成功している → CORS による拒否の可能性が高い (これは実験として正しい挙動)";
+    }
+    return "hint: TypeError/Failed to fetch は CORS 拒否か接続失敗かを区別できない。Diagnostics の D4 (no-cors) で切り分ける";
+  }
+  if (/NetworkError/i.test(msg) || /NetworkError/i.test(name || "")) {
+    return "hint: NetworkError — preflight 失敗 / 接続切断 / mixed-content の可能性";
+  }
+  if (name === "AbortError") return "hint: AbortError — タイムアウトまたは中断";
+  return "";
+}
+
+function describeOk(res, body) {
+  return `status=${res.status} type=${res.type} ok=${res.ok} bodyHead=${JSON.stringify(body.slice(0, 120))}`;
+}
+function describeErr(e) {
+  const ctor = e && e.constructor ? e.constructor.name : "?";
+  return `name=${e && e.name} ctor=${ctor} message=${e && e.message}`;
+}
+
+// ---------- diagnostics ----------
+async function diagFetch(label, url, init = {}) {
+  const t0 = performance.now();
+  try {
+    const res = await fetch(url, init);
+    const dt = (performance.now() - t0).toFixed(1);
+    let bodyHead = "";
+    try {
+      // opaque (no-cors) responses cannot be read; guard with res.type
+      if (res.type === "opaque") bodyHead = "(opaque — body unreadable by design)";
+      else bodyHead = await res.text();
+    } catch (be) {
+      bodyHead = `(body read failed: ${be.name})`;
+    }
+    dlog(`${label} OK  ${dt}ms  url=${url}`, "ok");
+    dlog(`  ${describeOk(res, bodyHead)}`, "ok");
+    return { ok: true, res };
+  } catch (e) {
+    const dt = (performance.now() - t0).toFixed(1);
+    dlog(`${label} FAIL ${dt}ms  url=${url}`, "err");
+    dlog(`  ${describeErr(e)}`, "err");
+    return { ok: false, err: e };
+  }
+}
+
+function diagXHR(label, url) {
+  return new Promise((resolve) => {
+    const t0 = performance.now();
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", url, true);
+    xhr.timeout = 5000;
+    xhr.onload = () => {
+      const dt = (performance.now() - t0).toFixed(1);
+      const bodyHead = (xhr.responseText || "").slice(0, 120);
+      dlog(`${label} OK  ${dt}ms  url=${url}`, "ok");
+      dlog(`  status=${xhr.status} bodyHead=${JSON.stringify(bodyHead)}`, "ok");
+      resolve({ ok: true });
+    };
+    xhr.onerror = () => {
+      const dt = (performance.now() - t0).toFixed(1);
+      dlog(`${label} FAIL ${dt}ms  url=${url}`, "err");
+      dlog(`  XHR onerror — readyState=${xhr.readyState} status=${xhr.status}`, "err");
+      resolve({ ok: false });
+    };
+    xhr.ontimeout = () => {
+      dlog(`${label} TIMEOUT  url=${url}`, "err");
+      resolve({ ok: false });
+    };
+    try { xhr.send(); }
+    catch (e) {
+      dlog(`${label} THROW ${describeErr(e)}`, "err");
+      resolve({ ok: false });
+    }
+  });
+}
+
+async function runDiagnostics() {
+  diagEl.innerHTML = "";
+  dlog(`# diagnostics start  ${new Date().toISOString()}`, "note");
+  dlog(`# origin=${location.origin}  ua=${navigator.userAgent}`, "note");
+
+  const r1 = await diagFetch("D1 fetch localhost   ", `http://localhost:8000${HEALTHZ_BASE}`);
+  const r2 = await diagFetch("D2 fetch 127.0.0.1   ", `http://127.0.0.1:8000${HEALTHZ_BASE}`);
+  const r3 = await diagFetch("D3 fetch [::1]       ", `http://[::1]:8000${HEALTHZ_BASE}`);
+  const r4 = await diagFetch("D4 fetch no-cors     ", `http://localhost:8000${HEALTHZ_BASE}`, { mode: "no-cors" });
+  const r5 = await diagXHR  ("D5 XHR   localhost   ", `http://localhost:8000${HEALTHZ_BASE}`);
+
+  dlog(`# diagnostics done`, "note");
+  // Interpretation
+  if (r4.ok && !r1.ok) {
+    dlog(`>> D4 が通って D1 が落ちる: 接続は生きている。/healthz は CORS_MODE と独立に Allow-Origin:* を返すはずなので、`, "warn");
+    dlog(`   ここで D1 が落ちるなら fetch の CORS パス側の異常 (拡張機能の改変など) を疑う。`, "warn");
+  } else if (!r4.ok && !r1.ok && !r2.ok && !r3.ok) {
+    dlog(`>> 全滅: TCP/接続層が届いていない可能性が高い。`, "warn");
+    dlog(`   Firewall / VPN / 拡張機能 / Private Network Access / プロキシを確認。サーバ側 [wire] ログが出ているかも見る。`, "warn");
+  } else if (r2.ok && r3.ok && !r1.ok) {
+    dlog(`>> 127.0.0.1 / [::1] は通るが localhost が落ちる: localhost の名前解決層 (hosts / DNS) を疑う。`, "warn");
+  } else if (r1.ok && r2.ok && r3.ok && r4.ok && r5.ok) {
+    dlog(`>> 全通: 到達性に問題なし。本ボタンの失敗は純粋な CORS 拒否。`, "ok");
+  }
+}
+
+document.getElementById("diag-run").onclick = runDiagnostics;
+
+// ---------- existing 5 buttons (behavior unchanged, logging beefed up) ----------
+async function run(label, fn) {
+  log(`--- ${label} ---`);
+  const t0 = performance.now();
+  try {
+    const res = await fn();
+    const dt = (performance.now() - t0).toFixed(1);
+    const text = await res.text();
+    log(`  ${dt}ms  ${describeOk(res, text)}`, "ok");
+  } catch (e) {
+    const dt = (performance.now() - t0).toFixed(1);
+    log(`  ${dt}ms  FAILED  ${describeErr(e)}`, "err");
+    // Probe no-cors as a quick is-it-CORS-or-connection sniff test.
+    let noCorsAlsoFailed;
+    try {
+      await fetch(API, { mode: "no-cors" });
+      noCorsAlsoFailed = false;
+    } catch (_) {
+      noCorsAlsoFailed = true;
+    }
+    const hint = classifyError(e, { noCorsAlsoFailed });
+    if (hint) log(`  ${hint}`, "warn");
+    log(`  (See DevTools Console for the real CORS error message. Run diagnostics for full split.)`);
+  }
+}
+
+document.getElementById("b1").onclick = () =>
+  run("Simple GET", () => fetch(API));
+
+document.getElementById("b2").onclick = () =>
+  run("Custom-header GET", () =>
+    fetch(API, { headers: { "X-My-Header": "1" } }));
+
+document.getElementById("b3").onclick = () =>
+  run("Simple POST (text/plain)", () =>
+    fetch(API, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: "hello-from-simple-post",
+    }));
+
+document.getElementById("b4").onclick = () =>
+  run("POST with JSON", () =>
+    fetch(API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hello: "json" }),
+    }));
+
+document.getElementById("b5").onclick = () =>
+  run("GET with credentials", () =>
+    fetch(API, { credentials: "include" }));
+
+// ---------- environment footer ----------
+document.getElementById("env").textContent =
+  `origin=${window.location.origin}  protocol=${document.location.protocol}  ua=${navigator.userAgent}`;
+</script>
+</body>
+</html>
