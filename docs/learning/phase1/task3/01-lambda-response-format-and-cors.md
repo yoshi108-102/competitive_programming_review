@@ -545,6 +545,9 @@ iframe は「ページ内ブラウザ」で、独立した `window` / `document`
 ## 関連
 
 - 前のトピック: [../task2/02-pytest-fixtures-for-aws.md](../task2/02-pytest-fixtures-for-aws.md) — Lambda テスト基盤
+- 議論・Q&A: [reference/cors-error-server-side-visibility.md](reference/cors-error-server-side-visibility.md) — CORS エラー時にサーバ（CloudWatch）に届いているのか
+- 議論・Q&A: [reference/cors-only-blocks-reads-not-writes.md](reference/cors-only-blocks-reads-not-writes.md) — CORS は「読み取り」しか防がない / CSRF は別の層
+- 議論・Q&A: [reference/samesite-cookie-and-csrf-defense.md](reference/samesite-cookie-and-csrf-defense.md) — SameSite Cookie の Lax デフォルト化 / Site vs Origin / JWT 方式との比較
 - 次のトピック候補（未作成）: `json.dumps(..., default=str)` の役割（DynamoDB の Decimal / datetime 対応）、`{ data, meta }` 統一形式の設計思想
 - 関連する将来 Task: Task 9 (Lambda モジュール) で API Gateway 統合設定、Phase 5 (CloudFront/WAF) でオリジン限定と CSP
 

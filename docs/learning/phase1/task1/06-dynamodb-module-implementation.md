@@ -300,6 +300,7 @@ AWS リソースを一意に識別する絶対的なID（URL/物理住所のよ�
 - [05-user-id-identity.md](05-user-id-identity.md) - user_id = Cognito sub の区別
 - [reference/terraform-basics.md](reference/terraform-basics.md) - Terraform基礎リファレンス
 - [reference/iam-overview.md](reference/iam-overview.md) - IAM/ARN詳細
+- [reference/terraform-defaults-vs-python-defaults.md](reference/terraform-defaults-vs-python-defaults.md) - `default` をルートに書きモジュールに書かない理由、Python の default 引数との比較
 
 ---
 
