@@ -557,3 +557,87 @@ iframe は「ページ内ブラウザ」で、独立した `window` / `document`
 ---
 
 _Saved at 2026-04-20 via /learning-flow:topic_
+
+## 振り返りクイズ
+
+回答は各問の `**回答**:` 行の下に記入してください。
+全問記入後に `/learning-flow:grade` を実行すると、Claude が採点して進捗を更新します。
+
+---
+
+### Q1. Lambda Proxy Integration の body に dict を渡すとどうなるか
+
+Lambda ハンドラで以下のように返した場合、クライアントにはどう見えるか。なぜそうなるか理由も述べよ。
+
+```python
+return {
+    "statusCode": 200,
+    "body": {"data": [{"id": "SUB001"}]}
+}
+```
+
+**参考**:
+- [Lambda Proxy Integration - AWS Docs](https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html)
+
+**回答**:
+
+---
+Lambda内部で加工されるため、HTTPレスポンスの形に加工されて見える。
+
+### Q2. CORS エラー時のサーバ側可視性
+
+フロントエンドで CORS エラーが発生した。バックエンド開発者が CloudWatch を見ると Lambda は 200 OK で正常終了、DynamoDB にもデータが書き込まれていた。この状況は矛盾しているか？ なぜこのようなことが起きるのか、仕組みから説明せよ。
+
+また、本リクエストが**サーバに到達しない**ケースもある。それはどのような場合か。
+
+**参考**:
+- [Cross-Origin Resource Sharing (CORS) - MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS)
+
+**関連ノート**: [reference/cors-error-server-side-visibility.md](reference/cors-error-server-side-visibility.md)
+
+**回答**:
+矛盾していない、CORSエラーはあくまでブラウザ側の読み取り時に発生するエラーにすぎないので、DB側での処理には影響しない。リクエストが正しければ問題なくDBの処理が走る。なお、プリフライトリクエストの時点でシャットアウトされた場合はリクエスト自体が届かない場合もある。
+---
+
+### Q3. CORS の防御主体 — サーバが Origin ヘッダで弾けば十分か
+
+「サーバが `Origin` ヘッダを見て、許可リストに無いオリジンからのリクエストを拒否すれば、ブラウザに頼らなくても同等の防御になるのでは？」という主張がある。この主張の問題点を説明せよ。
+
+**参考**:
+- [Origin header - MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Origin)
+
+**関連ノート**: [reference/why-cors-exists-three-actors.md](reference/why-cors-exists-three-actors.md)
+
+**回答**:
+curlなどを使う場合にはOriginの値を任意に偽装することが可能であるため、脆弱性が高い構成になってしまうため。
+---
+
+### Q4. JWT 方式と CSRF 耐性の構造的な関係
+
+今回のプロジェクトでは Cognito の JWT を `Authorization: Bearer` ヘッダで送る方式を採用している。この方式が CSRF に対して構造的に強い理由を、Cookie 認証方式と対比して説明せよ。
+
+また、この方式を採用すると preflight が常に発動する。それはなぜか、セキュリティ上どのような副次的利点があるか。
+
+**参考**:
+- [Cross-Site Request Forgery Prevention Cheat Sheet - OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)
+- [SameSite cookies - MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite)
+
+**関連ノート**: [reference/cors-only-blocks-reads-not-writes.md](reference/cors-only-blocks-reads-not-writes.md), [reference/samesite-cookie-and-csrf-defense.md](reference/samesite-cookie-and-csrf-defense.md)
+
+**回答**:
+
+---
+
+わからない
+
+### Q5. Clickjacking を SOP で防げない理由と正しい防御
+
+Clickjacking 攻撃は SOP（同一オリジンポリシー）では防げない。なぜ SOP の射程外なのか、SOP が何を守っているかと対比して理由を述べよ。Clickjacking を防ぐ正しい手段を2つ挙げよ。
+
+**参考**:
+- [X-Frame-Options - MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options)
+- [CSP: frame-ancestors - MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy/frame-ancestors)
+
+**回答**:
+
+クリックジャッキング攻撃は、iframeなどを用いて透明化された悪意のあるページを正規ページの上に重ねることで悪意ある操作をユーザに行わせる方法であるが、ユーザを物理的に騙すだけでリクエスト自体は正当なので防ぎようがない。防護策としては、iframe自体を禁止するオプションの使用、selfドメインにのみ限定して埋め込みを許可するなど。

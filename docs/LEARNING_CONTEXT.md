@@ -26,7 +26,70 @@ Phase 1 実装計画: `plans/phase1-mvp-implementation.md`
 
 ## 現在の進捗
 
-**Phase 1 / Task 3: Backend — shared/response.py (APIレスポンスヘルパー)** の学習段階。
+**Phase 1 / Task 17 + Task 18 (デプロイ実行待ち)**。Task 3〜16 のコード・教材は全て実装完了。
+ユーザー判断により lesson とまとめクイズは MVP 動作確認後に一括解説する方針 (`feedback_lesson_after_implementation.md`)。
+
+### Task 4〜16 実装完了（2026-05-09、lesson と クイズは MVP 動作確認後に一括採点）
+
+#### Backend Python (Tasks 4〜8)
+
+| Task | 成果物 | テスト |
+|---|---|---|
+| 4 | `shared/db.py` (get_table, query_all) | 6 件 |
+| 5 | `shared/atcoder_client.py` (AtCoderClient) | 7 件 |
+| 6 | `lambdas/save_user/handler.py` | 7 件 |
+| 7 | `lambdas/sync_submissions/handler.py` | 6 件 |
+| 8 | `lambdas/get_submissions/handler.py` (list+detail+pagination) | 12 件 |
+
+合計 50 件 (test_response.py 12 件含む) 全パス。
+
+#### Terraform (Tasks 9, 10)
+
+- `terraform/modules/lambda/` — IAM 実行ロール、3 関数を `for_each` で一括定義、CloudWatch Log Group、API Gateway 用 permission
+- `terraform/modules/api_gateway/` — `/users/me`, `/sync`, `/submissions`, `/submissions/{submission_id}` 各エンドポイント + CORS preflight (OPTIONS) + Cognito Authorizer
+- `modules.tf` で全モジュール配線、`terraform validate` 通過
+
+#### Frontend (Tasks 11〜15) — Next.js 16 + React 19 + Amplify v6
+
+- `frontend/app/lib/types.ts` — Backend `{data, meta}` / `{error}` 形式の型 + ドメイン型
+- `frontend/app/lib/api.ts` — Cognito JWT を `idToken` で取り出して `Authorization: Bearer` 付きで fetch するクライアント
+- `frontend/app/components/AppShell.tsx` — 共通ヘッダ + ナビゲーション
+- `frontend/app/page.tsx` — ホームダッシュボード
+- `frontend/app/settings/page.tsx` — AtCoder ユーザー名登録フォーム
+- `frontend/app/submissions/page.tsx` — 提出一覧 + 同期ボタン + ページネーション
+- `frontend/app/submissions/[submission_id]/page.tsx` — 動的ルートで詳細表示
+- `tsc --noEmit` 通過
+
+#### デプロイスクリプト (Task 16)
+
+- `backend/scripts/build_lambda.sh` — uv pip install --target で依存と app コードを ZIP 化（生成成功: ~16MB）
+- `scripts/deploy_phase1.sh` — build / plan / apply / sync-env / destroy のサブコマンド分離
+
+#### 残: Task 17 + 18 (実行待ち)
+
+`scripts/deploy_phase1.sh` の各サブコマンドを実行することで完成。
+**実 AWS 課金が発生**するためユーザー実行待ち。手順は `docs/learning/phase1/task17/` と `task18/` に詳細あり。
+
+Task 7 で発覚した実物の知見（教材 02 / Decimal 問題の伏線回収）:
+- Boto3 は `float` を拒否し `Decimal` を要求する → `_floats_to_decimal()` ヘルパで変換
+
+
+
+### Task 3 実装完了（2026-05-09、まとめクイズは MVP 完成後に採点予定）
+
+Task 3「Backend — shared/response.py (APIレスポンスヘルパー)」で実装したもの:
+- `backend/shared/response.py` — `success(data, meta, status_code)` / `error(code, message, status_code)`
+- `backend/tests/test_response.py` — 12 件の単体テスト（CORS / Decimal / ステートレス性 など）
+- `backend/lambdas/get_submissions/handler.py` — 最小ハンドラ（end-to-end 動作確認用）
+- `backend/tests/test_get_submissions.py` — moto + DynamoDB 結合テスト 3 件
+
+教材は `docs/learning/phase1/task3/` に 3 枚:
+- `01-lambda-response-format-and-cors.md` — Lambda Proxy Integration / CORS / SOP / Clickjacking / CSRF（採点済み）
+- `02-json-dumps-default-and-decimal.md` — `default=str` 慣用句、Boto3 Decimal、JSONEncoder（クイズ生成済み・未採点 = 1問のみ部分回答）
+- `03-shared-response-helper-design.md` — `shared/response.py` の設計ノート（クイズなし = 実装で代替）
+
+**Task 2 + 3 統合まとめクイズは `phase1/task3/main.md` に生成済み**だが、ユーザー判断により採点は MVP 完成後に先送り。
+理由: API GW / Cognito / フロントが揃っていない段階では横断的論点（環境変数経由でのテーブル名注入、warm start のステートレス性、JWT × CORS preflight 等）が点でしか繋がらず、動くものを見ないとピンと来ないため。
 
 ### Task 1 完了（2026-04-18 採点済み）
 
@@ -51,17 +114,15 @@ Task 2「Backend — Python 環境セットアップ」で習得:
 
 振り返りは **pytest を実際に書く Task (Task 3 or Task 4) とまとめて実施**する方針。
 
-### Task 3 概要
+### Task 4 概要
 
-`backend/shared/response.py` を作成。全 Lambda ハンドラーが共通で使う**APIレスポンス整形ヘルパー**。
+`backend/shared/db.py` を作成。Lambda ハンドラから DynamoDB を操作するための共通ヘルパー。
 
-- `success(data, meta, status_code)`: `{ data, meta }` 形式の成功レスポンス
-- `error(code, message, status_code)`: `{ error: { code, message } }` 形式のエラーレスポンス
-
-主な学習ポイント:
-- **Lambda + API Gateway 統合**の「特殊な返り値の形」（statusCode / headers / body）
-- **CORS ヘッダ**の意味と必要性（`Access-Control-Allow-Origin` 等）
-- **`json.dumps(..., default=str)`** の役割（Decimal や datetime の JSON 変換）
+主な学習ポイント（予定）:
+- Boto3 Resource API vs Client API
+- `Table.query` / `Table.put_item` のラップ方針
+- ページネーション（`LastEvaluatedKey`）の扱い
+- 環境変数経由でテーブル名解決（Task 3 で確立した方針の延長）
 
 ## タスクごとの学習フロー
 

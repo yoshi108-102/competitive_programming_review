@@ -7,7 +7,7 @@ resource "aws_cognito_user_pool" "main" {
   }
 
   # メールをユーザー名として使用
-  username_attributes = ["email"]
+  username_attributes      = ["email"]
   auto_verified_attributes = ["email"]
 
   # パスワードポリシー
@@ -57,9 +57,9 @@ resource "aws_cognito_user_pool_client" "main" {
   ]
 
   # トークン有効期限
-  access_token_validity  = 1   # 1時間
-  id_token_validity      = 1   # 1時間
-  refresh_token_validity = 30  # 30日
+  access_token_validity  = 1  # 1時間
+  id_token_validity      = 1  # 1時間
+  refresh_token_validity = 30 # 30日
 
   token_validity_units {
     access_token  = "hours"

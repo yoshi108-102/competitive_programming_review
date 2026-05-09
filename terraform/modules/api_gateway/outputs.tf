@@ -17,3 +17,10 @@ output "authorizer_id" {
   description = "Cognito Authorizer ID"
   value       = aws_api_gateway_authorizer.cognito.id
 }
+
+# Lambda モジュールが aws_lambda_permission の source_arn に使う
+# → docs/learning/phase1/task9/01-terraform-lambda-module.md §D
+output "execution_arn" {
+  description = "Execution ARN used by Lambda permission resource"
+  value       = aws_api_gateway_rest_api.main.execution_arn
+}
