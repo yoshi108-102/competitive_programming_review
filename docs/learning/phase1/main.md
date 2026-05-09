@@ -1,27 +1,50 @@
-# Phase 1 / Task 3: Backend — shared/response.py (APIレスポンスヘルパー)
+# Phase 1: MVP — AWS 学習トピック
 
-## 概要
+## 目的
 
-全 Lambda ハンドラーが共通で使う **API レスポンス整形ヘルパー** を実装する。
-`{ data, meta }` 形式のレスポンスと、エラーレスポンスの2つの関数を `shared/response.py` に定義する。
+AtCoder 復習支援ツールの MVP を構築する過程で、Phase 1 で扱う AWS サービス群（Cognito / API Gateway / Lambda / DynamoDB / Amplify Hosting）の中核概念を学ぶ。
 
-Lambda + API Gateway 統合で必要となる「特殊な返り値の形」を理解するのが主題:
+Phase 1 全体は 18 の実装 Task に分かれているが、**学習ノートはタスクの実装手順ではなく AWS の概念単位**で組み直してある。実装の細部に関する Q&A は `practice/` 以下で個別に扱う。
 
-- statusCode / headers / body の3要素構造
-- CORS ヘッダの意味と必要性
-- `json.dumps(..., default=str)` の役割（Decimal対応）
+## AWS 学習トピック
 
-## 目次
+| # | トピック | 内容 |
+|---|---|---|
+| 1 | [task1/](task1/) | DynamoDB キー設計、Terraform 基礎、IAM、Bootstrap、設計原則（**完了・採点済み**） |
+| 2 | [Lambda Proxy Integration と CORS](02-lambda-proxy-integration-and-cors.md) | Lambda の戻り値三要素、`body=str` 制約、CORS / SOP / Clickjacking / CSRF |
+| 3 | [Boto3 Resource API vs Client API](03-boto3-resource-vs-client.md) | 2 系統の SDK、Resource はメンテナンスモード、スレッドセーフティ |
+| 4 | [DynamoDB Decimal とページネーション](04-dynamodb-decimal-and-pagination.md) | Number = Decimal の理由、1MB 制限、LastEvaluatedKey、Boto3 Paginators |
+| 5 | [Lambda 実行ロールとデプロイパッケージ](05-lambda-execution-role-and-deployment.md) | IAM Trust/Permission、CloudWatch Logs、aws_lambda_permission、ZIP の中身 |
+| 6 | [API Gateway REST API 構造](06-api-gateway-rest-api-structure.md) | Resource/Method/Integration/Deployment/Stage、AWS_PROXY、CORS preflight |
+| 7 | [Cognito と API Gateway Authorizer](07-cognito-and-api-gateway-authorizer.md) | User Pool/Client、JWT (idToken vs accessToken)、Cognito Authorizer 連携 |
 
-- [01. Lambda の HTTP レスポンス形式と CORS / SOP の関係](01-lambda-response-format-and-cors.md) — Lambda Proxy Integration = HTTP レスポンス、CORS/SOP、iframe、Clickjacking、CSRF、徳丸本との接続 [done][quiz][graded]
-- [02. json.dumps の default パラメータと DynamoDB Decimal 問題](02-json-dumps-default-and-decimal.md) — `default=str` 慣用句、Python→JSON 型対応、Boto3 Decimal の素性、JSONEncoder サブクラス化との比較 [done][quiz]
-- [03. `shared/response.py` の設計ノート](03-shared-response-helper-design.md) — `success()` / `error()` が吸収する 4 つの責務、ハンドラ側のビフォーアフター [done]
+## 実装 Q&A・参考メモ
 
-## 振り返り（Task 2 + 3 統合 まとめクイズ）
+`practice/` 配下に、Phase 1 の実装過程で出た **AWS の主題ではない** Q&A・設計ノート・参考メモを置く。
+将来の質疑応答もここに追記していく。
 
-Task 2（Python 環境 + moto/pytest 基盤）と Task 3（`shared/response.py` + 最小ハンドラ）を**横断する**論点のみ出題。
-個別 Topic の事実問題（教材 01/02 で扱った CORS や json.dumps の細部）は再出題しない。
+主な内容（[practice/README.md](practice/README.md) も参照）:
 
+- `shared/response.py` の設計判断（API レスポンスヘルパー）
+- `shared/db.py` / `shared/atcoder_client.py` の実装パターン
+- Python テスト基盤（moto / pytest fixtures / requests-mock）
+- Lambda ハンドラ骨格パターン
+- Frontend (Next.js + Amplify) ページ実装
+- Terraform apply / Frontend 結合テストの手順
+- CORS 関連の Q&A ログ（`practice/reference/`）
+
+## 保留中の振り返りクイズ（MVP 動作確認後に採点）
+
+Task 2 + Task 3 統合のまとめクイズを 6 問生成済み（採点保留）。
+MVP（実 AWS デプロイ + フロント結合）が動いた後に `/learning-flow:grade --summary` で採点する方針。
+
+クイズ本体は下記 §振り返り に保持。
+
+---
+
+## 振り返り（Task 2 + 3 統合 まとめクイズ — 採点保留）
+
+実装 Task のうち Task 2（Python 環境 + moto/pytest 基盤）と Task 3（`shared/response.py` + 最小ハンドラ）を**横断する**論点。
 回答は各問の `**回答**:` 行の下に記入してください。
 全問記入後に `/learning-flow:grade --summary` を実行すると、Claude が採点して進捗を更新します。
 
@@ -41,7 +64,7 @@ Task 2（Python 環境 + moto/pytest 基盤）と Task 3（`shared/response.py` 
 - [pytest fixtures - About fixtures](https://docs.pytest.org/en/stable/explanation/fixtures.html)
 - [moto - Getting Started](https://docs.getmoto.org/en/latest/docs/getting_started.html)
 
-**関連ノート**: [phase1/task2/](../task2/)（Task 2 の Python 環境セットアップ）
+**関連ノート**: [practice/pytest-fixtures-for-aws.md](practice/pytest-fixtures-for-aws.md), [practice/moto-and-aws-test-credentials.md](practice/moto-and-aws-test-credentials.md)
 
 **回答**:
 
@@ -86,7 +109,7 @@ Task 2（Python 環境 + moto/pytest 基盤）と Task 3（`shared/response.py` 
 - [Boto3 DynamoDB customization](https://docs.aws.amazon.com/boto3/latest/reference/customizations/dynamodb.html)
 - [Python `json.dumps`](https://docs.python.org/3/library/json.html#json.dumps)
 
-**関連ノート**: [02-json-dumps-default-and-decimal.md](02-json-dumps-default-and-decimal.md)
+**関連ノート**: [04-dynamodb-decimal-and-pagination.md](04-dynamodb-decimal-and-pagination.md), [practice/json-dumps-default-str.md](practice/json-dumps-default-str.md)
 
 **回答**:
 
@@ -111,7 +134,7 @@ assert _CORS_HEADERS == snapshot
 **参考**:
 - [AWS Lambda - Execution environment lifecycle](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html)
 
-**関連ノート**: [03-shared-response-helper-design.md](03-shared-response-helper-design.md) §テスト観点
+**関連ノート**: [practice/shared-response-helper-design.md](practice/shared-response-helper-design.md) §テスト観点
 
 **回答**:
 
@@ -137,7 +160,7 @@ assert _CORS_HEADERS == snapshot
 
 ### Q6. JWT (`Authorization: Bearer`) と CORS preflight の組み合わせ — 強化問題
 
-Task 3 / Topic 1 のクイズで「わからない」だった論点の再出題。
+Topic 2 のクイズで「わからない」だった論点の再出題。
 
 このプロジェクトでは Cognito JWT を `Authorization: Bearer ...` で送る。
 
@@ -150,6 +173,6 @@ Task 3 / Topic 1 のクイズで「わからない」だった論点の再出題
 - [Simple requests - MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS#simple_requests)
 - [CSRF Prevention - OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)
 
-**関連ノート**: [01-lambda-response-format-and-cors.md](01-lambda-response-format-and-cors.md), [reference/cors-only-blocks-reads-not-writes.md](reference/cors-only-blocks-reads-not-writes.md), [reference/preflight-bypass-via-simple-post.md](reference/preflight-bypass-via-simple-post.md)
+**関連ノート**: [02-lambda-proxy-integration-and-cors.md](02-lambda-proxy-integration-and-cors.md), [practice/reference/cors-only-blocks-reads-not-writes.md](practice/reference/cors-only-blocks-reads-not-writes.md), [practice/reference/preflight-bypass-via-simple-post.md](practice/reference/preflight-bypass-via-simple-post.md)
 
 **回答**:
