@@ -4,249 +4,1064 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Phase 7 — EventBridge スケジュール &amp; イベントバス | AWS 学習デモ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
-:root{
-  --bg:#0b0f14; --surface:#141b24; --surface-2:#1c2531; --surface-3:#243042;
-  --border:#2b3645; --text:#e6edf3; --muted:#93a1b3;
-  --accent:#ff9900; --accent-soft:#ffb84d; --cyan:#4dd0e1; --green:#3fb950;
-  --red:#f85149; --yellow:#e3b341; --purple:#bc8cff; --blue:#58a6ff;
-  --radius:14px; --radius-sm:8px; --shadow:0 8px 30px rgba(0,0,0,.35);
-  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
-  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+/* ============================================================
+   CSS 変数 — note 風エディトリアルテーマ
+   ============================================================ */
+:root {
+  --bg:          #ffffff;
+  --bg-sub:      #f7f7f5;
+  --border:      #e8e8e6;
+  --text:        #202124;
+  --text-muted:  #6b6f76;
+  --accent:      #0891b2;
+  --accent-light:#e0f2fe;
+  --accent-dark: #0e7490;
+  --ok:          #16a34a;
+  --ok-light:    #dcfce7;
+  --err:         #dc2626;
+  --err-light:   #fee2e2;
+  --warn:        #d97706;
+  --warn-light:  #fef3c7;
+  --card-shadow: 0 1px 3px rgba(0,0,0,.06);
+  --radius:      11px;
+  --radius-sm:   7px;
+  --font:        "Noto Sans JP", system-ui, "Hiragino Kaku Gothic ProN", sans-serif;
+  --mono:        ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace;
 }
-*{box-sizing:border-box}
-html{scroll-behavior:smooth}
-body{margin:0;background:radial-gradient(1200px 600px at 80% -10%,rgba(255,153,0,.08),transparent),var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
-a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
-.wrap{max-width:1080px;margin:0 auto;padding:28px 24px 80px}
-.topbar{position:sticky;top:0;z-index:20;backdrop-filter:blur(10px);background:rgba(11,15,20,.72);border-bottom:1px solid var(--border)}
-.topbar .inner{max-width:1080px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;gap:14px}
-.brand{font-weight:700;letter-spacing:.3px;display:flex;align-items:center;gap:10px}
-.brand .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
-.spacer{flex:1}
-.eyebrow{color:var(--accent);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase}
-h1{font-size:clamp(24px,4vw,38px);line-height:1.2;margin:.3em 0 .25em}
-.lead{color:var(--muted);font-size:17px;max-width:72ch}
-.section-title{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:34px 0 12px;font-weight:700}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;box-shadow:var(--shadow)}
-.card + .card{margin-top:18px}
-.grid{display:grid;gap:18px}
-.grid-2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
-.grid-3{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
-.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--surface-3);border:1px solid var(--border);color:var(--text)}
-.pill.accent{background:rgba(255,153,0,.14);border-color:rgba(255,153,0,.4);color:var(--accent-soft)}
-.badge{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px}
-.badge.ok{background:rgba(63,185,80,.15);color:var(--green)}
-.badge.err{background:rgba(248,81,73,.15);color:var(--red)}
-.badge.warn{background:rgba(227,179,65,.15);color:var(--yellow)}
-.badge.info{background:rgba(88,166,255,.15);color:var(--blue)}
-.btn{appearance:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;color:var(--text);background:var(--surface-3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 16px;transition:all .12s ease}
-.btn:hover{border-color:var(--muted)} .btn:active{transform:translateY(1px)}
-.btn:disabled{opacity:.45;cursor:not-allowed}
-.btn.accent{background:var(--accent);border-color:var(--accent);color:#1a1206}
-.btn.accent:hover{background:var(--accent-soft)}
-.btn.ghost{background:transparent}
-.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:4px 0 16px}
-label.field{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
-input[type=text],input[type=number],select,textarea{font-family:inherit;font-size:14px;color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 11px}
-input[type=range]{accent-color:var(--accent)}
-.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;user-select:none}
-.flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
-.flow-node{flex:1;min-width:120px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center;position:relative;transition:all .2s ease}
-.flow-node.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(255,153,0,.25);background:var(--surface-3)}
-.flow-node.ok{border-color:var(--green);box-shadow:0 0 0 2px rgba(63,185,80,.2)} .flow-node.err{border-color:var(--red)}
-.flow-arrow{display:flex;align-items:center;color:var(--muted);padding:0 8px;font-size:20px}
-.log{font-family:var(--mono);font-size:13px;background:#0a0e13;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;max-height:300px;overflow:auto;white-space:pre-wrap;line-height:1.6}
-.log .l-ok{color:var(--green)} .log .l-err{color:var(--red)} .log .l-warn{color:var(--yellow)} .log .l-info{color:var(--blue)} .log .l-dim{color:var(--muted)}
-code,kbd{font-family:var(--mono);font-size:.92em}
-.kbd{background:var(--surface-3);border:1px solid var(--border);border-bottom-width:2px;border-radius:6px;padding:1px 6px;font-size:12px}
-pre{font-family:var(--mono);font-size:13px;background:#0a0e13;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;overflow:auto}
-pre .hl{background:rgba(255,153,0,.18);display:block;margin:0 -14px;padding:0 14px}
-.takeaways{list-style:none;padding:0;margin:0;display:grid;gap:10px}
-.takeaways li{display:flex;flex-direction:column;gap:3px;background:var(--surface-2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--radius-sm);padding:12px 14px;font-size:14px}
-.takeaways li b{color:var(--accent-soft)}
-.note{font-size:13px;color:var(--muted);border-left:3px solid var(--border);padding-left:12px;margin:14px 0}
-.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:13px}
-.kv dt{color:var(--muted)} .kv dd{margin:0;font-family:var(--mono)}
-.muted{color:var(--muted)} hr.sep{border:none;border-top:1px solid var(--border);margin:28px 0}
-.footer{color:var(--muted);font-size:13px;margin-top:48px;border-top:1px solid var(--border);padding-top:20px}
-@media (max-width:640px){.flow{flex-direction:column}.flow-arrow{transform:rotate(90deg);padding:6px 0}}
 
-/* ページ固有スタイル */
-.card-title{font-size:16px;font-weight:700;margin:0 0 4px;display:flex;align-items:center;gap:8px}
-.card-sub{font-size:13px;color:var(--muted);margin:0 0 18px}
-.schedule-expr{font-family:var(--mono);font-size:15px;color:var(--accent-soft);padding:10px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);margin:8px 0 16px;display:flex;align-items:center;gap:10px}
-.schedule-expr .expr-text{flex:1}
-.virtual-clock{font-family:var(--mono);font-size:28px;font-weight:700;color:var(--cyan);text-align:center;padding:10px 0;letter-spacing:.04em}
-.clock-label{font-size:11px;color:var(--muted);text-align:center;margin-top:-4px;margin-bottom:12px}
-.next-fires{margin-top:14px}
-.next-fires-title{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px}
-.next-fires-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:4px}
-.next-fires-list li{font-family:var(--mono);font-size:12px;padding:5px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;display:flex;justify-content:space-between;align-items:center}
-.lambda-icon{font-size:36px;transition:all .25s ease}
-.lambda-icon.fired{filter:drop-shadow(0 0 12px var(--green));animation:pulse .4s ease}
-@keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.25)}100%{transform:scale(1)}}
-.speed-row{display:flex;align-items:center;gap:12px;font-size:13px;color:var(--muted)}
-.speed-row input{flex:1}
-.expr-presets{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
-.expr-preset-btn{font-size:12px;font-family:var(--mono);padding:4px 10px;border-radius:6px}
-.pattern-editor{width:100%;min-height:80px;resize:vertical;font-family:var(--mono);font-size:13px}
-.event-editor{width:100%;min-height:120px;resize:vertical;font-family:var(--mono);font-size:13px}
-.match-result{padding:12px 14px;border-radius:var(--radius-sm);margin:12px 0;font-size:14px;font-weight:600;border:1px solid;display:flex;align-items:center;gap:10px}
-.match-result.matched{background:rgba(63,185,80,.1);border-color:var(--green);color:var(--green)}
-.match-result.dropped{background:rgba(248,81,73,.1);border-color:var(--red);color:var(--red)}
-.match-result.idle{background:var(--surface-2);border-color:var(--border);color:var(--muted)}
-.bus-flow{display:flex;flex-direction:column;gap:8px;margin:16px 0}
-.bus-node{padding:10px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface-2);font-size:13px;transition:all .25s ease}
-.bus-node .node-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px}
-.bus-node .node-val{font-family:var(--mono);font-size:13px}
-.bus-node.active{border-color:var(--accent);background:var(--surface-3)}
-.bus-node.ok{border-color:var(--green);background:rgba(63,185,80,.06)}
-.bus-node.dropped{border-color:var(--red);background:rgba(248,81,73,.06)}
-.stat-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px}
-.stat-box{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 16px;flex:1;min-width:80px;text-align:center}
-.stat-num{font-size:26px;font-weight:700;font-family:var(--mono)}
-.stat-lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+/* ============================================================
+   リセット / ベース
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.9;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code {
+  font-family: var(--mono);
+  font-size: .875em;
+  color: var(--accent-dark);
+  background: var(--accent-light);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+/* ============================================================
+   レイアウト
+   ============================================================ */
+.wrap {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 24px 96px;
+}
+
+/* ============================================================
+   トップバー
+   ============================================================ */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(255,255,255,0.92);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(8px);
+}
+.topbar .inner {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 24px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.brand {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: -.01em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.brand svg { flex-shrink: 0; }
+.spacer { flex: 1; }
+.phase-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-light);
+  padding: 3px 10px;
+  border-radius: 20px;
+  letter-spacing: .03em;
+}
+
+/* ============================================================
+   ヒーロー
+   ============================================================ */
+.hero {
+  padding: 56px 0 40px;
+  opacity: 0;
+  animation: fadeIn 0.6s ease 0.05s forwards;
+}
+.eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+h1 {
+  font-size: clamp(26px, 4vw, 38px);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -.02em;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+h1 em {
+  font-style: normal;
+  color: var(--accent);
+}
+.lead {
+  font-size: 17px;
+  color: var(--text-muted);
+  line-height: 1.85;
+  margin-bottom: 24px;
+  max-width: 60ch;
+}
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 12px;
+  background: var(--bg-sub);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--text-muted);
+}
+.chip-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   セクション区切り
+   ============================================================ */
+.sep {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 40px 0;
+}
+
+/* ============================================================
+   アニメーション
+   ============================================================ */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.reveal {
+  opacity: 0;
+  animation: fadeIn 0.55s ease forwards;
+}
+.reveal:nth-child(1) { animation-delay: .1s; }
+.reveal:nth-child(2) { animation-delay: .2s; }
+.reveal:nth-child(3) { animation-delay: .3s; }
+.reveal:nth-child(4) { animation-delay: .4s; }
+
+/* ============================================================
+   カード
+   ============================================================ */
+.card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px 28px 24px;
+  box-shadow: var(--card-shadow);
+  margin-bottom: 28px;
+}
+.card-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  color: var(--text);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.card-title svg { color: var(--accent); flex-shrink: 0; }
+.card-sub {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: 22px;
+  line-height: 1.7;
+}
+
+/* ============================================================
+   セクションラベル
+   ============================================================ */
+.section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 20px 0 10px;
+}
+
+/* ============================================================
+   プリセットボタン
+   ============================================================ */
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.preset-btn {
+  appearance: none;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-sub);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  transition: border-color .15s, color .15s, background .15s;
+  line-height: 1.5;
+}
+.preset-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-light);
+}
+.preset-btn[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-light);
+  font-weight: 600;
+}
+
+/* ============================================================
+   フォーム要素
+   ============================================================ */
+label.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  font-weight: 500;
+}
+label.field .hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 400;
+  opacity: .8;
+}
+input[type=text], input[type=number], select, textarea {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg-sub);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+  width: 100%;
+}
+input[type=text]:focus, input[type=number]:focus, textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-light);
+  background: var(--bg);
+}
+input[type=range] {
+  accent-color: var(--accent);
+  flex: 1;
+  cursor: pointer;
+}
+textarea {
+  resize: vertical;
+  min-height: 100px;
+  line-height: 1.6;
+}
+
+/* ============================================================
+   スケジュール式表示
+   ============================================================ */
+.expr-display {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-light);
+  border: 1px solid rgba(8,145,178,.18);
+  border-radius: var(--radius-sm);
+  padding: 10px 16px;
+  margin: 6px 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.expr-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   仮想時計
+   ============================================================ */
+.clock-display {
+  text-align: center;
+  padding: 16px 0;
+  margin: 12px 0;
+}
+.clock-face {
+  display: inline-block;
+  background: var(--bg-sub);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 28px;
+}
+.clock-time {
+  font-family: var(--mono);
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: .04em;
+  display: block;
+}
+.clock-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: .08em;
+  margin-top: 6px;
+  text-transform: uppercase;
+}
+
+/* ============================================================
+   速度コントロール
+   ============================================================ */
+.speed-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+}
+.speed-val {
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 13px;
+  min-width: 28px;
+}
+
+/* ============================================================
+   フローノード
+   ============================================================ */
+.flow {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  flex-wrap: wrap;
+  margin: 14px 0;
+}
+.flow-node {
+  flex: 1;
+  min-width: 130px;
+  background: var(--bg-sub);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 12px;
+  text-align: center;
+  transition: border-color .2s, background .2s, box-shadow .2s;
+}
+.flow-node .node-icon {
+  font-size: 26px;
+  margin-bottom: 6px;
+  display: block;
+  transition: transform .2s;
+}
+.flow-node .node-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: .05em;
+  margin-bottom: 3px;
+  text-transform: uppercase;
+}
+.flow-node .node-status {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.flow-node.active {
+  border-color: var(--accent);
+  background: var(--accent-light);
+}
+.flow-node.active .node-status { color: var(--accent); }
+.flow-node.ok {
+  border-color: var(--ok);
+  background: var(--ok-light);
+}
+.flow-node.ok .node-status { color: var(--ok); }
+.flow-node.err {
+  border-color: var(--err);
+  background: var(--err-light);
+}
+
+.flow-arrow {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  color: var(--border);
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.flow-arrow svg { transition: stroke .3s; }
+.flow-arrow.flowing svg line,
+.flow-arrow.flowing svg polygon { stroke: var(--accent); fill: var(--accent); }
+
+.lambda-icon {
+  font-family: var(--mono);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-muted);
+  transition: color .25s, transform .25s;
+  display: block;
+}
+.lambda-icon.fired {
+  color: var(--ok);
+  transform: scale(1.2);
+}
+
+/* ============================================================
+   次回発火リスト
+   ============================================================ */
+.next-fires { margin-top: 14px; }
+.next-fires-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.next-fires-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.next-fires-list li {
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 6px 12px;
+  background: var(--bg-sub);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text-muted);
+}
+.next-fires-list li:first-child {
+  border-color: var(--accent);
+  color: var(--text);
+  background: var(--accent-light);
+}
+.next-tag {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent);
+  background: rgba(8,145,178,.12);
+  border: 1px solid rgba(8,145,178,.2);
+  padding: 1px 8px;
+  border-radius: 20px;
+  letter-spacing: .04em;
+}
+
+/* ============================================================
+   発火カウンタバッジ
+   ============================================================ */
+.fire-badge {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(8,145,178,.25);
+  color: var(--accent);
+  background: var(--accent-light);
+}
+
+/* ============================================================
+   コントロール
+   ============================================================ */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 16px 0;
+}
+.btn {
+  appearance: none;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--bg);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 8px 18px;
+  transition: background .15s, border-color .15s, opacity .15s;
+  line-height: 1;
+}
+.btn:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
+.btn:active { opacity: .85; }
+.btn:disabled { opacity: .38; cursor: not-allowed; }
+.btn.outline {
+  background: transparent;
+  color: var(--accent);
+}
+.btn.outline:hover { background: var(--accent-light); }
+.btn.ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+.btn.ghost:hover { background: var(--bg-sub); color: var(--text); border-color: var(--text-muted); }
+
+/* ============================================================
+   ログ — 薄グレー地・等幅ダーク文字
+   ============================================================ */
+.log {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.75;
+  background: var(--bg-sub);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  color: var(--text);
+}
+.l-ok   { color: var(--ok); }
+.l-err  { color: var(--err); }
+.l-warn { color: var(--warn); }
+.l-info { color: var(--accent); }
+.l-dim  { color: var(--text-muted); }
+
+/* ============================================================
+   イベントバス — バスフロー縦
+   ============================================================ */
+.bus-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 16px 0;
+  position: relative;
+}
+.bus-flow::before {
+  content: '';
+  position: absolute;
+  left: 20px; top: 28px; bottom: 28px;
+  width: 2px;
+  background: var(--border);
+  z-index: 0;
+}
+.bus-node {
+  padding: 12px 14px 12px 44px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sub);
+  font-size: 13px;
+  transition: border-color .25s, background .25s, box-shadow .25s;
+  position: relative;
+  z-index: 1;
+  margin-bottom: 6px;
+}
+.bus-node::before {
+  content: '';
+  position: absolute;
+  left: 14px; top: 50%;
+  transform: translateY(-50%);
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--border);
+  border: 2px solid var(--text-muted);
+  transition: background .25s, border-color .25s;
+}
+.bus-node .node-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+.bus-node .node-val {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.bus-node.active {
+  border-color: var(--accent);
+  background: var(--accent-light);
+  box-shadow: var(--card-shadow);
+}
+.bus-node.active::before {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.bus-node.active .node-val { color: var(--accent); }
+.bus-node.ok {
+  border-color: var(--ok);
+  background: var(--ok-light);
+}
+.bus-node.ok::before { background: var(--ok); border-color: var(--ok); }
+.bus-node.ok .node-val { color: var(--ok); }
+.bus-node.dropped {
+  border-color: var(--err);
+  background: var(--err-light);
+}
+.bus-node.dropped::before { background: var(--err); border-color: var(--err); }
+.bus-node.dropped .node-val { color: var(--err); }
+
+/* ============================================================
+   統計
+   ============================================================ */
+.stat-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.stat-box {
+  flex: 1;
+  min-width: 80px;
+  background: var(--bg-sub);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  text-align: center;
+}
+.stat-num {
+  font-family: var(--mono);
+  font-size: 28px;
+  font-weight: 700;
+  display: block;
+  line-height: 1.1;
+}
+.stat-num.green { color: var(--ok); }
+.stat-num.red   { color: var(--err); }
+.stat-num.blue  { color: var(--accent); }
+.stat-lbl {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+/* ============================================================
+   マッチング結果
+   ============================================================ */
+.match-result {
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  margin: 12px 0;
+  transition: all .25s;
+  background: var(--bg-sub);
+  color: var(--text-muted);
+}
+.match-result.matched {
+  background: var(--ok-light);
+  border-color: var(--ok);
+  color: var(--ok);
+}
+.match-result.dropped {
+  background: var(--err-light);
+  border-color: var(--err);
+  color: var(--err);
+}
+.match-icon { font-size: 18px; flex-shrink: 0; }
+
+/* ============================================================
+   グリッド
+   ============================================================ */
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  gap: 18px;
+}
+
+/* ============================================================
+   学ぶポイント
+   ============================================================ */
+h2.section-heading {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+.takeaways {
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+.takeaways li {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: box-shadow .15s;
+}
+.takeaways li:hover { box-shadow: var(--card-shadow); }
+.takeaways li strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+.takeaways li span { color: var(--text-muted); line-height: 1.75; }
+
+/* ============================================================
+   ノート / CTA フッター
+   ============================================================ */
+.note-block {
+  background: var(--bg-sub);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--text-muted);
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 16px 0;
+  line-height: 1.8;
+}
+.cta-block {
+  background: var(--bg-sub);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px 26px;
+  margin-top: 40px;
+}
+.cta-block h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -.01em;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cta-block h3::before {
+  content: '';
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+.cta-commands {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cta-cmd {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.cta-cmd .cmd-prefix {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--bg);
+  background: var(--accent);
+  padding: 1px 7px;
+  border-radius: 4px;
+  letter-spacing: .06em;
+  flex-shrink: 0;
+}
+.cta-cmd .cmd-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+.cta-meta {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.page-footer {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-top: 48px;
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+  line-height: 1.8;
+}
+
+/* ============================================================
+   スクロールバー
+   ============================================================ */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ============================================================
+   レスポンシブ
+   ============================================================ */
+@media (max-width: 600px) {
+  .flow { flex-direction: column; }
+  .flow-arrow { transform: rotate(90deg); padding: 6px 0; justify-content: center; }
+  .clock-time { font-size: 28px; }
+  .card { padding: 20px 16px; }
+}
 </style>
 </head>
 <body>
 
+<!-- トップバー -->
 <nav class="topbar" aria-label="サイトナビゲーション">
   <div class="inner">
     <div class="brand">
-      <span class="dot" aria-hidden="true"></span>
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+        <circle cx="9" cy="9" r="7.5" stroke="#0891b2" stroke-width="1.5"/>
+        <path d="M9 5.5v3.5l2.5 2.5" stroke="#0891b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
       AWS 学習デモ
     </div>
     <div class="spacer"></div>
-    <span class="pill accent">Phase 7</span>
+    <span class="phase-badge">Phase 7</span>
   </div>
 </nav>
 
 <main class="wrap">
 
   <!-- ヒーロー -->
-  <div class="eyebrow">Phase 7</div>
-  <h1>EventBridge — スケジュール &amp; イベントバス</h1>
-  <p class="lead">cron/rate 式で Lambda を定時起動し、イベントパターンでルーティングする疎結合ハブ。触って仕組みを体感しよう。</p>
-  <div class="badges" aria-label="対象サービス">
-    <span class="pill accent">⚡ EventBridge</span>
-    <span class="pill">🕐 Scheduler</span>
-    <span class="pill">🔀 イベントバス</span>
-    <span class="pill">λ Lambda ターゲット</span>
-  </div>
+  <header class="hero" aria-label="ページヘッダー">
+    <div class="eyebrow">Phase 7 / EventBridge</div>
+    <h1>EventBridge<br><em>スケジュール &amp; イベントバス</em></h1>
+    <p class="lead">cron/rate 式で Lambda を定時起動し、イベントパターンでルーティングする疎結合ハブ。シミュレーションを触って仕組みを体感しよう。</p>
+    <div class="badges" aria-label="対象サービス">
+      <span class="chip"><span class="chip-dot" aria-hidden="true"></span>EventBridge</span>
+      <span class="chip"><span class="chip-dot" aria-hidden="true"></span>Scheduler</span>
+      <span class="chip"><span class="chip-dot" aria-hidden="true"></span>イベントバス</span>
+      <span class="chip"><span class="chip-dot" aria-hidden="true"></span>Lambda ターゲット</span>
+    </div>
+  </header>
 
   <hr class="sep">
 
-  <!-- カード 1: スケジューラ -->
-  <section class="card" aria-labelledby="card1-title">
-    <h2 class="card-title" id="card1-title">🕐 カード 1 — EventBridge スケジューラ</h2>
-    <p class="card-sub">スケジュール式を選択・入力 → 仮想時計が進み、一致したら Lambda が発火する様子を確認</p>
+  <!-- ============================================================
+       カード 1: スケジューラ
+       ============================================================ -->
+  <section class="card reveal" aria-labelledby="card1-title">
+    <h2 class="card-title" id="card1-title">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <circle cx="10" cy="10" r="8" stroke="#0891b2" stroke-width="1.5"/>
+        <path d="M10 6v4l3 3" stroke="#0891b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      EventBridge Scheduler
+    </h2>
+    <p class="card-sub">スケジュール式を選択・入力 → 仮想時計が進み、一致したら Lambda が発火する</p>
 
-    <div class="section-title">スケジュール式プリセット</div>
-    <div class="expr-presets" role="group" aria-label="スケジュール式プリセット">
-      <button class="btn expr-preset-btn" data-expr="rate(1 minutes)" aria-pressed="false">rate(1 minutes)</button>
-      <button class="btn expr-preset-btn" data-expr="rate(5 minutes)" aria-pressed="false">rate(5 minutes)</button>
-      <button class="btn expr-preset-btn" data-expr="rate(1 hours)" aria-pressed="false">rate(1 hours)</button>
-      <button class="btn expr-preset-btn" data-expr="cron(0 9 * * ? *)" aria-pressed="false">cron(0 9 * * ? *)</button>
-      <button class="btn expr-preset-btn" data-expr="cron(0 0 1 * ? *)" aria-pressed="false">cron(0 0 1 * ? *)</button>
+    <div class="section-label">スケジュール式プリセット</div>
+    <div class="presets" role="group" aria-label="スケジュール式プリセット">
+      <button class="preset-btn" data-expr="rate(1 minutes)" aria-pressed="false">rate(1 minutes)</button>
+      <button class="preset-btn" data-expr="rate(5 minutes)" aria-pressed="false">rate(5 minutes)</button>
+      <button class="preset-btn" data-expr="rate(1 hours)" aria-pressed="false">rate(1 hours)</button>
+      <button class="preset-btn" data-expr="cron(0 9 * * ? *)" aria-pressed="false">cron(0 9 * * ? *)</button>
+      <button class="preset-btn" data-expr="cron(0 0 1 * ? *)" aria-pressed="false">cron(0 0 1 * ? *)</button>
     </div>
 
-    <label class="field" for="expr-input">カスタム式（rate(N minutes|hours|days) または cron(分 時 日 月 ? 年)）</label>
-    <div class="schedule-expr" id="schedule-expr-display" aria-live="polite">
-      <span>⚡</span>
-      <span class="expr-text" id="expr-display-text">rate(5 minutes)</span>
+    <label class="field" for="expr-input">
+      カスタム式
+      <span class="hint">rate(N minutes|hours|days) または cron(分 時 日 月 ? 年)</span>
+    </label>
+    <div class="expr-display" id="schedule-expr-display" aria-live="polite">
+      <span class="expr-dot" aria-hidden="true"></span>
+      <span id="expr-display-text">rate(5 minutes)</span>
     </div>
-    <input type="text" id="expr-input" value="rate(5 minutes)" style="width:100%;margin-bottom:14px" aria-label="スケジュール式">
+    <input type="text" id="expr-input" value="rate(5 minutes)" aria-label="スケジュール式">
 
+    <div class="section-label" style="margin-top:20px">仮想クロック速度</div>
     <div class="speed-row">
       <span>速度</span>
       <input type="range" id="speed-slider" min="1" max="10" value="5" aria-label="仮想時計の速度">
-      <span id="speed-label">×5</span>
-      <span style="margin-left:auto;font-size:12px">1目盛り = 1秒 → 仮想N分</span>
+      <span class="speed-val" id="speed-label">×5</span>
+      <span style="margin-left:auto;font-size:12px;color:var(--text-muted)">1 tick = 仮想 N 分</span>
     </div>
 
-    <hr class="sep" style="margin:16px 0">
+    <!-- 仮想時計 -->
+    <div class="clock-display" aria-label="仮想時計">
+      <div class="clock-face">
+        <span class="clock-time" id="virtual-clock" aria-live="polite">09:00:00</span>
+        <div class="clock-label">仮想時刻</div>
+      </div>
+    </div>
 
-    <div class="virtual-clock" id="virtual-clock" aria-live="polite" aria-label="仮想時計">09:00:00</div>
-    <div class="clock-label">仮想時刻（速度×でティック中）</div>
-
+    <!-- フローノード -->
     <div class="flow" aria-label="処理フロー">
       <div class="flow-node" id="sched-node-eb" aria-label="EventBridge スケジューラ">
-        <div style="font-size:24px">⚡</div>
-        <div style="font-weight:700;font-size:14px;margin-top:4px">EventBridge<br>Scheduler</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:6px" id="sched-status-text">待機中</div>
+        <span class="node-icon" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+            <rect x="2" y="2" width="22" height="22" rx="3" stroke="#0891b2" stroke-width="1.5"/>
+            <circle cx="13" cy="13" r="5.5" stroke="#0891b2" stroke-width="1.5"/>
+            <path d="M13 9.5v3.5l2.5 2.5" stroke="#0891b2" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div class="node-name">Scheduler</div>
+        <div class="node-status" id="sched-status-text">待機中</div>
       </div>
-      <div class="flow-arrow" aria-hidden="true">→</div>
+      <div class="flow-arrow" id="flow-arrow" aria-hidden="true">
+        <svg width="40" height="20" viewBox="0 0 40 20">
+          <line x1="0" y1="10" x2="32" y2="10" id="flow-trace-line" stroke="#e8e8e6" stroke-width="2"/>
+          <polygon points="32,6 40,10 32,14" fill="#e8e8e6" id="flow-trace-arrow"/>
+        </svg>
+      </div>
       <div class="flow-node" id="sched-node-lambda" aria-label="Lambda ターゲット">
-        <div class="lambda-icon" id="lambda-icon">λ</div>
-        <div style="font-weight:700;font-size:14px;margin-top:4px">Lambda<br>ターゲット</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:6px" id="lambda-status-text">未発火</div>
+        <span class="lambda-icon" id="lambda-icon" aria-label="Lambda">λ</span>
+        <div class="node-name">Lambda Target</div>
+        <div class="node-status" id="lambda-status-text">未発火</div>
       </div>
     </div>
 
+    <!-- 次回発火 -->
     <div class="next-fires" aria-live="polite">
-      <div class="next-fires-title">次回発火予定（仮想時刻）</div>
+      <div class="next-fires-title">次回発火予定</div>
       <ul class="next-fires-list" id="next-fires-list" aria-label="次回発火スケジュール">
         <li><span>計算中...</span></li>
       </ul>
     </div>
 
-    <div class="controls" style="margin-top:16px">
-      <button class="btn accent" id="btn-sched-start" aria-label="スケジュール開始">▶ 開始</button>
-      <button class="btn" id="btn-sched-stop" disabled aria-label="スケジュール停止">⏸ 停止</button>
+    <!-- コントロールボタン -->
+    <div class="controls">
+      <button class="btn" id="btn-sched-start" aria-label="スケジュール開始">▶ 開始</button>
+      <button class="btn outline" id="btn-sched-stop" disabled aria-label="スケジュール停止">⏸ 停止</button>
       <button class="btn ghost" id="btn-sched-reset" aria-label="スケジュールリセット">↺ リセット</button>
-      <span class="badge info" id="fire-count-badge">発火: 0 回</span>
+      <span class="fire-badge" id="fire-count-badge" aria-live="polite">FIRE: 0</span>
     </div>
 
-    <div class="section-title">発火ログ</div>
-    <div class="log" id="sched-log" role="log" aria-label="スケジュール発火ログ" aria-live="polite">
-      <span class="l-dim">-- スケジューラを開始すると発火ログがここに表示されます --</span>
-    </div>
+    <div class="section-label">発火ログ</div>
+    <div class="log" id="sched-log" role="log" aria-label="スケジュール発火ログ" aria-live="polite"><span class="l-dim">// スケジューラを開始すると発火ログがここに表示されます</span></div>
   </section>
 
-  <!-- カード 2: イベントバス -->
-  <section class="card" aria-labelledby="card2-title">
-    <h2 class="card-title" id="card2-title">🔀 カード 2 — EventBridge イベントバス</h2>
+  <hr class="sep">
+
+  <!-- ============================================================
+       カード 2: イベントバス
+       ============================================================ -->
+  <section class="card reveal" aria-labelledby="card2-title">
+    <h2 class="card-title" id="card2-title">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <path d="M3 10h4m6 0h4M10 3v4m0 6v4" stroke="#0891b2" stroke-width="1.5" stroke-linecap="round"/>
+        <circle cx="10" cy="10" r="2.5" fill="#0891b2"/>
+      </svg>
+      EventBridge イベントバス
+    </h2>
     <p class="card-sub">ルールのイベントパターンを設定し、サンプルイベントを「発行」してルーティングを確認</p>
 
+    <!-- 統計 -->
     <div class="stat-row" aria-label="統計">
       <div class="stat-box">
-        <div class="stat-num l-ok" id="stat-matched" style="color:var(--green)">0</div>
-        <div class="stat-lbl">マッチ</div>
+        <span class="stat-num green" id="stat-matched">0</span>
+        <div class="stat-lbl">Match</div>
       </div>
       <div class="stat-box">
-        <div class="stat-num" id="stat-dropped" style="color:var(--red)">0</div>
-        <div class="stat-lbl">ドロップ</div>
+        <span class="stat-num red" id="stat-dropped">0</span>
+        <div class="stat-lbl">Drop</div>
       </div>
       <div class="stat-box">
-        <div class="stat-num" id="stat-total" style="color:var(--blue)">0</div>
-        <div class="stat-lbl">合計</div>
+        <span class="stat-num blue" id="stat-total">0</span>
+        <div class="stat-lbl">Total</div>
       </div>
     </div>
 
-    <div class="grid grid-2">
+    <!-- パターン / イベントエディタ -->
+    <div class="grid-2">
       <div>
         <label class="field" for="pattern-editor">
           イベントパターン（JSON）
-          <span style="font-size:11px;color:var(--muted)">source / detail-type / detail のフィールドでフィルタ</span>
+          <span class="hint">source / detail-type / detail でフィルタ</span>
         </label>
-        <textarea class="pattern-editor" id="pattern-editor" aria-label="イベントパターン JSON" spellcheck="false">{
+        <textarea id="pattern-editor" aria-label="イベントパターン JSON" spellcheck="false">{
   "source": ["atcoder"],
   "detail-type": ["submission"]
 }</textarea>
-        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">
-          <button class="btn expr-preset-btn" data-pattern='{"source":["atcoder"],"detail-type":["submission"]}' aria-label="AtCoder submission パターンをセット">AtCoder submission</button>
-          <button class="btn expr-preset-btn" data-pattern='{"source":["aws.s3"]}' aria-label="S3 イベントパターンをセット">S3 イベント</button>
-          <button class="btn expr-preset-btn" data-pattern='{"detail-type":["EC2 Instance State-change Notification"],"detail":{"state":["running"]}}' aria-label="EC2 State-change パターンをセット">EC2 State</button>
+        <div class="presets" style="margin-top:8px">
+          <button class="preset-btn" data-pattern='{"source":["atcoder"],"detail-type":["submission"]}' aria-label="AtCoder submission パターン">AtCoder sub</button>
+          <button class="preset-btn" data-pattern='{"source":["aws.s3"]}' aria-label="S3 イベントパターン">S3 event</button>
+          <button class="preset-btn" data-pattern='{"detail-type":["EC2 Instance State-change Notification"],"detail":{"state":["running"]}}' aria-label="EC2 State-change パターン">EC2 state</button>
         </div>
       </div>
       <div>
         <label class="field" for="event-editor">
           発行するイベント（JSON）
-          <span style="font-size:11px;color:var(--muted)">source / detail-type / detail を含む</span>
+          <span class="hint">source / detail-type / detail を含む</span>
         </label>
-        <textarea class="event-editor" id="event-editor" aria-label="発行イベント JSON" spellcheck="false">{
+        <textarea id="event-editor" aria-label="発行イベント JSON" spellcheck="false">{
   "source": "atcoder",
   "detail-type": "submission",
   "detail": {
@@ -255,82 +1070,120 @@ pre .hl{background:rgba(255,153,0,.18);display:block;margin:0 -14px;padding:0 14
     "language": "Python3"
   }
 }</textarea>
-        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">
-          <button class="btn expr-preset-btn" data-event='{"source":"atcoder","detail-type":"submission","detail":{"problem_id":"abc001_a","verdict":"AC","language":"Python3"}}' aria-label="AtCoder AC イベントをセット">AtCoder AC</button>
-          <button class="btn expr-preset-btn" data-event='{"source":"atcoder","detail-type":"contest_start","detail":{"contest_id":"abc300"}}' aria-label="AtCoder contest_start イベントをセット">contest_start</button>
-          <button class="btn expr-preset-btn" data-event='{"source":"aws.s3","detail-type":"Object Created","detail":{"bucket":"my-bucket"}}' aria-label="S3 イベントをセット">S3 Upload</button>
+        <div class="presets" style="margin-top:8px">
+          <button class="preset-btn" data-event='{"source":"atcoder","detail-type":"submission","detail":{"problem_id":"abc001_a","verdict":"AC","language":"Python3"}}' aria-label="AtCoder AC イベント">AtCoder AC</button>
+          <button class="preset-btn" data-event='{"source":"atcoder","detail-type":"contest_start","detail":{"contest_id":"abc300"}}' aria-label="contest_start イベント">contest_start</button>
+          <button class="preset-btn" data-event='{"source":"aws.s3","detail-type":"Object Created","detail":{"bucket":"my-bucket"}}' aria-label="S3 Upload イベント">S3 upload</button>
         </div>
       </div>
     </div>
 
+    <!-- バスフロー縦 -->
+    <div class="section-label">イベントバス フロー</div>
     <div class="bus-flow" id="bus-flow" aria-live="polite" aria-label="イベントバスフロー">
       <div class="bus-node" id="bus-publisher">
-        <div class="node-label">Publisher</div>
+        <div class="node-label">Publisher — 発行元</div>
         <div class="node-val" id="bus-pub-val">—</div>
       </div>
-      <div style="text-align:center;color:var(--muted);font-size:18px;padding:2px 0" aria-hidden="true">↓</div>
       <div class="bus-node" id="bus-eventbus">
-        <div class="node-label">Event Bus（default）</div>
+        <div class="node-label">Event Bus (default)</div>
         <div class="node-val">すべてのイベントを受信</div>
       </div>
-      <div style="text-align:center;color:var(--muted);font-size:18px;padding:2px 0" aria-hidden="true">↓</div>
       <div class="bus-node" id="bus-rule">
         <div class="node-label">Rule — イベントパターンでフィルタ</div>
         <div class="node-val" id="bus-rule-val">—</div>
       </div>
-      <div style="text-align:center;color:var(--muted);font-size:18px;padding:2px 0" aria-hidden="true">↓</div>
       <div class="bus-node" id="bus-target">
-        <div class="node-label">Target（Lambda）</div>
+        <div class="node-label">Target (Lambda)</div>
         <div class="node-val" id="bus-target-val">待機中</div>
       </div>
     </div>
 
+    <!-- マッチング結果 -->
     <div class="match-result idle" id="match-result" role="status" aria-live="assertive">
-      <span id="match-icon">🔍</span>
+      <span class="match-icon" id="match-icon">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <circle cx="8" cy="8" r="5.5" stroke="#6b6f76" stroke-width="1.5"/>
+          <path d="M13 13l2.5 2.5" stroke="#6b6f76" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </span>
       <span id="match-text">イベントを発行するとマッチング結果がここに表示されます</span>
     </div>
 
+    <!-- コントロール -->
     <div class="controls">
-      <button class="btn accent" id="btn-publish" aria-label="イベントを発行">📤 イベントを発行</button>
+      <button class="btn" id="btn-publish" aria-label="イベントを発行">▶ イベントを発行</button>
       <button class="btn ghost" id="btn-bus-reset" aria-label="イベントバスリセット">↺ リセット</button>
     </div>
 
-    <div class="section-title">イベントログ</div>
-    <div class="log" id="bus-log" role="log" aria-label="イベントバスログ" aria-live="polite">
-      <span class="l-dim">-- イベントを発行するとルーティングログがここに表示されます --</span>
-    </div>
+    <div class="section-label">イベントログ</div>
+    <div class="log" id="bus-log" role="log" aria-label="イベントバスログ" aria-live="polite"><span class="l-dim">// イベントを発行するとルーティングログがここに表示されます</span></div>
   </section>
 
-  <!-- 学ぶポイント -->
-  <div class="section-title">学ぶポイント</div>
-  <ul class="takeaways" aria-label="学ぶポイント">
-    <li>
-      <b>スケジュール式: rate と cron</b>
-      <span><code>rate(5 minutes)</code> は5分ごとに繰り返す。<code>cron(0 9 * * ? *)</code> は毎日9時に実行。EventBridge Scheduler は1回限り・タイムゾーン指定にも対応。</span>
-    </li>
-    <li>
-      <b>イベントバス + ルール + ターゲット</b>
-      <span>イベントをパターンでフィルタし、複数ターゲット（Lambda・SQS・SNS等）へ配信する疎結合ハブ。発行側はターゲットを知らなくてよい。</span>
-    </li>
-    <li>
-      <b>イベントパターン</b>
-      <span><code>source</code> / <code>detail-type</code> / <code>detail</code> のフィールド値が一致したイベントのみターゲットへ配信。一致しないイベントは自動的に捨てられる（課金なし）。</span>
-    </li>
-    <li>
-      <b>cron ポーリングとの違い</b>
-      <span>EventBridge はポーリング不要のイベント駆動。AWS サービス間連携（S3→Lambda 等）も同じ仕組みで、スケールしてもコード変更なし。</span>
-    </li>
-  </ul>
+  <hr class="sep">
 
-  <!-- 正式教材 -->
-  <div class="section-title">正式教材で深掘り</div>
-  <div class="note">
+  <!-- 学ぶポイント -->
+  <section class="reveal" aria-labelledby="takeaways-heading">
+    <h2 class="section-heading" id="takeaways-heading">学ぶポイント</h2>
+    <ul class="takeaways">
+      <li>
+        <strong>スケジュール式: rate と cron</strong>
+        <span><code>rate(5 minutes)</code> は 5 分ごとに繰り返す。<code>cron(0 9 * * ? *)</code> は毎日 9 時に実行。EventBridge Scheduler は 1 回限り・タイムゾーン指定にも対応。</span>
+      </li>
+      <li>
+        <strong>イベントバス + ルール + ターゲット</strong>
+        <span>イベントをパターンでフィルタし、複数ターゲット（Lambda・SQS・SNS 等）へ配信する疎結合ハブ。発行側はターゲットを知らなくてよい。</span>
+      </li>
+      <li>
+        <strong>イベントパターン</strong>
+        <span><code>source</code> / <code>detail-type</code> / <code>detail</code> のフィールド値が一致したイベントのみターゲットへ配信。一致しないイベントは自動的に捨てられる（課金なし）。</span>
+      </li>
+      <li>
+        <strong>cron ポーリングとの違い</strong>
+        <span>EventBridge はポーリング不要のイベント駆動。AWS サービス間連携（S3 → Lambda 等）も同じ仕組みで、スケールしてもコード変更なし。</span>
+      </li>
+    </ul>
+  </section>
+
+  <hr class="sep">
+
+  <div class="note-block reveal">
     このデモで触れた概念の詳細は <code>docs/learning/phase7/preview-eventbridge.md</code> で学習できます。公式ドキュメント（EventBridge ユーザーガイド・Scheduler ユーザーガイド）も合わせて参照してください。
   </div>
 
-  <div class="footer" role="contentinfo">
-    ⚠️ このページはデモ用シミュレーションです。実際の AWS / EventBridge API は一切呼び出していません。
+  <!-- 実 AWS CTA -->
+  <div class="cta-block reveal" role="complementary" aria-label="実 AWS で動かす">
+    <h3>実物で動かす（実 AWS）</h3>
+    <div class="cta-commands">
+      <div class="cta-cmd">
+        <span class="cmd-prefix">TEST</span>
+        <span>make sandbox-test-phase7</span>
+      </div>
+      <div class="cta-cmd">
+        <span class="cmd-prefix">APPLY</span>
+        <span>make sandbox-up-phase7</span>
+      </div>
+      <div class="cta-cmd">
+        <span class="cmd-prefix">LOAD</span>
+        <span>make sandbox-load-phase7</span>
+      </div>
+      <div class="cta-cmd">
+        <span class="cmd-prefix">WATCH</span>
+        <span>make sandbox-watch-phase7<span class="cmd-note">// CloudWatch 観測</span></span>
+      </div>
+      <div class="cta-cmd">
+        <span class="cmd-prefix">DOWN</span>
+        <span>make sandbox-down-phase7<span class="cmd-note">// 課金停止</span></span>
+      </div>
+    </div>
+    <p class="cta-meta">
+      設計: <code>docs/superpowers/specs/2026-05-31-aws-phase-sandboxes-design.md</code>
+    </p>
   </div>
+
+  <footer class="page-footer" role="contentinfo">
+    このページはデモ用シミュレーションです。実際の AWS / EventBridge API は一切呼び出していません。
+  </footer>
 
 </main>
 
@@ -350,30 +1203,28 @@ function appendLog(el, html) {
   el.scrollTop = el.scrollHeight;
 }
 
-function flashNode(node, cls, ms) {
-  node.classList.add(cls);
-  setTimeout(() => node.classList.remove(cls), ms || 600);
-}
-
 /* ============================================================
    カード 1: スケジューラ
    ============================================================ */
-const exprInput      = document.getElementById('expr-input');
-const exprDisplay    = document.getElementById('expr-display-text');
-const speedSlider    = document.getElementById('speed-slider');
-const speedLabel     = document.getElementById('speed-label');
-const virtualClock   = document.getElementById('virtual-clock');
-const nextFiresList  = document.getElementById('next-fires-list');
-const schedLog       = document.getElementById('sched-log');
-const schedNodeEb    = document.getElementById('sched-node-eb');
-const schedNodeLambda= document.getElementById('sched-node-lambda');
-const lambdaIcon     = document.getElementById('lambda-icon');
-const schedStatus    = document.getElementById('sched-status-text');
-const lambdaStatus   = document.getElementById('lambda-status-text');
-const fireCountBadge = document.getElementById('fire-count-badge');
-const btnSchedStart  = document.getElementById('btn-sched-start');
-const btnSchedStop   = document.getElementById('btn-sched-stop');
-const btnSchedReset  = document.getElementById('btn-sched-reset');
+const exprInput       = document.getElementById('expr-input');
+const exprDisplay     = document.getElementById('expr-display-text');
+const speedSlider     = document.getElementById('speed-slider');
+const speedLabel      = document.getElementById('speed-label');
+const virtualClock    = document.getElementById('virtual-clock');
+const nextFiresList   = document.getElementById('next-fires-list');
+const schedLog        = document.getElementById('sched-log');
+const schedNodeEb     = document.getElementById('sched-node-eb');
+const schedNodeLambda = document.getElementById('sched-node-lambda');
+const lambdaIcon      = document.getElementById('lambda-icon');
+const schedStatus     = document.getElementById('sched-status-text');
+const lambdaStatus    = document.getElementById('lambda-status-text');
+const fireCountBadge  = document.getElementById('fire-count-badge');
+const btnSchedStart   = document.getElementById('btn-sched-start');
+const btnSchedStop    = document.getElementById('btn-sched-stop');
+const btnSchedReset   = document.getElementById('btn-sched-reset');
+const flowTraceLine   = document.getElementById('flow-trace-line');
+const flowTraceArrow  = document.getElementById('flow-trace-arrow');
+const flowArrowEl     = document.getElementById('flow-arrow');
 
 let schedTimer = null;
 let virtualMinutes = 9 * 60; // 09:00
@@ -388,7 +1239,6 @@ function formatVirtual(totalMin) {
 
 function parseExpr(expr) {
   expr = expr.trim();
-  // rate(N unit)
   const rateM = expr.match(/^rate\(\s*(\d+)\s+(minute|minutes|hour|hours|day|days)\s*\)$/i);
   if (rateM) {
     const n = parseInt(rateM[1], 10);
@@ -396,7 +1246,6 @@ function parseExpr(expr) {
     let mins = u.startsWith('minute') ? n : u.startsWith('hour') ? n * 60 : n * 1440;
     return { type: 'rate', intervalMins: mins };
   }
-  // cron(min hour day month ? year)
   const cronM = expr.match(/^cron\(\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+\?\s+(\S+)\s*\)$/i);
   if (cronM) {
     const minPart  = cronM[1];
@@ -411,11 +1260,9 @@ function nextFireTimes(parsed, fromMinute, count) {
   const results = [];
   let cur = fromMinute + 1;
   if (parsed.type === 'rate') {
-    // find the first multiple
     const base = Math.ceil(cur / parsed.intervalMins) * parsed.intervalMins;
     for (let i = 0; i < count; i++) results.push(base + i * parsed.intervalMins);
   } else if (parsed.type === 'cron') {
-    // simple: fixed hour and minute
     const cronHour = parsed.hourPart === '*' ? 0 : parseInt(parsed.hourPart, 10);
     const cronMin  = parsed.minPart  === '*' ? 0 : parseInt(parsed.minPart,  10);
     if (isNaN(cronHour) || isNaN(cronMin)) return [];
@@ -434,12 +1281,12 @@ function nextFireTimes(parsed, fromMinute, count) {
 function renderNextFires(parsed, fromMinute) {
   const times = nextFireTimes(parsed, fromMinute, 5);
   if (!times.length) {
-    nextFiresList.innerHTML = '<li><span style="color:var(--red)">式が無効です</span></li>';
+    nextFiresList.innerHTML = '<li><span style="color:var(--err)">式が無効です</span></li>';
     return;
   }
   nextFiresList.innerHTML = times.map((m, i) => {
-    const label = i === 0 ? '<span class="badge ok">次回</span>' : '';
-    return `<li><span>${formatVirtual(m)}</span>${label}</li>`;
+    const tag = i === 0 ? '<span class="next-tag">NEXT</span>' : '';
+    return `<li><span>${formatVirtual(m)}</span>${tag}</li>`;
   }).join('');
 }
 
@@ -458,10 +1305,24 @@ function shouldFire(parsed, currentMinute) {
   return false;
 }
 
+function animateTrace() {
+  if (flowTraceLine) {
+    flowTraceLine.style.stroke = '#0891b2';
+    if (flowTraceArrow) flowTraceArrow.style.fill = '#0891b2';
+    setTimeout(() => {
+      if (flowTraceLine) flowTraceLine.style.stroke = '#e8e8e6';
+      if (flowTraceArrow) flowTraceArrow.style.fill = '#e8e8e6';
+    }, 600);
+  }
+}
+
 function fireLambda(minute) {
   lastFireMinute = minute;
   fireCount++;
-  fireCountBadge.textContent = `発火: ${fireCount} 回`;
+  fireCountBadge.textContent = `FIRE: ${fireCount}`;
+
+  animateTrace();
+
   lambdaIcon.classList.add('fired');
   schedNodeLambda.classList.add('ok');
   lambdaStatus.textContent = `発火! (${fireCount}回目)`;
@@ -475,7 +1336,7 @@ function fireLambda(minute) {
     lambdaStatus.textContent = `最終: ${formatVirtual(minute)}`;
   }, 600);
   appendLog(schedLog,
-    `<span class="l-ok">[${formatVirtual(minute)}] ✅ Lambda 発火 #${fireCount} — スケジュール: ${exprInput.value.trim()}</span>`
+    `<span class="l-ok">[${formatVirtual(minute)}] FIRE #${fireCount} → Lambda invoked // ${exprInput.value.trim()}</span>`
   );
 }
 
@@ -494,10 +1355,10 @@ function startScheduler() {
   if (schedTimer) return;
   const parsed = parseExpr(exprInput.value);
   if (!parsed) {
-    appendLog(schedLog, `<span class="l-err">[${ts()}] ❌ スケジュール式が無効です: ${exprInput.value}</span>`);
+    appendLog(schedLog, `<span class="l-err">[${ts()}] ERR: invalid expression — ${exprInput.value}</span>`);
     return;
   }
-  appendLog(schedLog, `<span class="l-info">[${ts()}] ▶ スケジューラ開始 — 式: ${exprInput.value.trim()}</span>`);
+  appendLog(schedLog, `<span class="l-info">[${ts()}] START // expression: ${exprInput.value.trim()}</span>`);
   schedNodeEb.classList.add('active');
   schedStatus.textContent = '次回を待機中';
   renderNextFires(parsed, virtualMinutes);
@@ -513,7 +1374,7 @@ function stopScheduler() {
   schedStatus.textContent = '停止中';
   btnSchedStart.disabled = false;
   btnSchedStop.disabled = true;
-  appendLog(schedLog, `<span class="l-warn">[${ts()}] ⏸ スケジューラ停止</span>`);
+  appendLog(schedLog, `<span class="l-warn">[${ts()}] STOP // scheduler paused</span>`);
 }
 
 function resetScheduler() {
@@ -522,13 +1383,12 @@ function resetScheduler() {
   fireCount = 0;
   lastFireMinute = -9999;
   virtualClock.textContent = '09:00:00';
-  fireCountBadge.textContent = '発火: 0 回';
+  fireCountBadge.textContent = 'FIRE: 0';
   lambdaIcon.classList.remove('fired');
-  schedNodeLambda.classList.remove('ok');
-  schedNodeLambda.classList.remove('active');
+  schedNodeLambda.classList.remove('ok', 'active');
   lambdaStatus.textContent = '未発火';
   schedStatus.textContent = '待機中';
-  schedLog.innerHTML = '<span class="l-dim">-- スケジューラを開始すると発火ログがここに表示されます --</span>';
+  schedLog.innerHTML = '<span class="l-dim">// スケジューラを開始すると発火ログがここに表示されます</span>';
   nextFiresList.innerHTML = '<li><span>計算中...</span></li>';
 }
 
@@ -556,7 +1416,7 @@ document.querySelectorAll('[data-expr]').forEach(btn => {
     btn.setAttribute('aria-pressed','true');
     const parsed = parseExpr(expr);
     renderNextFires(parsed, virtualMinutes);
-    appendLog(schedLog, `<span class="l-dim">[${ts()}] 📋 式変更: ${expr}</span>`);
+    appendLog(schedLog, `<span class="l-dim">[${ts()}] EXPR CHANGED: ${expr}</span>`);
   });
 });
 
@@ -566,38 +1426,34 @@ renderNextFires(parseExpr('rate(5 minutes)'), virtualMinutes);
 /* ============================================================
    カード 2: イベントバス
    ============================================================ */
-const patternEditor  = document.getElementById('pattern-editor');
-const eventEditor    = document.getElementById('event-editor');
-const btnPublish     = document.getElementById('btn-publish');
-const btnBusReset    = document.getElementById('btn-bus-reset');
-const busLog         = document.getElementById('bus-log');
-const matchResult    = document.getElementById('match-result');
-const matchIcon      = document.getElementById('match-icon');
-const matchText      = document.getElementById('match-text');
-const busPublisher   = document.getElementById('bus-publisher');
-const busEventbus    = document.getElementById('bus-eventbus');
-const busRule        = document.getElementById('bus-rule');
-const busTarget      = document.getElementById('bus-target');
-const busPubVal      = document.getElementById('bus-pub-val');
-const busRuleVal     = document.getElementById('bus-rule-val');
-const busTargetVal   = document.getElementById('bus-target-val');
-const statMatched    = document.getElementById('stat-matched');
-const statDropped    = document.getElementById('stat-dropped');
-const statTotal      = document.getElementById('stat-total');
+const patternEditor = document.getElementById('pattern-editor');
+const eventEditor   = document.getElementById('event-editor');
+const btnPublish    = document.getElementById('btn-publish');
+const btnBusReset   = document.getElementById('btn-bus-reset');
+const busLog        = document.getElementById('bus-log');
+const matchResult   = document.getElementById('match-result');
+const matchIcon     = document.getElementById('match-icon');
+const matchText     = document.getElementById('match-text');
+const busPublisher  = document.getElementById('bus-publisher');
+const busEventbus   = document.getElementById('bus-eventbus');
+const busRule       = document.getElementById('bus-rule');
+const busTarget     = document.getElementById('bus-target');
+const busPubVal     = document.getElementById('bus-pub-val');
+const busRuleVal    = document.getElementById('bus-rule-val');
+const busTargetVal  = document.getElementById('bus-target-val');
+const statMatched   = document.getElementById('stat-matched');
+const statDropped   = document.getElementById('stat-dropped');
+const statTotal     = document.getElementById('stat-total');
 
 let busMatched = 0, busDropped = 0, busTotal = 0;
 
-// Deep pattern matching: EventBridge pattern matching logic
 function matchPattern(pattern, event) {
-  // For each key in pattern, event must satisfy
   for (const key of Object.keys(pattern)) {
     const patVal = pattern[key];
     if (key === 'detail' && typeof patVal === 'object' && !Array.isArray(patVal)) {
-      // Nested detail matching
       if (!event.detail || typeof event.detail !== 'object') return false;
       if (!matchPattern(patVal, event.detail)) return false;
     } else if (Array.isArray(patVal)) {
-      // Event value must be in the pattern array
       const evVal = event[key];
       if (!patVal.includes(evVal)) return false;
     } else if (typeof patVal === 'object') {
@@ -611,11 +1467,9 @@ function matchPattern(pattern, event) {
 }
 
 function animateBusFlow(matched) {
-  // Reset all
   [busPublisher, busEventbus, busRule, busTarget].forEach(n => {
     n.classList.remove('active','ok','dropped');
   });
-
   setTimeout(() => busPublisher.classList.add('active'), 0);
   setTimeout(() => { busPublisher.classList.remove('active'); busEventbus.classList.add('active'); }, 300);
   setTimeout(() => { busEventbus.classList.remove('active'); busRule.classList.add('active'); }, 600);
@@ -635,55 +1489,53 @@ function publish() {
   try {
     pattern = JSON.parse(patternEditor.value);
   } catch(e) {
-    appendLog(busLog, `<span class="l-err">[${ts()}] ❌ イベントパターンが無効な JSON: ${e.message}</span>`);
+    appendLog(busLog, `<span class="l-err">[${ts()}] ERR: invalid pattern JSON — ${e.message}</span>`);
     return;
   }
   try {
     event = JSON.parse(eventEditor.value);
   } catch(e) {
-    appendLog(busLog, `<span class="l-err">[${ts()}] ❌ イベント JSON が無効: ${e.message}</span>`);
+    appendLog(busLog, `<span class="l-err">[${ts()}] ERR: invalid event JSON — ${e.message}</span>`);
     return;
   }
 
   busTotal++;
   statTotal.textContent = busTotal;
 
-  // Update publisher display
   busPubVal.textContent = `source: "${event.source || '?'}" / detail-type: "${event['detail-type'] || '?'}"`;
   busRuleVal.textContent = JSON.stringify(pattern).substring(0, 60) + (JSON.stringify(pattern).length > 60 ? '…' : '');
 
   const matched = matchPattern(pattern, event);
 
   appendLog(busLog,
-    `<span class="l-dim">[${ts()}] 📤 発行 — source: "${event.source}", detail-type: "${event['detail-type']}"</span>`
+    `<span class="l-dim">[${ts()}] PUB — source: "${event.source}", detail-type: "${event['detail-type']}"</span>`
   );
   appendLog(busLog,
-    `<span class="l-dim">      イベント: ${JSON.stringify(event).substring(0,80)}</span>`
+    `<span class="l-dim">      payload: ${JSON.stringify(event).substring(0,80)}</span>`
   );
 
   if (matched) {
     busMatched++;
     statMatched.textContent = busMatched;
     matchResult.className = 'match-result matched';
-    matchIcon.textContent = '✅';
-    matchText.textContent = 'マッチ — Lambda ターゲットへルーティング';
+    matchIcon.innerHTML = `<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7.5" stroke="#16a34a" stroke-width="1.5"/><path d="M5.5 9l2.5 2.5 4.5-4.5" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    matchText.textContent = 'MATCHED — Lambda ターゲットへルーティング';
     busTargetVal.textContent = `受信 — ${event['detail-type'] || event.source} を処理中`;
-    appendLog(busLog, `<span class="l-ok">[${ts()}] ✅ MATCHED — Lambda に配信</span>`);
+    appendLog(busLog, `<span class="l-ok">[${ts()}] MATCHED → Lambda invoked</span>`);
   } else {
     busDropped++;
     statDropped.textContent = busDropped;
     matchResult.className = 'match-result dropped';
-    matchIcon.textContent = '🗑️';
-    matchText.textContent = 'ドロップ — パターン不一致のためターゲットへ届きません';
+    matchIcon.innerHTML = `<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7.5" stroke="#dc2626" stroke-width="1.5"/><path d="M6 6l6 6M12 6l-6 6" stroke="#dc2626" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+    matchText.textContent = 'DROPPED — パターン不一致のためターゲットへ届きません';
     busTargetVal.textContent = '待機中（このイベントは届かない）';
-    appendLog(busLog, `<span class="l-warn">[${ts()}] ⚠️ DROPPED — パターン不一致</span>`);
-    // Show which field didn't match
+    appendLog(busLog, `<span class="l-warn">[${ts()}] DROPPED — no pattern match</span>`);
     for (const key of Object.keys(pattern)) {
       const patArr = pattern[key];
       if (Array.isArray(patArr)) {
         const evVal = event[key];
         if (!patArr.includes(evVal)) {
-          appendLog(busLog, `<span class="l-warn">      └ "${key}": イベント="${evVal}", パターン=${JSON.stringify(patArr)}</span>`);
+          appendLog(busLog, `<span class="l-warn">  └ "${key}": event="${evVal}", pattern=${JSON.stringify(patArr)}</span>`);
         }
       }
     }
@@ -701,12 +1553,12 @@ function resetBus() {
   statDropped.textContent = '0';
   statTotal.textContent = '0';
   matchResult.className = 'match-result idle';
-  matchIcon.textContent = '🔍';
+  matchIcon.innerHTML = `<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="8" cy="8" r="5.5" stroke="#6b6f76" stroke-width="1.5"/><path d="M13 13l2.5 2.5" stroke="#6b6f76" stroke-width="1.5" stroke-linecap="round"/></svg>`;
   matchText.textContent = 'イベントを発行するとマッチング結果がここに表示されます';
   busPubVal.textContent = '—';
   busRuleVal.textContent = '—';
   busTargetVal.textContent = '待機中';
-  busLog.innerHTML = '<span class="l-dim">-- イベントを発行するとルーティングログがここに表示されます --</span>';
+  busLog.innerHTML = '<span class="l-dim">// イベントを発行するとルーティングログがここに表示されます</span>';
 }
 
 btnPublish.addEventListener('click', publish);
@@ -714,18 +1566,15 @@ btnBusReset.addEventListener('click', resetBus);
 
 document.querySelectorAll('[data-pattern]').forEach(btn => {
   btn.addEventListener('click', () => {
-    const raw = btn.dataset.pattern;
-    patternEditor.value = JSON.stringify(JSON.parse(raw), null, 2);
+    patternEditor.value = JSON.stringify(JSON.parse(btn.dataset.pattern), null, 2);
   });
 });
 
 document.querySelectorAll('[data-event]').forEach(btn => {
   btn.addEventListener('click', () => {
-    const raw = btn.dataset.event;
-    eventEditor.value = JSON.stringify(JSON.parse(raw), null, 2);
+    eventEditor.value = JSON.stringify(JSON.parse(btn.dataset.event), null, 2);
   });
 });
 </script>
-<div class="wrap"><p class="note">🧪 <b>実物で動かす（実 AWS）:</b> このデモの概念は Terraform で実 AWS に立てて CloudWatch で観測できます。<br><code>make sandbox-test-phase7</code>（無料検証）→ <code>make sandbox-up-phase7</code>（apply）→ <code>make sandbox-load-phase7</code> → <code>make sandbox-watch-phase7</code>（CloudWatch 観測）→ <code>make sandbox-down-phase7</code>（課金停止）。<br>設計: <code>docs/superpowers/specs/2026-05-31-aws-phase-sandboxes-design.md</code></p></div>
 </body>
 </html>

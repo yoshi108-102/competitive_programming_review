@@ -4,279 +4,1062 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>X-Ray — 分散トレースを読む | AWS 学習デモ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
-:root{
-  --bg:#0b0f14; --surface:#141b24; --surface-2:#1c2531; --surface-3:#243042;
-  --border:#2b3645; --text:#e6edf3; --muted:#93a1b3;
-  --accent:#ff9900; --accent-soft:#ffb84d; --cyan:#4dd0e1; --green:#3fb950;
-  --red:#f85149; --yellow:#e3b341; --purple:#bc8cff; --blue:#58a6ff;
-  --radius:14px; --radius-sm:8px; --shadow:0 8px 30px rgba(0,0,0,.35);
-  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
-  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+/* ─── Design tokens ─── */
+:root {
+  --bg:         #ffffff;
+  --bg-soft:    #f7f7f5;
+  --surface:    #ffffff;
+  --border:     #e8e8e6;
+  --text:       #202124;
+  --muted:      #6b6f76;
+  --accent:     #0d9488;
+  --accent-light: rgba(13,148,136,0.08);
+  --accent-mid:   rgba(13,148,136,0.15);
+  --red:        #dc2626;
+  --red-light:  rgba(220,38,38,0.08);
+  --green:      #059669;
+  --green-light: rgba(5,150,105,0.08);
+  --yellow:     #d97706;
+  --radius:     10px;
+  --radius-sm:  6px;
+  --shadow:     0 1px 3px rgba(0,0,0,.06);
+  --shadow-md:  0 2px 8px rgba(0,0,0,.08);
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --body: "Noto Sans JP", system-ui, "Hiragino Kaku Gothic ProN", sans-serif;
 }
-*{box-sizing:border-box}
-html{scroll-behavior:smooth}
-body{margin:0;background:radial-gradient(1200px 600px at 80% -10%,rgba(255,153,0,.08),transparent),var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
-a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
-.wrap{max-width:1080px;margin:0 auto;padding:28px 24px 80px}
-.topbar{position:sticky;top:0;z-index:20;backdrop-filter:blur(10px);background:rgba(11,15,20,.72);border-bottom:1px solid var(--border)}
-.topbar .inner{max-width:1080px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;gap:14px}
-.brand{font-weight:700;letter-spacing:.3px;display:flex;align-items:center;gap:10px}
-.brand .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
-.spacer{flex:1}
-.eyebrow{color:var(--accent);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase}
-h1{font-size:clamp(24px,4vw,38px);line-height:1.2;margin:.3em 0 .25em}
-.lead{color:var(--muted);font-size:17px;max-width:72ch}
-.section-title{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:34px 0 12px;font-weight:700}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;box-shadow:var(--shadow)}
-.card + .card{margin-top:18px}
-.grid{display:grid;gap:18px}
-.grid-2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
-.grid-3{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
-.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--surface-3);border:1px solid var(--border);color:var(--text)}
-.pill.accent{background:rgba(255,153,0,.14);border-color:rgba(255,153,0,.4);color:var(--accent-soft)}
-.badge{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px}
-.badge.ok{background:rgba(63,185,80,.15);color:var(--green)}
-.badge.err{background:rgba(248,81,73,.15);color:var(--red)}
-.badge.warn{background:rgba(227,179,65,.15);color:var(--yellow)}
-.badge.info{background:rgba(88,166,255,.15);color:var(--blue)}
-.btn{appearance:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;color:var(--text);background:var(--surface-3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 16px;transition:all .12s ease}
-.btn:hover{border-color:var(--muted)} .btn:active{transform:translateY(1px)}
-.btn:disabled{opacity:.45;cursor:not-allowed}
-.btn.accent{background:var(--accent);border-color:var(--accent);color:#1a1206}
-.btn.accent:hover{background:var(--accent-soft)}
-.btn.ghost{background:transparent}
-.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:4px 0 16px}
-label.field{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
-input[type=text],input[type=number],select,textarea{font-family:inherit;font-size:14px;color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 11px}
-input[type=range]{accent-color:var(--accent)}
-.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;user-select:none}
-.flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
-.flow-node{flex:1;min-width:120px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center;position:relative;transition:all .2s ease}
-.flow-node.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(255,153,0,.25);background:var(--surface-3)}
-.flow-node.ok{border-color:var(--green)} .flow-node.err{border-color:var(--red)}
-.flow-arrow{display:flex;align-items:center;color:var(--muted);padding:0 8px;font-size:20px}
-.log{font-family:var(--mono);font-size:13px;background:#0a0e13;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;max-height:300px;overflow:auto;white-space:pre-wrap;line-height:1.6}
-.log .l-ok{color:var(--green)} .log .l-err{color:var(--red)} .log .l-warn{color:var(--yellow)} .log .l-info{color:var(--blue)} .log .l-dim{color:var(--muted)}
-code,kbd{font-family:var(--mono);font-size:.92em}
-.kbd{background:var(--surface-3);border:1px solid var(--border);border-bottom-width:2px;border-radius:6px;padding:1px 6px;font-size:12px}
-pre{font-family:var(--mono);font-size:13px;background:#0a0e13;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;overflow:auto}
-pre .hl{background:rgba(255,153,0,.18);display:block;margin:0 -14px;padding:0 14px}
-.takeaways{list-style:none;padding:0;margin:0;display:grid;gap:10px}
-.takeaways li{display:flex;flex-direction:column;gap:3px;background:var(--surface-2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--radius-sm);padding:12px 14px;font-size:14px}
-.takeaways li b{color:var(--accent-soft)}
-.note{font-size:13px;color:var(--muted);border-left:3px solid var(--border);padding-left:12px;margin:14px 0}
-.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:13px}
-.kv dt{color:var(--muted)} .kv dd{margin:0;font-family:var(--mono)}
-.muted{color:var(--muted)} hr.sep{border:none;border-top:1px solid var(--border);margin:28px 0}
-.footer{color:var(--muted);font-size:13px;margin-top:48px;border-top:1px solid var(--border);padding-top:20px}
-@media (max-width:640px){.flow{flex-direction:column}.flow-arrow{transform:rotate(90deg);padding:6px 0}}
 
-/* ===== Page-specific styles ===== */
-.waterfall-container{position:relative;overflow-x:auto;margin-top:16px}
-.waterfall-header{display:grid;grid-template-columns:200px 1fr;gap:0;margin-bottom:4px;font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.05em}
-.waterfall-header .wh-timeline{display:flex;justify-content:space-between;padding:0 4px;border-bottom:1px solid var(--border);padding-bottom:4px}
-.wf-row{display:grid;grid-template-columns:200px 1fr;gap:0;align-items:center;margin-bottom:3px;cursor:pointer;border-radius:6px;transition:background .1s}
-.wf-row:hover{background:var(--surface-2)}
-.wf-row.selected{background:var(--surface-3)}
-.wf-label{padding:6px 10px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
-.wf-label .indent{display:inline-block}
-.wf-bar-area{position:relative;height:32px;padding:4px}
-.wf-bar{position:absolute;top:6px;height:20px;border-radius:4px;display:flex;align-items:center;padding:0 6px;font-size:11px;font-weight:700;color:#fff;transition:all .3s ease;overflow:hidden;white-space:nowrap;min-width:4px}
-.wf-bar.seg-apigw{background:var(--purple)}
-.wf-bar.seg-lambda{background:var(--accent)}
-.wf-bar.seg-dynamo{background:var(--cyan)}
-.wf-bar.seg-http{background:var(--blue)}
-.wf-bar.seg-err{background:var(--red) !important}
-.wf-bar.seg-init{background:var(--surface-3);border:1px dashed var(--border);color:var(--muted)}
+/* ─── Reset & base ─── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
 
-.detail-panel{margin-top:16px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;min-height:80px}
-.detail-panel h3{margin:0 0 12px;font-size:14px;color:var(--accent-soft)}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--body);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.9;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
 
-/* Service Map */
-.svc-map{position:relative;width:100%;height:320px;background:#0a0e13;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}
-.svc-map svg{width:100%;height:100%}
-.svc-node{cursor:pointer;transition:all .2s}
-.svc-node circle{transition:fill .2s,stroke .2s}
-.svc-node text{font-family:var(--sans);font-size:12px;fill:var(--text);text-anchor:middle;pointer-events:none}
-.svc-node .node-label{font-size:11px;fill:var(--muted)}
-.edge-label{font-size:10px;fill:var(--muted);font-family:var(--mono)}
+/* ─── Topbar ─── */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+}
 
-.sampling-bar{height:8px;border-radius:4px;background:var(--surface-3);overflow:hidden;margin-top:6px}
-.sampling-fill{height:100%;border-radius:4px;background:var(--accent);transition:width .3s}
+.topbar-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 
-.toggle-fault{display:flex;align-items:center;gap:10px}
-.fault-toggle{position:relative;width:44px;height:24px;cursor:pointer}
-.fault-toggle input{opacity:0;width:0;height:0}
-.fault-slider{position:absolute;inset:0;background:var(--surface-3);border:1px solid var(--border);border-radius:12px;transition:.2s}
-.fault-slider::before{content:"";position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:var(--muted);transition:.2s}
-.fault-toggle input:checked + .fault-slider{background:rgba(248,81,73,.25);border-color:var(--red)}
-.fault-toggle input:checked + .fault-slider::before{background:var(--red);transform:translateX(20px)}
+.brand {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.topbar-spacer { flex: 1; }
+
+.phase-badge {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent);
+  background: var(--accent-light);
+  border: 1px solid var(--accent-mid);
+  padding: 2px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.02em;
+}
+
+/* ─── Main layout ─── */
+.wrap {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 24px 80px;
+}
+
+/* ─── Hero ─── */
+.hero {
+  padding: 56px 0 40px;
+  animation: fadeIn 0.4s ease both;
+}
+
+.eyebrow {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: clamp(26px, 5vw, 36px);
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+
+.lead {
+  font-size: 17px;
+  color: var(--muted);
+  line-height: 1.9;
+  max-width: 60ch;
+}
+
+.hero-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 20px;
+}
+
+.tag {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+/* ─── Section divider ─── */
+.section-sep {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 40px 0;
+}
+
+/* ─── Card ─── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 24px;
+  overflow: hidden;
+  animation: fadeIn 0.4s ease both;
+}
+
+.card-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.card-eyebrow {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+
+.card-title {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.card-desc {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.card-body {
+  padding: 20px 24px;
+}
+
+/* ─── Controls ─── */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+/* ─── Buttons ─── */
+.btn {
+  appearance: none;
+  cursor: pointer;
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  transition: background 0.15s, opacity 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn:hover { background: #0b8278; border-color: #0b8278; }
+.btn:active { opacity: 0.85; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn.outline {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--border);
+}
+.btn.outline:hover { border-color: var(--text); color: var(--text); }
+
+/* ─── Trace status ─── */
+.trace-status {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  padding: 8px 12px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #c9cdd4;
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+.status-dot.ok  { background: var(--green); }
+.status-dot.err { background: var(--red); }
+
+/* ─── Waterfall ─── */
+.waterfall-container { overflow-x: auto; }
+
+.waterfall-header {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--mono);
+  margin-bottom: 4px;
+}
+
+.wh-seg { padding: 0 8px 6px; border-bottom: 1px solid var(--border); }
+
+.wh-timeline {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 4px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.wf-row {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  align-items: center;
+  margin-bottom: 2px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.wf-row:hover   { background: var(--bg-soft); border-color: var(--border); }
+.wf-row.selected { background: var(--accent-light); border-color: var(--accent-mid); }
+
+.wf-label {
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.wf-label.root { color: var(--text); font-weight: 500; }
+
+.wf-indent { display: inline-block; flex-shrink: 0; }
+
+.wf-bar-area {
+  position: relative;
+  height: 32px;
+  padding: 5px 4px;
+}
+
+.wf-bar {
+  position: absolute;
+  top: 6px;
+  height: 20px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  font-size: 10px;
+  font-family: var(--mono);
+  font-weight: 500;
+  color: #fff;
+  overflow: hidden;
+  white-space: nowrap;
+  min-width: 3px;
+  transition: opacity 0.2s;
+}
+
+@keyframes barReveal {
+  from { opacity: 0; transform: scaleX(0.5); transform-origin: left center; }
+  to   { opacity: 1; transform: scaleX(1); }
+}
+.wf-bar.revealed { animation: barReveal 0.2s ease both; }
+
+.wf-bar.seg-apigw  { background: #7c3aed; }
+.wf-bar.seg-lambda { background: var(--accent); }
+.wf-bar.seg-dynamo { background: #2563eb; }
+.wf-bar.seg-http   { background: #6b7280; color: #fff; }
+.wf-bar.seg-err    { background: var(--red); }
+.wf-bar.seg-init   { background: transparent; border: 1.5px dashed var(--border); color: var(--muted); }
+
+/* ─── Detail panel ─── */
+.detail-panel {
+  margin-top: 12px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px 18px;
+  min-height: 72px;
+}
+
+.detail-title {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.detail-field { display: flex; flex-direction: column; gap: 2px; }
+.detail-label {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.detail-value {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.detail-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.detail-section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.detail-kv {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 14px;
+  font-size: 12px;
+}
+
+.detail-kv dt { color: var(--muted); font-family: var(--mono); }
+.detail-kv dd { font-family: var(--mono); color: var(--text); }
+
+/* ─── Fault toggle ─── */
+.fault-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-soft);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.fault-row:hover { border-color: #fca5a5; background: var(--red-light); }
+.fault-row.active { border-color: #fca5a5; background: var(--red-light); }
+
+.fault-label {
+  font-size: 13px;
+  color: var(--muted);
+  user-select: none;
+}
+
+.fault-toggle-track {
+  position: relative;
+  width: 38px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.fault-toggle-track input { opacity: 0; width: 0; height: 0; position: absolute; }
+
+.fault-slider {
+  position: absolute;
+  inset: 0;
+  background: #d1d5db;
+  border-radius: 10px;
+  transition: 0.2s;
+}
+
+.fault-slider::before {
+  content: '';
+  position: absolute;
+  left: 3px; top: 3px;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: 0.2s;
+  box-shadow: 0 1px 2px rgba(0,0,0,.15);
+}
+
+.fault-toggle-track input:checked + .fault-slider {
+  background: var(--red);
+}
+
+.fault-toggle-track input:checked + .fault-slider::before {
+  transform: translateX(18px);
+}
+
+/* ─── Service Map ─── */
+.svc-map-wrap {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  height: 280px;
+}
+
+.svc-map-wrap svg { width: 100%; height: 100%; }
+
+.svc-node { cursor: pointer; }
+.svc-node circle { transition: opacity 0.15s; }
+.svc-node:hover circle { opacity: 0.85; }
+.svc-node text { pointer-events: none; }
+
+.edge-label { font-family: var(--mono); font-size: 10px; }
+
+/* ─── Sampling ─── */
+.sampling-sliders {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.slider-field { display: flex; flex-direction: column; gap: 8px; }
+
+.slider-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.slider-value {
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.slider-value.blue { color: #2563eb; }
+
+input[type="range"] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid #fff;
+  box-shadow: var(--shadow-md);
+  transition: box-shadow 0.15s;
+}
+
+input[type="range"]:hover::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px var(--accent-light);
+}
+
+.sampling-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.stat-item { display: flex; flex-direction: column; gap: 2px; }
+
+.stat-label {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.stat-value {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.stat-value.green  { color: var(--green); }
+.stat-value.yellow { color: var(--yellow); }
+.stat-value.accent { color: var(--accent); }
+
+.sampling-bar-wrap {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.sampling-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.sample-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+.sample-dots-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 14px;
+}
+
+.sample-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.sample-dot.sampled { background: var(--accent); }
+.sample-dot.skipped { background: var(--border); }
+
+/* ─── Badges ─── */
+.badge {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+.badge.ok   { background: var(--green-light); color: var(--green);  border: 1px solid rgba(5,150,105,.2); }
+.badge.err  { background: var(--red-light);   color: var(--red);    border: 1px solid rgba(220,38,38,.2); }
+.badge.info { background: rgba(37,99,235,.08); color: #2563eb;      border: 1px solid rgba(37,99,235,.2); }
+.badge.sub  { background: var(--bg-soft);      color: var(--muted);  border: 1px solid var(--border); }
+
+/* ─── Section heading ─── */
+.section-heading {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 48px 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.section-heading::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ─── Takeaways ─── */
+.takeaways {
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.takeaways li {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+  transition: box-shadow 0.15s;
+}
+
+.takeaways li:hover { box-shadow: var(--shadow-md); }
+
+.takeaways li strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  margin-bottom: 3px;
+}
+
+.takeaways li span {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.8;
+}
+
+/* ─── Note block ─── */
+.note-block {
+  font-size: 13px;
+  color: var(--muted);
+  border-left: 3px solid var(--border);
+  padding: 10px 14px;
+  margin: 16px 0;
+  background: var(--bg-soft);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  line-height: 1.8;
+}
+
+.note-block code {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--accent);
+  background: var(--accent-light);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+/* ─── CTA block ─── */
+.cta-block {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  margin-top: 40px;
+}
+
+.cta-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.cta-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+
+.cta-desc {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 12px;
+  line-height: 1.7;
+}
+
+.cta-cmds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.cta-cmd {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+}
+
+.cta-note {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ─── Footer ─── */
+.footer {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 48px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ─── Animation ─── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.reveal-1 { animation: fadeIn 0.4s ease both; animation-delay: 0.1s; }
+.reveal-2 { animation: fadeIn 0.4s ease both; animation-delay: 0.2s; }
+.reveal-3 { animation: fadeIn 0.4s ease both; animation-delay: 0.3s; }
+.reveal-4 { animation: fadeIn 0.4s ease both; animation-delay: 0.4s; }
+
+/* ─── SVG text in service map ─── */
+.svc-node text.node-name {
+  font-family: "Noto Sans JP", system-ui, "Hiragino Kaku Gothic ProN", sans-serif;
+  font-size: 9px;
+  fill: var(--text, #202124);
+  text-anchor: middle;
+}
+.svc-node text.node-sub {
+  font-family: "Noto Sans JP", system-ui, "Hiragino Kaku Gothic ProN", sans-serif;
+  font-size: 8px;
+  fill: #6b6f76;
+  text-anchor: middle;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 640px) {
+  .wrap { padding: 0 16px 60px; }
+  h1 { font-size: 22px; }
+  .sampling-sliders { grid-template-columns: 1fr; }
+  .card-header { padding: 16px 16px 12px; }
+  .card-body { padding: 16px 16px; }
+  .topbar-inner { padding: 10px 16px; }
+}
 </style>
 </head>
 <body>
 
+<!-- ─── Topbar ─── -->
 <nav class="topbar" aria-label="サイトナビゲーション">
-  <div class="inner">
-    <div class="brand"><span class="dot"></span>AWS 学習デモ</div>
-    <div class="spacer"></div>
-    <span class="pill accent">Phase 9</span>
+  <div class="topbar-inner">
+    <div class="brand">
+      <svg class="brand-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="10" cy="10" r="9" stroke="#0d9488" stroke-width="1.5"/>
+        <line x1="10" y1="3" x2="10" y2="17" stroke="#0d9488" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="3" y1="10" x2="17" y2="10" stroke="#0d9488" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      AWS X-Ray 学習デモ
+    </div>
+    <div class="topbar-spacer"></div>
+    <span class="phase-badge">Phase 9</span>
   </div>
 </nav>
 
+<!-- ─── Main content ─── -->
 <main class="wrap">
-  <div class="eyebrow">Phase 9</div>
-  <h1>X-Ray — 分散トレースを読む</h1>
-  <p class="lead">AWS X-Ray はリクエスト 1 本の旅路をトレースし、複数サービスにまたがるレイテンシとエラーの原因を特定するサービスです。ウォーターフォールとサービスマップで体験しましょう。</p>
-  <div class="badges">
-    <span class="pill">🔍 X-Ray</span>
-    <span class="pill">📊 Trace / Segment</span>
-    <span class="pill">🗺️ Service Map</span>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="eyebrow">Phase 9 — 分散トレーシング</div>
+    <h1>AWS X-Ray で<br>リクエストの旅路を透視する</h1>
+    <p class="lead">1本のリクエストが API Gateway → Lambda → DynamoDB をどう流れるか。X-Ray はその全経路をウォーターフォールで記録し、レイテンシと障害の根因を可視化します。</p>
+    <div class="hero-tags">
+      <span class="tag">X-Ray Trace</span>
+      <span class="tag">Segment / Subsegment</span>
+      <span class="tag">Service Map</span>
+      <span class="tag">Sampling</span>
+      <span class="tag">Fault Injection</span>
+    </div>
+  </section>
+
+  <hr class="section-sep">
+
+  <!-- ─── CARD 1: Waterfall ─── -->
+  <div class="card reveal-1" id="card-waterfall">
+    <div class="card-header">
+      <div class="card-eyebrow">モジュール 1</div>
+      <div class="card-title">トレース ウォーターフォール</div>
+      <div class="card-desc">セグメント / サブセグメントを時系列の棒グラフで可視化。バーをクリックするとセグメント詳細を確認できます。</div>
+    </div>
+    <div class="card-body">
+
+      <div class="controls">
+        <button class="btn" id="btn-run" aria-label="リクエストを実行してトレースを生成">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><polygon points="2,1 12,6.5 2,12" fill="currentColor"/></svg>
+          リクエスト実行
+        </button>
+
+        <label class="fault-row" id="fault-row" aria-label="DynamoDB スロットリング障害を注入" tabindex="0">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><path d="M6.5 1L1 11.5h11L6.5 1z" stroke="#dc2626" stroke-width="1.2" fill="none"/><line x1="6.5" y1="5" x2="6.5" y2="8" stroke="#dc2626" stroke-width="1.2"/><circle cx="6.5" cy="9.5" r="0.7" fill="#dc2626"/></svg>
+          <span class="fault-label">障害注入 — DynamoDB スロットリング</span>
+          <div class="fault-toggle-track">
+            <input type="checkbox" id="fault-toggle" aria-label="DynamoDB スロットリング障害を注入">
+            <span class="fault-slider"></span>
+          </div>
+        </label>
+
+        <button class="btn outline" id="btn-reset" style="margin-left:auto">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><path d="M2 6.5A4.5 4.5 0 0 1 9 2.5" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/><path d="M7 1.5l2 1-1 2" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/><path d="M11 6.5A4.5 4.5 0 0 1 4 10.5" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/><path d="M6 11.5l-2-1 1-2" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/></svg>
+          リセット
+        </button>
+      </div>
+
+      <!-- Status bar -->
+      <div class="trace-status" id="trace-status" role="status" aria-live="polite">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="trace-status-text">リクエストを実行するとトレースが生成されます</span>
+      </div>
+
+      <!-- Waterfall -->
+      <div class="waterfall-container" id="waterfall-wrap" aria-label="ウォーターフォールタイムライン">
+        <div class="waterfall-header">
+          <div class="wh-seg">セグメント</div>
+          <div class="wh-timeline">
+            <span>0 ms</span>
+            <span id="wh-mid"></span>
+            <span id="wh-end"></span>
+          </div>
+        </div>
+        <div id="waterfall-rows"></div>
+      </div>
+
+      <!-- Detail panel -->
+      <div class="detail-panel" id="detail-panel">
+        <p style="margin:0;color:var(--muted);font-size:13px;">バーをクリックするとセグメントの詳細がここに表示されます</p>
+      </div>
+
+    </div>
   </div>
 
-  <hr class="sep">
-
-  <!-- DEMO CARD 1: Waterfall Timeline -->
-  <div class="card">
-    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
-      <div style="flex:1">
-        <div class="eyebrow" style="margin-bottom:4px">トレース ウォーターフォール</div>
-        <p style="margin:0;font-size:14px;color:var(--muted)">セグメント/サブセグメントを時系列棒グラフで確認。バーをクリックで詳細を表示。</p>
+  <!-- ─── CARD 2: Service Map ─── -->
+  <div class="card reveal-2" id="card-map">
+    <div class="card-header">
+      <div class="card-eyebrow">モジュール 2</div>
+      <div class="card-title">サービスマップ</div>
+      <div class="card-desc">サービス間の依存関係をグラフで俯瞰。各エッジに平均レイテンシとエラー率を表示。ノードをクリックで詳細。</div>
+    </div>
+    <div class="card-body" style="padding-bottom:16px;">
+      <div class="svc-map-wrap" id="svc-map" role="img" aria-label="サービスマップ">
+        <svg id="svc-svg" viewBox="0 0 700 280" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div class="detail-panel" id="map-detail" style="margin-top:10px;">
+        <p style="margin:0;color:var(--muted);font-size:13px;">ノードをクリックするとサービス詳細がここに表示されます</p>
       </div>
     </div>
+  </div>
 
-    <div class="controls">
-      <button class="btn accent" id="btn-run" aria-label="リクエストを実行してトレースを生成">▶ リクエスト実行</button>
-      <div class="toggle-fault" style="margin-left:8px">
-        <label for="fault-toggle" style="font-size:14px;color:var(--muted)">障害注入 (DynamoDB スロットリング)</label>
-        <label class="fault-toggle">
-          <input type="checkbox" id="fault-toggle" aria-label="DynamoDB スロットリング障害を注入">
-          <span class="fault-slider"></span>
-        </label>
-      </div>
-      <button class="btn ghost" id="btn-reset" style="margin-left:auto">↺ リセット</button>
+  <!-- ─── CARD 3: Sampling ─── -->
+  <div class="card reveal-3" id="card-sampling">
+    <div class="card-header">
+      <div class="card-eyebrow">モジュール 3</div>
+      <div class="card-title">サンプリングレート シミュレーター</div>
+      <div class="card-desc">X-Ray は全リクエストではなく一定割合だけ記録します。スライダーで変化を確認しましょう。</div>
     </div>
+    <div class="card-body">
 
-    <div id="trace-status" style="margin-bottom:10px;font-size:13px;color:var(--muted)">リクエストを実行するとトレースが生成されます</div>
-
-    <div class="waterfall-container" id="waterfall-wrap" aria-label="ウォーターフォールタイムライン">
-      <div class="waterfall-header">
-        <div style="padding:0 10px;padding-bottom:4px;border-bottom:1px solid var(--border)">セグメント</div>
-        <div class="wh-timeline">
-          <span>0 ms</span><span id="wh-mid"></span><span id="wh-end"></span>
+      <div class="sampling-sliders">
+        <div class="slider-field">
+          <div class="slider-label">
+            <span>サンプリングレート</span>
+            <span class="slider-value" id="rate-val">5%</span>
+          </div>
+          <input type="range" id="sample-rate" min="1" max="100" value="5" aria-label="サンプリングレートを選択">
+        </div>
+        <div class="slider-field">
+          <div class="slider-label">
+            <span>RPS (リクエスト/秒)</span>
+            <span class="slider-value blue" id="rps-val">100</span>
+          </div>
+          <input type="range" id="rps" min="1" max="1000" value="100" aria-label="RPSを選択">
         </div>
       </div>
-      <div id="waterfall-rows"></div>
-    </div>
 
-    <div class="detail-panel" id="detail-panel">
-      <p style="margin:0;color:var(--muted);font-size:13px">バーをクリックするとセグメントの詳細がここに表示されます</p>
+      <div class="sampling-stats">
+        <div class="stat-item">
+          <div class="stat-label">記録される req/秒</div>
+          <div class="stat-value green" id="sampled-rps">5</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">コスト概算/100万</div>
+          <div class="stat-value yellow" id="cost-est">$0.0050</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">スキップ率</div>
+          <div class="stat-value accent" id="skip-rate">95%</div>
+        </div>
+      </div>
+
+      <div class="sampling-bar-wrap" role="progressbar" aria-valuenow="5" aria-valuemin="0" aria-valuemax="100" id="sample-progress-bar">
+        <div class="sampling-bar-fill" id="sample-fill" style="width:5%"></div>
+      </div>
+      <p class="sample-hint">サンプリング割合 — 色付き=記録 / グレー=スキップ</p>
+
+      <div class="sample-dots-wrap" id="sample-dots" aria-label="サンプリング可視化"></div>
+
     </div>
   </div>
 
-  <!-- DEMO CARD 2: Service Map -->
-  <div class="card">
-    <div class="eyebrow" style="margin-bottom:4px">サービスマップ</div>
-    <p style="margin:0 0 16px;font-size:14px;color:var(--muted)">サービス間の依存関係をグラフで俯瞰。各エッジに平均レイテンシとエラー率を表示。ノードをクリックで詳細。</p>
-
-    <div class="svc-map" id="svc-map" role="img" aria-label="サービスマップ">
-      <svg id="svc-svg" viewBox="0 0 700 300" preserveAspectRatio="xMidYMid meet"></svg>
-    </div>
-
-    <div class="detail-panel" id="map-detail" style="margin-top:12px">
-      <p style="margin:0;color:var(--muted);font-size:13px">ノードをクリックするとサービス詳細がここに表示されます</p>
-    </div>
-  </div>
-
-  <!-- DEMO CARD 3: Sampling Rate -->
-  <div class="card">
-    <div class="eyebrow" style="margin-bottom:4px">サンプリングレート シミュレーター</div>
-    <p style="margin:0 0 16px;font-size:14px;color:var(--muted)">X-Ray は全リクエストではなく一定割合だけ記録します。スライダーで変化を確認しましょう。</p>
-
-    <div class="controls" style="align-items:flex-start;gap:24px;flex-wrap:wrap">
-      <label class="field" style="flex:1;min-width:180px">
-        サンプリングレート: <strong id="rate-val" style="color:var(--accent)">5%</strong>
-        <input type="range" id="sample-rate" min="1" max="100" value="5" aria-label="サンプリングレートを選択">
-      </label>
-      <label class="field" style="flex:1;min-width:180px">
-        RPS (リクエスト/秒): <strong id="rps-val" style="color:var(--blue)">100</strong>
-        <input type="range" id="rps" min="1" max="1000" value="100" aria-label="RPSを選択">
-      </label>
-    </div>
-
-    <div style="font-size:13px;color:var(--muted);margin-bottom:8px">
-      実際に記録されるリクエスト/秒: <strong id="sampled-rps" style="color:var(--green)">5</strong>
-      &nbsp;/&nbsp; コスト概算: <strong id="cost-est" style="color:var(--yellow)">$0.005</strong>/100万トレース換算
-    </div>
-    <div class="sampling-bar" role="progressbar" aria-valuenow="5" aria-valuemin="0" aria-valuemax="100" id="sample-progress-bar">
-      <div class="sampling-fill" id="sample-fill" style="width:5%"></div>
-    </div>
-    <div style="font-size:12px;color:var(--muted);margin-top:6px">サンプリング割合 (青=記録、灰=スキップ)</div>
-
-    <div style="margin-top:16px;display:flex;flex-wrap:wrap;gap:6px" id="sample-dots" aria-label="サンプリング可視化"></div>
-  </div>
-
-  <!-- Takeaways -->
-  <div class="section-title">学ぶポイント</div>
-  <ul class="takeaways">
+  <!-- ─── Takeaways ─── -->
+  <div class="section-heading reveal-4">学ぶポイント</div>
+  <ul class="takeaways reveal-4">
     <li>
-      <b>トレース・セグメント・サブセグメント</b>
-      <span>トレースは 1 リクエストの全体。サービス単位の記録が segment、その下位呼び出し (DB・HTTP) が subsegment に分解される。</span>
+      <strong>トレース・セグメント・サブセグメント</strong>
+      <span>トレースは 1 リクエストの全体。サービス単位の記録が segment、その下位呼び出し（DB・HTTP）が subsegment に分解される。</span>
     </li>
     <li>
-      <b>サンプリングでコスト最適化</b>
+      <strong>サンプリングでコスト最適化</strong>
       <span>全リクエストを記録すると費用がかさむため、X-Ray はデフォルトで先頭 1 req/秒 + 5% をサンプリング。レートはルールで調整できる。</span>
     </li>
     <li>
-      <b>annotation vs metadata</b>
+      <strong>annotation vs metadata</strong>
       <span>annotation はインデックス化されてコンソールで検索可能。metadata は任意の付帯情報を格納できるが検索対象外。</span>
     </li>
     <li>
-      <b>サービスマップでボトルネック特定</b>
+      <strong>サービスマップでボトルネック特定</strong>
       <span>ノード＋エッジのグラフでエラー源と高レイテンシ箇所を俯瞰し、ウォーターフォールで時系列の内訳を深掘りする。</span>
     </li>
   </ul>
 
-  <div class="section-title">正式教材で深掘り</div>
-  <div class="note">
-    このデモの対応教材: <code>docs/learning/phase9/preview-xray.md</code> — セグメント JSON の詳細・サンプリングルール設定・X-Ray SDK の組み込み方を解説しています。
+  <!-- ─── 教材リンク ─── -->
+  <div class="section-heading">正式教材で深掘り</div>
+  <div class="note-block">
+    対応教材: <code>docs/learning/phase9/preview-xray.md</code> — セグメント JSON の詳細・サンプリングルール設定・X-Ray SDK の組み込み方を解説しています。
   </div>
 
-  <div class="footer">
-    ⚠️ これはブラウザ完結のシミュレーションです。実際の AWS X-Ray は呼び出していません。
+  <!-- ─── CTA: 実 AWS ─── -->
+  <div class="cta-block">
+    <div class="cta-label">実物で動かす — 実 AWS</div>
+    <div class="cta-title">Terraform で実環境に立てる</div>
+    <p class="cta-desc">このデモの概念は Terraform で実 AWS に立てて CloudWatch で観測できます。</p>
+    <div class="cta-cmds">
+      <span class="cta-cmd">make sandbox-test-phase9</span>
+      <span class="cta-cmd">make sandbox-up-phase9</span>
+      <span class="cta-cmd">make sandbox-load-phase9</span>
+      <span class="cta-cmd">make sandbox-watch-phase9</span>
+      <span class="cta-cmd">make sandbox-down-phase9</span>
+    </div>
+    <div class="cta-note">設計: docs/superpowers/specs/2026-05-31-aws-phase-sandboxes-design.md</div>
   </div>
+
+  <!-- ─── Footer ─── -->
+  <div class="footer">
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5.5" stroke="#c9cdd4" stroke-width="1.2"/><line x1="6.5" y1="3.5" x2="6.5" y2="7" stroke="#c9cdd4" stroke-width="1.2" stroke-linecap="round"/><circle cx="6.5" cy="9" r="0.7" fill="#c9cdd4"/></svg>
+    ブラウザ完結シミュレーション — 実際の AWS X-Ray は呼び出していません
+  </div>
+
 </main>
 
 <script>
-// ===== データ定義 =====
+// ===== Segment data =====
 const SEGMENTS_NORMAL = [
-  { id:'apigw',   label:'API Gateway',         depth:0, color:'seg-apigw', start:0,   dur:220, code:200, type:'segment',
+  { id:'apigw',   label:'API Gateway',            depth:0, color:'seg-apigw',  start:0,   dur:220, code:200, type:'segment',
     annotations:{environment:'prod', version:'v2'}, metadata:{requestId:'abc-123', stage:'prod'} },
-  { id:'lambda',  label:'Lambda (handler)',     depth:1, color:'seg-lambda', start:8,   dur:195, code:200, type:'segment',
+  { id:'lambda',  label:'Lambda (handler)',        depth:1, color:'seg-lambda', start:8,   dur:195, code:200, type:'segment',
     annotations:{function:'get_submissions', coldStart:'false'}, metadata:{memoryLimit:'256MB', region:'ap-northeast-1'} },
-  { id:'init',    label:'Init (cold start)',    depth:2, color:'seg-init',   start:8,   dur:30,  code:'-',  type:'subsegment',
+  { id:'init',    label:'Init (cold start)',       depth:2, color:'seg-init',   start:8,   dur:30,  code:'-', type:'subsegment',
     annotations:{}, metadata:{runtimeVersion:'python3.12'} },
-  { id:'dynamo',  label:'DynamoDB GetItem',     depth:2, color:'seg-dynamo', start:42,  dur:35,  code:200, type:'subsegment',
+  { id:'dynamo',  label:'DynamoDB GetItem',        depth:2, color:'seg-dynamo', start:42,  dur:35,  code:200, type:'subsegment',
     annotations:{tableName:'Submissions', operation:'GetItem'}, metadata:{consumedCapacity:'1.0 RCU'} },
-  { id:'dynamo2', label:'DynamoDB Query',       depth:2, color:'seg-dynamo', start:82,  dur:58,  code:200, type:'subsegment',
+  { id:'dynamo2', label:'DynamoDB Query',          depth:2, color:'seg-dynamo', start:82,  dur:58,  code:200, type:'subsegment',
     annotations:{tableName:'Submissions', operation:'Query'}, metadata:{scannedCount:'12', count:'12'} },
-  { id:'http',    label:'External HTTP (AtCoder)', depth:2, color:'seg-http', start:148, dur:48,  code:200, type:'subsegment',
+  { id:'http',    label:'External HTTP (AtCoder)', depth:2, color:'seg-http',   start:148, dur:48,  code:200, type:'subsegment',
     annotations:{url:'atcoder.jp/api', method:'GET'}, metadata:{responseSize:'2048B'} },
 ];
 
 const SEGMENTS_FAULT = [
-  { id:'apigw',   label:'API Gateway',         depth:0, color:'seg-apigw', start:0,   dur:380, code:500, type:'segment',
+  { id:'apigw',   label:'API Gateway',                   depth:0, color:'seg-apigw',  start:0,   dur:380, code:500, type:'segment',
     annotations:{environment:'prod', version:'v2'}, metadata:{requestId:'def-456', stage:'prod'} },
-  { id:'lambda',  label:'Lambda (handler)',     depth:1, color:'seg-lambda', start:8,   dur:365, code:500, type:'segment',
+  { id:'lambda',  label:'Lambda (handler)',               depth:1, color:'seg-lambda', start:8,   dur:365, code:500, type:'segment',
     annotations:{function:'get_submissions', coldStart:'false', error:'true'}, metadata:{memoryLimit:'256MB'} },
-  { id:'init',    label:'Init (cold start)',    depth:2, color:'seg-init',   start:8,   dur:30,  code:'-',  type:'subsegment',
+  { id:'init',    label:'Init (cold start)',              depth:2, color:'seg-init',   start:8,   dur:30,  code:'-', type:'subsegment',
     annotations:{}, metadata:{runtimeVersion:'python3.12'} },
-  { id:'dynamo',  label:'DynamoDB GetItem',     depth:2, color:'seg-dynamo', start:42,  dur:35,  code:200, type:'subsegment',
+  { id:'dynamo',  label:'DynamoDB GetItem',               depth:2, color:'seg-dynamo', start:42,  dur:35,  code:200, type:'subsegment',
     annotations:{tableName:'Submissions', operation:'GetItem'}, metadata:{consumedCapacity:'1.0 RCU'} },
-  { id:'dynamo2', label:'DynamoDB Query (Throttled)', depth:2, color:'seg-err', start:82, dur:270, code:400, type:'subsegment',
+  { id:'dynamo2', label:'DynamoDB Query (Throttled)',     depth:2, color:'seg-err',    start:82,  dur:270, code:400, type:'subsegment',
     annotations:{tableName:'Submissions', operation:'Query', error:'ThrottlingException'}, metadata:{retries:'3', backoff:'exponential'} },
-  { id:'http',    label:'External HTTP (AtCoder)', depth:2, color:'seg-http', start:358, dur:18, code:'-',  type:'subsegment',
+  { id:'http',    label:'External HTTP (AtCoder)',        depth:2, color:'seg-http',   start:358, dur:18,  code:'-', type:'subsegment',
     annotations:{url:'atcoder.jp/api', method:'GET', skipped:'true'}, metadata:{note:'skipped due to upstream error'} },
 ];
 
@@ -289,49 +1072,57 @@ let animStep = 0;
 let animTimer = null;
 
 // ===== Waterfall =====
-function totalDur(segs){ return Math.max(...segs.map(s=>s.start+s.dur)); }
+function totalDur(segs){ return Math.max(...segs.map(s => s.start + s.dur)); }
 
 function renderWaterfall(segs, step){
   const wrap = document.getElementById('waterfall-rows');
   const total = totalDur(segs);
-  const mid = Math.round(total/2);
+  const mid = Math.round(total / 2);
   document.getElementById('wh-mid').textContent = mid + ' ms';
   document.getElementById('wh-end').textContent = total + ' ms';
   wrap.innerHTML = '';
 
   segs.forEach((seg, i) => {
     const row = document.createElement('div');
-    row.className = 'wf-row' + (selectedSeg === seg.id ? ' selected':'');
-    row.setAttribute('role','button');
-    row.setAttribute('tabindex','0');
+    row.className = 'wf-row' + (selectedSeg === seg.id ? ' selected' : '');
+    row.setAttribute('role', 'button');
+    row.setAttribute('tabindex', '0');
     row.setAttribute('aria-label', seg.label);
 
     const leftPct  = (seg.start / total) * 100;
     const widthPct = Math.max((seg.dur / total) * 100, 0.5);
-    const visible = step > i;
+    const visible  = step > i;
 
+    // Label
     const label = document.createElement('div');
-    label.className = 'wf-label';
+    label.className = 'wf-label' + (seg.depth === 0 ? ' root' : '');
+
     const indent = document.createElement('span');
-    indent.className = 'indent';
+    indent.className = 'wf-indent';
     indent.style.width = (seg.depth * 16) + 'px';
-    indent.style.display = 'inline-block';
     label.appendChild(indent);
 
-    const icon = seg.type === 'segment' ? '📦' : '↳';
-    label.innerHTML += `${icon} ${seg.label}`;
+    const iconEl = document.createElement('span');
+    iconEl.style.cssText = 'font-size:10px;opacity:0.5;flex-shrink:0;';
+    iconEl.textContent = seg.type === 'segment' ? '▣' : '↳';
+    label.appendChild(iconEl);
 
+    const nameEl = document.createElement('span');
+    nameEl.textContent = seg.label;
+    nameEl.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    label.appendChild(nameEl);
+
+    // Bar area
     const barArea = document.createElement('div');
     barArea.className = 'wf-bar-area';
 
     if(visible){
       const bar = document.createElement('div');
-      bar.className = 'wf-bar ' + seg.color;
-      bar.style.left = leftPct + '%';
+      bar.className = 'wf-bar ' + seg.color + ' revealed';
+      bar.style.left  = leftPct + '%';
       bar.style.width = widthPct + '%';
-      const durationLabel = seg.dur >= 20 ? seg.dur + ' ms' : '';
-      bar.textContent = durationLabel;
-      bar.setAttribute('aria-hidden','true');
+      if(seg.dur >= 20) bar.textContent = seg.dur + 'ms';
+      bar.setAttribute('aria-hidden', 'true');
       barArea.appendChild(bar);
     }
 
@@ -344,31 +1135,43 @@ function renderWaterfall(segs, step){
       showDetail(seg);
     };
     row.addEventListener('click', onClick);
-    row.addEventListener('keydown', e => { if(e.key==='Enter'||e.key===' '){onClick();} });
+    row.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' ') onClick(); });
     wrap.appendChild(row);
   });
 }
 
 function showDetail(seg){
   const panel = document.getElementById('detail-panel');
-  const codeClass = seg.code >= 400 ? 'err' : seg.code === 200 ? 'ok' : 'info';
+  const isErr = typeof seg.code === 'number' && seg.code >= 400;
+  const isOk  = seg.code === 200;
+  const badgeCls = isErr ? 'err' : isOk ? 'ok' : 'sub';
   const codeLabel = seg.code === '-' ? '—' : seg.code;
 
-  const annEntries = Object.entries(seg.annotations).map(([k,v])=>
-    `<dt>${k}</dt><dd>${v}</dd>`).join('');
-  const metaEntries = Object.entries(seg.metadata).map(([k,v])=>
-    `<dt>${k}</dt><dd>${v}</dd>`).join('');
+  const annEntries = Object.entries(seg.annotations)
+    .map(([k,v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+  const metaEntries = Object.entries(seg.metadata)
+    .map(([k,v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
 
   panel.innerHTML = `
-    <h3>${seg.label} <span class="badge ${codeClass}" style="font-size:11px">${seg.type}</span></h3>
-    <div class="kv" style="margin-bottom:12px">
-      <dt>Duration</dt><dd>${seg.dur} ms</dd>
-      <dt>Start offset</dt><dd>${seg.start} ms</dd>
-      <dt>HTTP status</dt><dd><span class="badge ${codeClass}">${codeLabel}</span></dd>
-      <dt>Type</dt><dd>${seg.type}</dd>
+    <div class="detail-title">
+      ${seg.label}
+      <span class="badge ${badgeCls}">${seg.type}</span>
+      ${isErr ? '<span class="badge err">ERROR</span>' : ''}
     </div>
-    ${annEntries ? `<div style="margin-bottom:8px"><span class="badge info" style="margin-bottom:6px;display:inline-block">annotations (検索可)</span><dl class="kv">${annEntries}</dl></div>` : ''}
-    ${metaEntries ? `<div><span class="badge warn" style="margin-bottom:6px;display:inline-block">metadata (検索不可)</span><dl class="kv">${metaEntries}</dl></div>` : ''}
+    <div class="detail-grid">
+      <div class="detail-field"><div class="detail-label">Duration</div><div class="detail-value">${seg.dur} ms</div></div>
+      <div class="detail-field"><div class="detail-label">Start offset</div><div class="detail-value">${seg.start} ms</div></div>
+      <div class="detail-field"><div class="detail-label">HTTP status</div><div class="detail-value"><span class="badge ${badgeCls}">${codeLabel}</span></div></div>
+      <div class="detail-field"><div class="detail-label">Type</div><div class="detail-value">${seg.type}</div></div>
+    </div>
+    ${annEntries ? `
+      <div class="detail-section-label">annotations <span style="font-size:10px;color:var(--muted);font-weight:400;">(インデックス化・検索可)</span></div>
+      <dl class="detail-kv" style="margin-bottom:12px;">${annEntries}</dl>
+    ` : ''}
+    ${metaEntries ? `
+      <div class="detail-section-label" style="color:var(--muted);">metadata <span style="font-size:10px;color:var(--muted);font-weight:400;">(検索不可)</span></div>
+      <dl class="detail-kv">${metaEntries}</dl>
+    ` : ''}
   `;
 }
 
@@ -376,65 +1179,94 @@ function animateTrace(segs){
   clearInterval(animTimer);
   animStep = 0;
   renderWaterfall(segs, 0);
-  animTimer = setInterval(()=>{
+  animTimer = setInterval(() => {
     animStep++;
     renderWaterfall(segs, animStep);
     if(animStep >= segs.length){ clearInterval(animTimer); }
   }, 180);
 }
 
-document.getElementById('btn-run').addEventListener('click', ()=>{
+// Run button
+document.getElementById('btn-run').addEventListener('click', () => {
   faultMode = document.getElementById('fault-toggle').checked;
   const segs = faultMode ? SEGMENTS_FAULT : SEGMENTS_NORMAL;
   currentSegments = segs;
   traceGenerated = true;
   selectedSeg = null;
+
   const total = totalDur(segs);
-  const statusEl = document.getElementById('trace-status');
   const traceId = '1-' + Date.now().toString(16).slice(-8) + '-' + Math.random().toString(16).slice(2,18);
-  const statusClass = faultMode ? '<span style="color:var(--red)">❌ Error (500)</span>' : '<span style="color:var(--green)">✅ OK (200)</span>';
-  statusEl.innerHTML = `Trace ID: <code>${traceId}</code> &nbsp;|&nbsp; 合計時間: <strong>${total} ms</strong> &nbsp;|&nbsp; ステータス: ${statusClass}`;
+  const dot = document.getElementById('status-dot');
+  const statusText = document.getElementById('trace-status-text');
+
+  dot.className = 'status-dot ' + (faultMode ? 'err' : 'ok');
+  if(faultMode){
+    statusText.innerHTML = `Trace ID: <code style="color:var(--accent);font-family:var(--mono);">${traceId}</code>&nbsp; &nbsp;合計: <strong>${total} ms</strong>&nbsp; &nbsp;ステータス: <span style="color:var(--red);">500 Error</span>`;
+  } else {
+    statusText.innerHTML = `Trace ID: <code style="color:var(--accent);font-family:var(--mono);">${traceId}</code>&nbsp; &nbsp;合計: <strong>${total} ms</strong>&nbsp; &nbsp;ステータス: <span style="color:var(--green);">200 OK</span>`;
+  }
+
   animateTrace(segs);
   updateServiceMap(faultMode);
-  document.getElementById('detail-panel').innerHTML = '<p style="margin:0;color:var(--muted);font-size:13px">バーをクリックするとセグメントの詳細がここに表示されます</p>';
+  document.getElementById('detail-panel').innerHTML = '<p style="margin:0;color:var(--muted);font-size:13px;">バーをクリックするとセグメントの詳細がここに表示されます</p>';
 });
 
-document.getElementById('btn-reset').addEventListener('click', ()=>{
+// Reset button
+document.getElementById('btn-reset').addEventListener('click', () => {
   clearInterval(animTimer);
   currentSegments = null;
   selectedSeg = null;
   traceGenerated = false;
   animStep = 0;
   document.getElementById('waterfall-rows').innerHTML = '';
-  document.getElementById('trace-status').textContent = 'リクエストを実行するとトレースが生成されます';
+  document.getElementById('status-dot').className = 'status-dot';
+  document.getElementById('trace-status-text').textContent = 'リクエストを実行するとトレースが生成されます';
   document.getElementById('wh-mid').textContent = '';
   document.getElementById('wh-end').textContent = '';
-  document.getElementById('detail-panel').innerHTML = '<p style="margin:0;color:var(--muted);font-size:13px">バーをクリックするとセグメントの詳細がここに表示されます</p>';
+  document.getElementById('detail-panel').innerHTML = '<p style="margin:0;color:var(--muted);font-size:13px;">バーをクリックするとセグメントの詳細がここに表示されます</p>';
   document.getElementById('fault-toggle').checked = false;
+  document.getElementById('fault-row').classList.remove('active');
   updateServiceMap(false);
+});
+
+// Fault toggle visual update
+document.getElementById('fault-toggle').addEventListener('change', (e) => {
+  const row = document.getElementById('fault-row');
+  row.classList.toggle('active', e.target.checked);
+  if(traceGenerated) document.getElementById('btn-run').click();
+});
+
+// Fault row keyboard
+document.getElementById('fault-row').addEventListener('keydown', e => {
+  if(e.key === 'Enter' || e.key === ' '){
+    e.preventDefault();
+    const cb = document.getElementById('fault-toggle');
+    cb.checked = !cb.checked;
+    cb.dispatchEvent(new Event('change'));
+  }
 });
 
 // ===== Service Map =====
 const NODES = [
-  { id:'client',  label:'Client',       sub:'Internet',      x:70,  y:150 },
-  { id:'apigw',   label:'API Gateway',  sub:'Segment',       x:210, y:150 },
-  { id:'lambda',  label:'Lambda',       sub:'Segment',       x:370, y:150 },
-  { id:'dynamo',  label:'DynamoDB',     sub:'Subsegment',    x:530, y:80  },
-  { id:'http',    label:'AtCoder API',  sub:'Subsegment',    x:530, y:220 },
+  { id:'client',  label:'Client',      sub:'Internet',   x:70,  y:140 },
+  { id:'apigw',   label:'API Gateway', sub:'Segment',    x:210, y:140 },
+  { id:'lambda',  label:'Lambda',      sub:'Segment',    x:370, y:140 },
+  { id:'dynamo',  label:'DynamoDB',    sub:'Subsegment', x:530, y:70  },
+  { id:'http',    label:'AtCoder API', sub:'Subsegment', x:530, y:210 },
 ];
 
 const EDGES = [
-  { from:'client',  to:'apigw',  latency:8,   errRate:0   },
-  { from:'apigw',   to:'lambda', latency:5,   errRate:0   },
-  { from:'lambda',  to:'dynamo', latency:47,  errRate:0   },
-  { from:'lambda',  to:'http',   latency:48,  errRate:0   },
+  { from:'client', to:'apigw',  latency:8,   errRate:0   },
+  { from:'apigw',  to:'lambda', latency:5,   errRate:0   },
+  { from:'lambda', to:'dynamo', latency:47,  errRate:0   },
+  { from:'lambda', to:'http',   latency:48,  errRate:0   },
 ];
 
 const EDGES_FAULT = [
-  { from:'client',  to:'apigw',  latency:8,   errRate:0    },
-  { from:'apigw',   to:'lambda', latency:5,   errRate:100  },
-  { from:'lambda',  to:'dynamo', latency:152, errRate:100  },
-  { from:'lambda',  to:'http',   latency:18,  errRate:0    },
+  { from:'client', to:'apigw',  latency:8,   errRate:0   },
+  { from:'apigw',  to:'lambda', latency:5,   errRate:100 },
+  { from:'lambda', to:'dynamo', latency:152, errRate:100 },
+  { from:'lambda', to:'http',   latency:18,  errRate:0   },
 ];
 
 function updateServiceMap(isFault){
@@ -442,150 +1274,206 @@ function updateServiceMap(isFault){
   svg.innerHTML = '';
   const edges = isFault ? EDGES_FAULT : EDGES;
 
-  // defs for arrow marker
-  const defs = document.createElementNS('http://www.w3.org/2000/svg','defs');
-  ['normal','err'].forEach(type => {
-    const marker = document.createElementNS('http://www.w3.org/2000/svg','marker');
-    marker.setAttribute('id','arrow-'+type);
-    marker.setAttribute('markerWidth','8');
-    marker.setAttribute('markerHeight','8');
-    marker.setAttribute('refX','6');
-    marker.setAttribute('refY','3');
-    marker.setAttribute('orient','auto');
-    const poly = document.createElementNS('http://www.w3.org/2000/svg','polygon');
-    poly.setAttribute('points','0 0, 8 3, 0 6');
-    poly.setAttribute('fill', type==='err' ? '#f85149' : '#2b3645');
+  const NS = 'http://www.w3.org/2000/svg';
+
+  // defs
+  const defs = document.createElementNS(NS, 'defs');
+
+  // Arrow markers
+  [{id:'arrow-normal', fill:'#c9cdd4'}, {id:'arrow-err', fill:'#dc2626'}, {id:'arrow-ok', fill:'#0d9488'}].forEach(m => {
+    const marker = document.createElementNS(NS, 'marker');
+    marker.setAttribute('id', m.id);
+    marker.setAttribute('markerWidth', '8'); marker.setAttribute('markerHeight', '8');
+    marker.setAttribute('refX', '6'); marker.setAttribute('refY', '3');
+    marker.setAttribute('orient', 'auto');
+    const poly = document.createElementNS(NS, 'polygon');
+    poly.setAttribute('points', '0 0, 8 3, 0 6');
+    poly.setAttribute('fill', m.fill);
     marker.appendChild(poly);
     defs.appendChild(marker);
   });
+
   svg.appendChild(defs);
 
-  // draw edges
+  // White background
+  const bgRect = document.createElementNS(NS, 'rect');
+  bgRect.setAttribute('width', '700'); bgRect.setAttribute('height', '280');
+  bgRect.setAttribute('fill', '#f7f7f5');
+  svg.appendChild(bgRect);
+
+  // Draw edges
   edges.forEach(e => {
-    const from = NODES.find(n=>n.id===e.from);
-    const to   = NODES.find(n=>n.id===e.to);
-    if(!from||!to) return;
+    const from = NODES.find(n => n.id === e.from);
+    const to   = NODES.find(n => n.id === e.to);
+    if(!from || !to) return;
     const isErr = isFault && e.errRate > 0;
-    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
-    const scaleX = 1;
-    const fx = from.x * scaleX + 26, fy = from.y;
-    const tx = to.x * scaleX - 26,   ty = to.y;
+
+    const fx = from.x + 26, fy = from.y;
+    const tx = to.x   - 26, ty = to.y;
+
+    const line = document.createElementNS(NS, 'line');
     line.setAttribute('x1', fx); line.setAttribute('y1', fy);
     line.setAttribute('x2', tx); line.setAttribute('y2', ty);
-    line.setAttribute('stroke', isErr ? '#f85149' : '#2b3645');
-    line.setAttribute('stroke-width', isErr ? '2.5' : '1.5');
-    line.setAttribute('marker-end', 'url(#arrow-'+(isErr?'err':'normal')+')');
+    line.setAttribute('stroke', isErr ? '#dc2626' : '#c9cdd4');
+    line.setAttribute('stroke-width', isErr ? '2' : '1.5');
+    if(isErr) line.setAttribute('stroke-dasharray', '4 3');
+    line.setAttribute('marker-end', 'url(#arrow-' + (isErr ? 'err' : 'normal') + ')');
     svg.appendChild(line);
 
-    // edge label
-    const mx = (fx+tx)/2, my = (fy+ty)/2 - 8;
-    const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
+    // Edge label
+    const mx = (fx + tx) / 2;
+    const my = (fy + ty) / 2 - 8;
+    const txt = document.createElementNS(NS, 'text');
     txt.setAttribute('x', mx); txt.setAttribute('y', my);
-    txt.setAttribute('text-anchor','middle');
-    txt.setAttribute('class','edge-label');
-    txt.setAttribute('fill', isErr ? '#f85149' : '#93a1b3');
-    txt.textContent = e.latency+'ms' + (e.errRate > 0 ? ' ⚠️'+e.errRate+'%err' : '');
+    txt.setAttribute('text-anchor', 'middle');
+    txt.setAttribute('class', 'edge-label');
+    txt.setAttribute('fill', isErr ? '#dc2626' : '#6b6f76');
+    txt.textContent = e.latency + 'ms' + (e.errRate > 0 ? ' ' + e.errRate + '%err' : '');
     svg.appendChild(txt);
   });
 
-  // draw nodes
-  NODES.forEach(node => {
-    const isErrNode = isFault && (node.id==='dynamo'||node.id==='lambda'||node.id==='apigw');
-    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
-    g.setAttribute('class','svc-node');
-    g.setAttribute('transform',`translate(${node.x},${node.y})`);
-    g.setAttribute('role','button');
-    g.setAttribute('tabindex','0');
-    g.setAttribute('aria-label',node.label);
+  // Node icons map
+  const nodeIcons = {
+    client: '👤', apigw: '◈', lambda: 'λ', dynamo: '⬡', http: '◎'
+  };
 
-    const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
-    circle.setAttribute('r','26');
-    circle.setAttribute('fill', isErrNode ? 'rgba(248,81,73,.18)' : 'var(--surface-2,#1c2531)');
-    circle.setAttribute('stroke', isErrNode ? '#f85149' : (node.id==='client'?'#2b3645':'#ff9900'));
-    circle.setAttribute('stroke-width', isErrNode ? '2.5' : '1.5');
+  // Draw nodes
+  NODES.forEach(node => {
+    const isErrNode = isFault && (node.id === 'dynamo' || node.id === 'lambda' || node.id === 'apigw');
+
+    const g = document.createElementNS(NS, 'g');
+    g.setAttribute('class', 'svc-node');
+    g.setAttribute('transform', `translate(${node.x},${node.y})`);
+    g.setAttribute('role', 'button');
+    g.setAttribute('tabindex', '0');
+    g.setAttribute('aria-label', node.label);
+
+    // Main circle
+    const circle = document.createElementNS(NS, 'circle');
+    circle.setAttribute('r', '26');
+    circle.setAttribute('fill', isErrNode ? 'rgba(220,38,38,0.08)' : 'rgba(13,148,136,0.07)');
+    circle.setAttribute('stroke', isErrNode ? '#dc2626' : node.id === 'client' ? '#c9cdd4' : '#0d9488');
+    circle.setAttribute('stroke-width', '1.5');
     g.appendChild(circle);
 
-    const emoji = {client:'👤', apigw:'🌐', lambda:'λ', dynamo:'🗄️', http:'🌍'}[node.id]||'⬡';
-    const t1 = document.createElementNS('http://www.w3.org/2000/svg','text');
-    t1.setAttribute('y','-6'); t1.setAttribute('text-anchor','middle');
-    t1.setAttribute('font-size','16'); t1.setAttribute('fill','var(--text)');
-    t1.textContent = emoji;
+    // Icon text
+    const t1 = document.createElementNS(NS, 'text');
+    t1.setAttribute('y', '-3');
+    t1.setAttribute('text-anchor', 'middle');
+    t1.setAttribute('font-size', '14');
+    t1.setAttribute('fill', isErrNode ? '#dc2626' : '#0d9488');
+    t1.setAttribute('font-family', '"Noto Sans JP", system-ui, sans-serif');
+    t1.textContent = nodeIcons[node.id] || '○';
     g.appendChild(t1);
 
-    const t2 = document.createElementNS('http://www.w3.org/2000/svg','text');
-    t2.setAttribute('y','8'); t2.setAttribute('text-anchor','middle');
-    t2.setAttribute('font-size','10'); t2.setAttribute('fill', isErrNode ? '#f85149' : 'var(--text)');
+    // Node label
+    const t2 = document.createElementNS(NS, 'text');
+    t2.setAttribute('y', '13');
+    t2.setAttribute('text-anchor', 'middle');
+    t2.setAttribute('font-size', '9');
+    t2.setAttribute('fill', isErrNode ? '#dc2626' : '#202124');
+    t2.setAttribute('font-family', '"Noto Sans JP", system-ui, "Hiragino Kaku Gothic ProN", sans-serif');
+    t2.setAttribute('font-weight', '500');
     t2.textContent = node.label;
     g.appendChild(t2);
 
-    const t3 = document.createElementNS('http://www.w3.org/2000/svg','text');
-    t3.setAttribute('y','42'); t3.setAttribute('text-anchor','middle');
-    t3.setAttribute('font-size','10'); t3.setAttribute('fill','#93a1b3');
+    // Sub label
+    const t3 = document.createElementNS(NS, 'text');
+    t3.setAttribute('y', '40');
+    t3.setAttribute('text-anchor', 'middle');
+    t3.setAttribute('font-size', '8');
+    t3.setAttribute('fill', '#6b6f76');
+    t3.setAttribute('font-family', '"Noto Sans JP", system-ui, sans-serif');
     t3.textContent = node.sub;
     g.appendChild(t3);
 
+    // Error indicator
+    if(isErrNode){
+      const errText = document.createElementNS(NS, 'text');
+      errText.setAttribute('y', '-30');
+      errText.setAttribute('text-anchor', 'middle');
+      errText.setAttribute('font-size', '8');
+      errText.setAttribute('fill', '#dc2626');
+      errText.setAttribute('font-family', '"Noto Sans JP", system-ui, sans-serif');
+      errText.setAttribute('font-weight', '700');
+      errText.textContent = 'ERR';
+      g.appendChild(errText);
+    }
+
     g.addEventListener('click', () => showMapDetail(node, isFault));
-    g.addEventListener('keydown', e => { if(e.key==='Enter'||e.key===' ') showMapDetail(node, isFault); });
+    g.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' ') showMapDetail(node, isFault); });
     svg.appendChild(g);
   });
 }
 
 function showMapDetail(node, isFault){
   const panel = document.getElementById('map-detail');
-  const isErrNode = isFault && (node.id==='dynamo'||node.id==='lambda'||node.id==='apigw');
+  const isErrNode = isFault && (node.id === 'dynamo' || node.id === 'lambda' || node.id === 'apigw');
 
   const stats = {
-    client:  { reqCount:1,    okRate:100,  avgLat:'—' },
-    apigw:   { reqCount:1,    okRate: isFault?0:100,  avgLat: isFault?'380ms':'220ms' },
-    lambda:  { reqCount:1,    okRate: isFault?0:100,  avgLat: isFault?'365ms':'195ms' },
-    dynamo:  { reqCount:isFault?4:2, okRate: isFault?25:100, avgLat: isFault?'152ms':'47ms' },
-    http:    { reqCount:1,    okRate:100,  avgLat:'48ms' },
+    client:  { reqCount:1, okRate:100,              avgLat:'—'    },
+    apigw:   { reqCount:1, okRate:isFault?0:100,    avgLat:isFault?'380ms':'220ms' },
+    lambda:  { reqCount:1, okRate:isFault?0:100,    avgLat:isFault?'365ms':'195ms' },
+    dynamo:  { reqCount:isFault?4:2, okRate:isFault?25:100, avgLat:isFault?'152ms':'47ms' },
+    http:    { reqCount:1, okRate:100,              avgLat:'48ms' },
   }[node.id];
 
   panel.innerHTML = `
-    <h3>${node.label} ${isErrNode ? '<span class="badge err">ERROR</span>' : '<span class="badge ok">正常</span>'}</h3>
-    <div class="kv">
-      <dt>トレース数</dt><dd>${stats.reqCount}</dd>
-      <dt>成功率</dt><dd><span style="color:${stats.okRate>=100?'var(--green)':'var(--red)'}">${stats.okRate}%</span></dd>
-      <dt>平均レイテンシ</dt><dd>${stats.avgLat}</dd>
-      <dt>タイプ</dt><dd>${node.sub}</dd>
+    <div class="detail-title">
+      ${node.label}
+      <span class="badge ${isErrNode ? 'err' : 'ok'}">${isErrNode ? 'ERROR' : '正常'}</span>
     </div>
-    ${isErrNode ? '<div style="margin-top:10px;font-size:13px;color:var(--red)">⚠️ このノードでエラーが発生しています。ウォーターフォールで詳細を確認してください。</div>' : ''}
+    <div class="detail-grid">
+      <div class="detail-field"><div class="detail-label">トレース数</div><div class="detail-value">${stats.reqCount}</div></div>
+      <div class="detail-field"><div class="detail-label">成功率</div><div class="detail-value" style="color:${stats.okRate >= 100 ? 'var(--green)' : 'var(--red)'};">${stats.okRate}%</div></div>
+      <div class="detail-field"><div class="detail-label">平均レイテンシ</div><div class="detail-value">${stats.avgLat}</div></div>
+      <div class="detail-field"><div class="detail-label">タイプ</div><div class="detail-value">${node.sub}</div></div>
+    </div>
+    ${isErrNode ? '<div style="font-size:12px;color:var(--red);border:1px solid rgba(220,38,38,0.2);padding:8px 12px;border-radius:6px;background:var(--red-light);">このノードでエラーが発生しています。ウォーターフォールで詳細を確認してください。</div>' : ''}
   `;
 }
 
-// init map
+// Init map
 updateServiceMap(false);
 
 // ===== Sampling Simulator =====
 function updateSampling(){
-  const rate = parseInt(document.getElementById('sample-rate').value);
-  const rps  = parseInt(document.getElementById('rps').value);
+  const rate    = parseInt(document.getElementById('sample-rate').value);
+  const rps     = parseInt(document.getElementById('rps').value);
   const sampled = Math.ceil(rps * rate / 100);
+  const skip    = 100 - rate;
+
   document.getElementById('rate-val').textContent = rate + '%';
   document.getElementById('rps-val').textContent  = rps;
   document.getElementById('sampled-rps').textContent = sampled;
+  document.getElementById('skip-rate').textContent   = skip + '%';
+
   const costPer1M = ((sampled / rps) * 0.005).toFixed(4);
   document.getElementById('cost-est').textContent = '$' + costPer1M;
-  document.getElementById('sample-fill').style.width = rate + '%';
+
+  const fill = document.getElementById('sample-fill');
+  fill.style.width = rate + '%';
+
   const bar = document.getElementById('sample-progress-bar');
   bar.setAttribute('aria-valuenow', rate);
 
-  // dot visualization (max 50 dots)
+  // Dot visualization (max 50)
   const container = document.getElementById('sample-dots');
   container.innerHTML = '';
   const total = Math.min(rps, 50);
   const sampledCount = Math.round(total * rate / 100);
+
   for(let i = 0; i < total; i++){
     const dot = document.createElement('div');
-    dot.style.cssText = `width:12px;height:12px;border-radius:50%;background:${i < sampledCount ? 'var(--accent)' : 'var(--surface-3)'};border:1px solid var(--border);flex-shrink:0;transition:background .2s`;
+    dot.className = 'sample-dot ' + (i < sampledCount ? 'sampled' : 'skipped');
     dot.setAttribute('title', i < sampledCount ? 'トレース記録' : 'スキップ');
     container.appendChild(dot);
   }
+
   if(rps > 50){
     const more = document.createElement('span');
-    more.style.cssText = 'font-size:12px;color:var(--muted);align-self:center;margin-left:4px';
-    more.textContent = `... + ${rps - 50} req`;
+    more.style.cssText = 'font-size:11px;color:var(--muted);align-self:center;margin-left:4px;font-family:var(--mono);';
+    more.textContent = '+ ' + (rps - 50) + ' req…';
     container.appendChild(more);
   }
 }
@@ -594,13 +1482,10 @@ document.getElementById('sample-rate').addEventListener('input', updateSampling)
 document.getElementById('rps').addEventListener('input', updateSampling);
 updateSampling();
 
-// fault toggle auto-runs trace if already generated
-document.getElementById('fault-toggle').addEventListener('change', ()=>{
-  if(traceGenerated){
-    document.getElementById('btn-run').click();
-  }
+// fault toggle auto-reruns if trace already generated
+document.getElementById('fault-toggle').addEventListener('change', () => {
+  if(traceGenerated) document.getElementById('btn-run').click();
 });
 </script>
-<div class="wrap"><p class="note">🧪 <b>実物で動かす（実 AWS）:</b> このデモの概念は Terraform で実 AWS に立てて CloudWatch で観測できます。<br><code>make sandbox-test-phase9</code>（無料検証）→ <code>make sandbox-up-phase9</code>（apply）→ <code>make sandbox-load-phase9</code> → <code>make sandbox-watch-phase9</code>（CloudWatch 観測）→ <code>make sandbox-down-phase9</code>（課金停止）。<br>設計: <code>docs/superpowers/specs/2026-05-31-aws-phase-sandboxes-design.md</code></p></div>
 </body>
 </html>

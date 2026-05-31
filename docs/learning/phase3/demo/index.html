@@ -4,272 +4,909 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SQS — 非同期キューの仕組みを体験 | AWS 学習デモ Phase 3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
-:root{
-  --bg:#0b0f14; --surface:#141b24; --surface-2:#1c2531; --surface-3:#243042;
-  --border:#2b3645; --text:#e6edf3; --muted:#93a1b3;
-  --accent:#ff9900; --accent-soft:#ffb84d; --cyan:#4dd0e1; --green:#3fb950;
-  --red:#f85149; --yellow:#e3b341; --purple:#bc8cff; --blue:#58a6ff;
-  --radius:14px; --radius-sm:8px; --shadow:0 8px 30px rgba(0,0,0,.35);
-  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
-  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+/* =============================================
+   NOTE.COM 風 エディトリアル — Phase 3 SQS
+   アクセント: #d97706
+   ============================================= */
+:root {
+  --bg: #ffffff;
+  --bg-subtle: #f7f7f5;
+  --text: #202124;
+  --text-sub: #6b6f76;
+  --border: #e8e8e6;
+  --accent: #d97706;
+  --accent-hover: #b45309;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --sans: "Noto Sans JP", system-ui, "Hiragino Kaku Gothic ProN", sans-serif;
+  --card-radius: 10px;
+  --card-shadow: 0 1px 3px rgba(0,0,0,.06);
+  --content-width: 720px;
 }
-*{box-sizing:border-box}
-html{scroll-behavior:smooth}
-body{margin:0;background:radial-gradient(1200px 600px at 80% -10%,rgba(255,153,0,.08),transparent),var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
-a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
-.wrap{max-width:1080px;margin:0 auto;padding:28px 24px 80px}
-.topbar{position:sticky;top:0;z-index:20;backdrop-filter:blur(10px);background:rgba(11,15,20,.72);border-bottom:1px solid var(--border)}
-.topbar .inner{max-width:1080px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;gap:14px}
-.brand{font-weight:700;letter-spacing:.3px;display:flex;align-items:center;gap:10px}
-.brand .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
-.spacer{flex:1}
-.eyebrow{color:var(--accent);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase}
-h1{font-size:clamp(24px,4vw,38px);line-height:1.2;margin:.3em 0 .25em}
-.lead{color:var(--muted);font-size:17px;max-width:72ch}
-.section-title{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:34px 0 12px;font-weight:700}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;box-shadow:var(--shadow)}
-.card + .card{margin-top:18px}
-.grid{display:grid;gap:18px}
-.grid-2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
-.grid-3{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
-.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--surface-3);border:1px solid var(--border);color:var(--text)}
-.pill.accent{background:rgba(255,153,0,.14);border-color:rgba(255,153,0,.4);color:var(--accent-soft)}
-.badge{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px}
-.badge.ok{background:rgba(63,185,80,.15);color:var(--green)}
-.badge.err{background:rgba(248,81,73,.15);color:var(--red)}
-.badge.warn{background:rgba(227,179,65,.15);color:var(--yellow)}
-.badge.info{background:rgba(88,166,255,.15);color:var(--blue)}
-.btn{appearance:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;color:var(--text);background:var(--surface-3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 16px;transition:all .12s ease}
-.btn:hover{border-color:var(--muted)} .btn:active{transform:translateY(1px)}
-.btn:disabled{opacity:.45;cursor:not-allowed}
-.btn.accent{background:var(--accent);border-color:var(--accent);color:#1a1206}
-.btn.accent:hover{background:var(--accent-soft)}
-.btn.ghost{background:transparent}
-.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:4px 0 16px}
-label.field{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
-input[type=text],input[type=number],select,textarea{font-family:inherit;font-size:14px;color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 11px}
-input[type=range]{accent-color:var(--accent)}
-.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;user-select:none}
-.flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
-.flow-node{flex:1;min-width:120px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center;position:relative;transition:all .2s ease}
-.flow-node.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(255,153,0,.25);background:var(--surface-3)}
-.flow-node.ok{border-color:var(--green)} .flow-node.err{border-color:var(--red)}
-.flow-arrow{display:flex;align-items:center;color:var(--muted);padding:0 8px;font-size:20px}
-.log{font-family:var(--mono);font-size:13px;background:#0a0e13;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;max-height:300px;overflow:auto;white-space:pre-wrap;line-height:1.6}
-.log .l-ok{color:var(--green)} .log .l-err{color:var(--red)} .log .l-warn{color:var(--yellow)} .log .l-info{color:var(--blue)} .log .l-dim{color:var(--muted)}
-code,kbd{font-family:var(--mono);font-size:.92em}
-.kbd{background:var(--surface-3);border:1px solid var(--border);border-bottom-width:2px;border-radius:6px;padding:1px 6px;font-size:12px}
-pre{font-family:var(--mono);font-size:13px;background:#0a0e13;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;overflow:auto}
-pre .hl{background:rgba(255,153,0,.18);display:block;margin:0 -14px;padding:0 14px}
-.takeaways{list-style:none;padding:0;margin:0;display:grid;gap:10px}
-.takeaways li{display:flex;flex-direction:column;gap:3px;background:var(--surface-2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--radius-sm);padding:12px 14px;font-size:14px}
-.takeaways li b{color:var(--accent-soft)}
-.note{font-size:13px;color:var(--muted);border-left:3px solid var(--border);padding-left:12px;margin:14px 0}
-.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:13px}
-.kv dt{color:var(--muted)} .kv dd{margin:0;font-family:var(--mono)}
-.muted{color:var(--muted)} hr.sep{border:none;border-top:1px solid var(--border);margin:28px 0}
-.footer{color:var(--muted);font-size:13px;margin-top:48px;border-top:1px solid var(--border);padding-top:20px}
-@media (max-width:640px){.flow{flex-direction:column}.flow-arrow{transform:rotate(90deg);padding:6px 0}}
 
-/* ===== Page-specific styles ===== */
-.lanes{display:grid;grid-template-columns:repeat(5,1fr);gap:0;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;min-height:260px}
-.lane{display:flex;flex-direction:column;border-right:1px solid var(--border);background:var(--surface-2)}
-.lane:last-child{border-right:none}
-.lane-header{padding:10px 8px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;text-align:center;border-bottom:1px solid var(--border);background:var(--surface-3);color:var(--muted)}
-.lane-header.producer{color:var(--blue)}
-.lane-header.queue{color:var(--accent)}
-.lane-header.inflight{color:var(--yellow)}
-.lane-header.consumer{color:var(--green)}
-.lane-header.dlq{color:var(--red)}
-.lane-body{flex:1;padding:8px;display:flex;flex-direction:column;gap:6px;min-height:160px;overflow-y:auto}
-.msg-card{position:relative;background:var(--surface-3);border:1px solid var(--border);border-radius:6px;padding:7px 9px;font-size:12px;font-family:var(--mono);cursor:default;transition:all .2s ease}
-.msg-card.new-flash{animation:flash-in .35s ease}
-.msg-card .msg-id{color:var(--muted);font-size:10px}
-.msg-card .msg-body{color:var(--text);margin-top:2px;word-break:break-all}
-.msg-card .recv-badge{font-size:10px;margin-top:4px;color:var(--yellow)}
-.msg-card.inflight-card{border-color:var(--yellow);background:rgba(227,179,65,.07)}
-.msg-card.dlq-card{border-color:var(--red);background:rgba(248,81,73,.07)}
-@keyframes flash-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
 
-/* Visibility timeout progress bar */
-.vt-bar-wrap{margin-top:6px;background:var(--surface);border-radius:3px;height:5px;overflow:hidden}
-.vt-bar{height:100%;border-radius:3px;background:var(--yellow);transition:width .25s linear}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.9;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
 
-/* Toggle (switch) */
-.toggle-wrap{display:flex;align-items:center;gap:10px;font-size:14px}
-.toggle-track{position:relative;display:inline-block;width:42px;height:24px;cursor:pointer}
-.toggle-track input{opacity:0;width:0;height:0;position:absolute}
-.toggle-slider{position:absolute;inset:0;background:var(--surface-3);border:1px solid var(--border);border-radius:999px;transition:.2s}
-.toggle-slider::before{content:"";position:absolute;left:3px;top:3px;width:16px;height:16px;background:var(--muted);border-radius:50%;transition:.2s}
-.toggle-track input:checked + .toggle-slider{background:rgba(255,153,0,.2);border-color:var(--accent)}
-.toggle-track input:checked + .toggle-slider::before{transform:translateX(18px);background:var(--accent)}
+/* ---- TOP ACCENT LINE ---- */
+.top-accent {
+  height: 3px;
+  background: var(--accent);
+}
 
-.sliders-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
-@media(max-width:640px){.sliders-row{grid-template-columns:1fr}.lanes{grid-template-columns:1fr 1fr}}
-.slider-label{font-size:13px;color:var(--muted);margin-bottom:4px}
-.slider-val{font-weight:700;color:var(--accent-soft);font-family:var(--mono)}
+/* ---- SITE NAV ---- */
+.site-nav {
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+}
+.site-nav-inner {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.nav-brand {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-sub);
+  letter-spacing: 0.02em;
+}
+.nav-sep {
+  color: var(--border);
+  font-size: 18px;
+  font-weight: 300;
+}
+.nav-phase {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+}
 
-.inflight-item{position:relative}
-.action-btns{display:flex;gap:6px;margin-top:5px;flex-wrap:wrap}
-.action-btns .btn{font-size:11px;padding:4px 8px}
+/* ---- MAIN CONTENT ---- */
+.content {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: 0 24px 80px;
+}
 
-.empty-hint{font-size:12px;color:var(--muted);text-align:center;padding:20px 0;opacity:.6}
+/* ---- HERO ---- */
+.hero {
+  padding: 56px 0 40px;
+  opacity: 0;
+  animation: fade-in 0.5s ease 0.05s forwards;
+}
+.hero-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.hero-title {
+  font-size: clamp(28px, 5vw, 40px);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+.hero-lead {
+  font-size: 16px;
+  color: var(--text-sub);
+  line-height: 1.85;
+  max-width: 58ch;
+  margin-bottom: 20px;
+}
+.hero-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tag {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 3px 10px;
+  border-radius: 4px;
+  background: var(--bg-subtle);
+  color: var(--text-sub);
+  border: 1px solid var(--border);
+}
+.tag.accent {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fcd34d;
+}
 
-.fifo-badge{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:rgba(188,140,255,.15);color:var(--purple);margin-left:4px}
+/* ---- SECTION HEADING ---- */
+.section-heading {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-sub);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+  opacity: 0;
+  animation: fade-in 0.5s ease 0.15s forwards;
+}
 
-.stats-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px}
-.stat-box{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 16px;min-width:90px;text-align:center}
-.stat-num{font-size:22px;font-weight:700;font-family:var(--mono);color:var(--accent)}
-.stat-label{font-size:11px;color:var(--muted);margin-top:2px}
+/* ---- DEMO CARD ---- */
+.demo-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+  opacity: 0;
+  animation: fade-in 0.5s ease 0.2s forwards;
+}
+
+/* Demo top bar */
+.demo-topbar {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  background: var(--bg-subtle);
+}
+.demo-topbar-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  flex: 1;
+  letter-spacing: -0.01em;
+}
+
+/* FIFO Toggle */
+.toggle-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-sub);
+}
+.toggle-track {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.toggle-track input { opacity: 0; width: 0; height: 0; position: absolute; }
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--border);
+  border-radius: 12px;
+  transition: background 0.2s;
+}
+.toggle-slider::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,.15);
+  transition: transform 0.2s;
+}
+.toggle-track input:checked + .toggle-slider { background: var(--accent); }
+.toggle-track input:checked + .toggle-slider::before { transform: translateX(20px); }
+
+/* ---- SLIDERS ---- */
+.sliders-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+}
+@media (max-width: 560px) { .sliders-row { grid-template-columns: 1fr; } }
+.slider-cell {
+  padding: 16px 20px;
+}
+.slider-cell + .slider-cell {
+  border-left: 1px solid var(--border);
+}
+@media (max-width: 560px) {
+  .slider-cell + .slider-cell { border-left: none; border-top: 1px solid var(--border); }
+}
+.slider-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-sub);
+  margin-bottom: 4px;
+}
+.slider-val-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.slider-num {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.slider-unit {
+  font-size: 13px;
+  color: var(--text-sub);
+}
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,.15);
+  transition: background 0.15s;
+}
+input[type="range"]::-webkit-slider-thumb:hover { background: var(--accent-hover); }
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: var(--accent);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+/* ---- STATS BAR ---- */
+.stats-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-bottom: 1px solid var(--border);
+}
+@media (max-width: 480px) { .stats-bar { grid-template-columns: 1fr 1fr; } }
+.stat-cell {
+  padding: 14px 12px;
+  text-align: center;
+}
+.stat-cell + .stat-cell { border-left: 1px solid var(--border); }
+@media (max-width: 480px) {
+  .stat-cell:nth-child(3) { border-left: none; }
+  .stat-cell:nth-child(3), .stat-cell:nth-child(4) { border-top: 1px solid var(--border); }
+}
+.stat-num {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  display: block;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.stat-num.c-queue   { color: #2563eb; }
+.stat-num.c-inflight { color: var(--accent); }
+.stat-num.c-dlq     { color: #dc2626; }
+.stat-num.c-done    { color: #16a34a; }
+.stat-lbl {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-sub);
+  margin-top: 3px;
+  display: block;
+}
+
+/* ---- CONTROLS ---- */
+.controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-subtle);
+}
+.btn {
+  appearance: none;
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  line-height: 1.3;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn.primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.btn.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn.outline {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--border);
+}
+.btn.outline:hover:not(:disabled) { background: var(--bg-subtle); border-color: #ccc; }
+.btn.ghost {
+  background: transparent;
+  color: var(--text-sub);
+  border-color: transparent;
+}
+.btn.ghost:hover:not(:disabled) { background: var(--border); color: var(--text); }
+
+/* ---- LANES ---- */
+.lanes-wrapper {
+  overflow-x: auto;
+}
+.lanes-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  min-height: 260px;
+}
+.lane { border-right: 1px solid var(--border); }
+.lane:last-child { border-right: none; }
+
+.lane-header {
+  padding: 8px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-sub);
+  background: var(--bg-subtle);
+}
+.lane-header.lh-producer { color: #1d4ed8; background: #eff6ff; }
+.lane-header.lh-queue    { color: #1d4ed8; background: #eff6ff; }
+.lane-header.lh-inflight { color: #92400e; background: #fffbeb; }
+.lane-header.lh-consumer { color: #166534; background: #f0fdf4; }
+.lane-header.lh-dlq      { color: #991b1b; background: #fef2f2; }
+
+.lane-body {
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 200px;
+  overflow-y: auto;
+}
+
+.empty-hint {
+  font-size: 11px;
+  color: var(--border);
+  text-align: center;
+  padding: 20px 0;
+  font-weight: 500;
+}
+
+/* ---- MESSAGE CARDS ---- */
+.msg-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 11px;
+  transition: box-shadow 0.15s;
+}
+.msg-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,.07); }
+.msg-id {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-sub);
+  font-family: var(--mono);
+}
+.msg-body {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text);
+  margin-top: 2px;
+  word-break: break-all;
+}
+.recv-badge {
+  font-size: 10px;
+  font-weight: 700;
+  margin-top: 4px;
+  color: var(--accent);
+}
+
+.fifo-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  background: #dbeafe;
+  color: #1e40af;
+  border-radius: 3px;
+  margin-left: 4px;
+}
+
+/* In-flight card */
+.msg-card.inflight-card {
+  background: #fffbeb;
+  border-color: #fcd34d;
+}
+
+/* DLQ card */
+.msg-card.dlq-card {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+.msg-card.dlq-card .msg-id { color: #991b1b; }
+.msg-card.dlq-card .msg-body { color: #7f1d1d; }
+.msg-card.dlq-card .recv-badge { color: #dc2626; }
+
+/* Consumer card */
+.msg-card.consumer-card {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+
+/* Arrive animation */
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.msg-card.new-flash { animation: card-in 0.3s ease; }
+
+/* VT progress bar */
+.vt-bar-wrap {
+  margin-top: 6px;
+  height: 3px;
+  background: #fde68a;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.vt-bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.25s linear;
+}
+
+/* Action buttons inside inflight */
+.action-btns {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+.action-btns .btn {
+  font-size: 10px;
+  padding: 4px 8px;
+  border-radius: 5px;
+}
+.btn-ok  { background: #f0fdf4; color: #166534; border: 1px solid #86efac; }
+.btn-ok:hover  { background: #dcfce7; }
+.btn-fail { background: #fef2f2; color: #991b1b; border: 1px solid #fca5a5; }
+.btn-fail:hover { background: #fee2e2; }
+
+/* ---- EVENT LOG ---- */
+.log-section {
+  border-top: 1px solid var(--border);
+  padding: 16px 20px;
+}
+.log-section-head {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.log-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-sub);
+  letter-spacing: 0.05em;
+}
+.log-clear-btn {
+  margin-left: auto;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 700;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 3px 10px;
+  cursor: pointer;
+  color: var(--text-sub);
+  transition: 0.12s;
+}
+.log-clear-btn:hover { background: var(--bg-subtle); }
+.log-output {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--bg-subtle);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  max-height: 200px;
+  overflow: auto;
+  white-space: pre-wrap;
+  line-height: 1.7;
+}
+.l-ok   { color: #16a34a; }
+.l-err  { color: #dc2626; }
+.l-warn { color: #d97706; }
+.l-info { color: #2563eb; }
+.l-dim  { color: var(--text-sub); }
+
+/* ---- LEARNING POINTS ---- */
+.learn-section {
+  margin-top: 48px;
+  opacity: 0;
+  animation: fade-in 0.5s ease 0.35s forwards;
+}
+.learn-section-head {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  letter-spacing: -0.01em;
+}
+.learn-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 560px) { .learn-list { grid-template-columns: 1fr; } }
+.learn-item {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  padding: 18px 20px;
+  box-shadow: var(--card-shadow);
+}
+.learn-num {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.learn-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+}
+.learn-body {
+  font-size: 13px;
+  color: var(--text-sub);
+  line-height: 1.75;
+}
+
+/* ---- REF BLOCK ---- */
+.ref-block {
+  margin-top: 32px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--card-radius);
+  padding: 16px 20px;
+  font-size: 13px;
+  color: var(--text-sub);
+  line-height: 1.75;
+  opacity: 0;
+  animation: fade-in 0.5s ease 0.4s forwards;
+}
+.ref-block code {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--bg);
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+}
+
+/* ---- CTA BLOCK ---- */
+.cta-block {
+  margin-top: 32px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  padding: 20px 24px;
+  opacity: 0;
+  animation: fade-in 0.5s ease 0.45s forwards;
+}
+.cta-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+.cta-body {
+  font-size: 13px;
+  color: var(--text-sub);
+  line-height: 1.8;
+}
+.cta-body code {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--bg-subtle);
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+}
+
+/* ---- FOOTER ---- */
+.footer-note {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-sub);
+  line-height: 1.7;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.footer-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+/* ---- FADE IN ---- */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 </style>
 </head>
 <body>
 
-<!-- 1. Topbar -->
-<nav class="topbar" role="navigation" aria-label="サイトナビゲーション">
-  <div class="inner">
-    <div class="brand">
-      <span class="dot" aria-hidden="true"></span>
-      AWS 学習デモ
-    </div>
-    <div class="spacer"></div>
-    <span class="pill accent">Phase 3</span>
+<div class="top-accent" aria-hidden="true"></div>
+
+<!-- Site nav -->
+<nav class="site-nav" role="navigation" aria-label="サイトナビゲーション">
+  <div class="site-nav-inner">
+    <span class="nav-brand">AWS 学習デモ</span>
+    <span class="nav-sep" aria-hidden="true">/</span>
+    <span class="nav-phase">Phase 3 — Amazon SQS</span>
   </div>
 </nav>
 
-<!-- 2. Hero -->
-<div class="wrap">
-  <div class="eyebrow">Phase 3</div>
-  <h1>SQS — 非同期キューの仕組みを体験</h1>
-  <p class="lead">Producer がキューにメッセージを積み、Consumer がポーリングで取り出す。可視性タイムアウト・DLQ・FIFO 順序保証を実際に操作して体験しよう。</p>
-  <div class="badges">
-    <span class="pill accent">SQS</span>
-    <span class="pill">非同期処理</span>
-    <span class="pill">DLQ</span>
-    <span class="pill">FIFO</span>
-  </div>
+<!-- Main content -->
+<main class="content">
 
-  <hr class="sep">
+  <!-- Hero -->
+  <section class="hero" aria-labelledby="hero-title">
+    <p class="hero-eyebrow">Phase 3 — Amazon SQS</p>
+    <h1 class="hero-title" id="hero-title">SQS 非同期キューの仕組みを体験する</h1>
+    <p class="hero-lead">Producer がキューにメッセージを積み、Consumer がポーリングで取り出す。可視性タイムアウト・DLQ・FIFO 順序保証をブラウザ内で操作して、SQS の動作を肌で掴もう。</p>
+    <div class="hero-tags">
+      <span class="tag accent">SQS</span>
+      <span class="tag">非同期処理</span>
+      <span class="tag">DLQ</span>
+      <span class="tag">FIFO</span>
+      <span class="tag">可視性タイムアウト</span>
+    </div>
+  </section>
 
-  <!-- 3. Main demo card -->
-  <div class="card">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-      <span style="font-weight:700;font-size:16px">🔄 SQS インタラクティブ・デモ</span>
-      <div class="toggle-wrap" style="margin-left:auto">
-        <label class="toggle-track" for="fifoToggle" title="Standard / FIFO切替">
-          <input type="checkbox" id="fifoToggle" aria-label="FIFOキューを有効にする">
+  <!-- Section heading -->
+  <p class="section-heading">インタラクティブ・シミュレーター</p>
+
+  <!-- Demo card -->
+  <div class="demo-card" role="region" aria-label="SQS シミュレーター">
+
+    <!-- Top bar -->
+    <div class="demo-topbar">
+      <span class="demo-topbar-title">SQS キュー・シミュレーター</span>
+      <div class="toggle-wrap" title="Standard / FIFO 切替">
+        <span>Standard</span>
+        <label class="toggle-track" for="fifoToggle">
+          <input type="checkbox" id="fifoToggle" aria-label="FIFO キューを有効にする">
           <span class="toggle-slider"></span>
         </label>
-        <span id="queueModeLabel">Standard キュー</span>
+        <span id="queueModeLabel" style="font-weight:700;color:var(--text)">FIFO</span>
       </div>
     </div>
 
     <!-- Sliders -->
     <div class="sliders-row">
-      <div>
-        <div class="slider-label">可視性タイムアウト: <span class="slider-val" id="vtLabel">10</span> 秒</div>
-        <input type="range" id="vtSlider" min="3" max="30" value="10" step="1" style="width:100%" aria-label="可視性タイムアウト秒数">
+      <div class="slider-cell">
+        <div class="slider-label">可視性タイムアウト</div>
+        <div class="slider-val-row">
+          <span class="slider-num" id="vtLabel">10</span>
+          <span class="slider-unit">秒</span>
+        </div>
+        <input type="range" id="vtSlider" min="3" max="30" value="10" step="1" aria-label="可視性タイムアウト秒数">
       </div>
-      <div>
-        <div class="slider-label">maxReceiveCount: <span class="slider-val" id="mrcLabel">3</span></div>
-        <input type="range" id="mrcSlider" min="1" max="6" value="3" step="1" style="width:100%" aria-label="最大受信回数">
+      <div class="slider-cell">
+        <div class="slider-label">maxReceiveCount</div>
+        <div class="slider-val-row">
+          <span class="slider-num" id="mrcLabel">3</span>
+          <span class="slider-unit">回</span>
+        </div>
+        <input type="range" id="mrcSlider" min="1" max="6" value="3" step="1" aria-label="最大受信回数">
       </div>
     </div>
 
-    <!-- Stats -->
-    <div class="stats-row">
-      <div class="stat-box"><div class="stat-num" id="statQueue">0</div><div class="stat-label">Queue</div></div>
-      <div class="stat-box"><div class="stat-num" id="statInflight">0</div><div class="stat-label">In-flight</div></div>
-      <div class="stat-box"><div class="stat-num" id="statDlq">0</div><div class="stat-label">DLQ</div></div>
-      <div class="stat-box"><div class="stat-num" id="statProcessed">0</div><div class="stat-label">処理済み</div></div>
+    <!-- Stats bar -->
+    <div class="stats-bar" role="status" aria-label="キュー統計">
+      <div class="stat-cell">
+        <span class="stat-num c-queue" id="statQueue">0</span>
+        <span class="stat-lbl">Queue</span>
+      </div>
+      <div class="stat-cell">
+        <span class="stat-num c-inflight" id="statInflight">0</span>
+        <span class="stat-lbl">In-flight</span>
+      </div>
+      <div class="stat-cell">
+        <span class="stat-num c-dlq" id="statDlq">0</span>
+        <span class="stat-lbl">DLQ</span>
+      </div>
+      <div class="stat-cell">
+        <span class="stat-num c-done" id="statProcessed">0</span>
+        <span class="stat-lbl">処理済み</span>
+      </div>
     </div>
 
     <!-- Controls -->
-    <div class="controls">
-      <button class="btn accent" id="btnSend" aria-label="メッセージを送信">📨 メッセージ送信</button>
-      <button class="btn" id="btnPoll" aria-label="キューをポーリング">🔍 ポーリング</button>
-      <button class="btn ghost" id="btnReset" aria-label="状態をリセット">↺ リセット</button>
+    <div class="controls-row">
+      <button class="btn primary" id="btnSend" aria-label="メッセージを送信">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        送信
+      </button>
+      <button class="btn outline" id="btnPoll" aria-label="キューをポーリング">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        ポーリング
+      </button>
+      <button class="btn ghost" id="btnReset" aria-label="状態をリセット">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3"/></svg>
+        リセット
+      </button>
     </div>
 
-    <!-- 5 lane diagram -->
-    <div class="lanes" role="region" aria-label="SQS キュー状態図">
-      <div class="lane">
-        <div class="lane-header producer">Producer</div>
-        <div class="lane-body" id="laneProducer">
-          <div class="empty-hint">送信済み</div>
+    <!-- 5-lane diagram -->
+    <div class="lanes-wrapper">
+      <div class="lanes-grid" role="region" aria-label="SQS キュー状態図">
+        <div class="lane">
+          <div class="lane-header lh-producer">Producer</div>
+          <div class="lane-body" id="laneProducer">
+            <div class="empty-hint">待機中</div>
+          </div>
         </div>
-      </div>
-      <div class="lane">
-        <div class="lane-header queue">Queue</div>
-        <div class="lane-body" id="laneQueue">
-          <div class="empty-hint">空</div>
+        <div class="lane">
+          <div class="lane-header lh-queue">Queue</div>
+          <div class="lane-body" id="laneQueue">
+            <div class="empty-hint">空</div>
+          </div>
         </div>
-      </div>
-      <div class="lane">
-        <div class="lane-header inflight">In-flight</div>
-        <div class="lane-body" id="laneInflight">
-          <div class="empty-hint">処理中なし</div>
+        <div class="lane">
+          <div class="lane-header lh-inflight">In-flight</div>
+          <div class="lane-body" id="laneInflight">
+            <div class="empty-hint">なし</div>
+          </div>
         </div>
-      </div>
-      <div class="lane">
-        <div class="lane-header consumer">Consumer</div>
-        <div class="lane-body" id="laneConsumer">
-          <div class="empty-hint">処理完了なし</div>
+        <div class="lane">
+          <div class="lane-header lh-consumer">Consumer</div>
+          <div class="lane-body" id="laneConsumer">
+            <div class="empty-hint">なし</div>
+          </div>
         </div>
-      </div>
-      <div class="lane">
-        <div class="lane-header dlq">DLQ</div>
-        <div class="lane-body" id="laneDlq">
-          <div class="empty-hint">退避なし</div>
+        <div class="lane">
+          <div class="lane-header lh-dlq">DLQ</div>
+          <div class="lane-body" id="laneDlq">
+            <div class="empty-hint">退避なし</div>
+          </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- Event log -->
-  <div class="card" style="margin-top:18px">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-      <span style="font-weight:700;font-size:14px">イベントログ</span>
-      <button class="btn ghost" id="btnClearLog" style="font-size:12px;padding:4px 10px;margin-left:auto" aria-label="ログをクリア">クリア</button>
+    <!-- Event log -->
+    <div class="log-section">
+      <div class="log-section-head">
+        <span class="log-section-title">イベントログ</span>
+        <button class="log-clear-btn" id="btnClearLog" aria-label="ログをクリア">クリア</button>
+      </div>
+      <div class="log-output" id="eventLog" aria-live="polite" aria-label="イベントログ"></div>
     </div>
-    <div class="log" id="eventLog" aria-live="polite" aria-label="イベントログ"></div>
+
+  </div><!-- /demo-card -->
+
+  <!-- Learning points -->
+  <section class="learn-section" aria-labelledby="learn-heading">
+    <h2 class="learn-section-head" id="learn-heading">学ぶポイント</h2>
+    <div class="learn-list">
+      <div class="learn-item">
+        <div class="learn-num">01</div>
+        <div class="learn-title">疎結合 — バッファとしてのキュー</div>
+        <p class="learn-body">Producer と Consumer を時間的に切り離し、急なスパイクをキューが吸収する。Consumer がダウンしていてもメッセージは失われない。</p>
+      </div>
+      <div class="learn-item">
+        <div class="learn-num">02</div>
+        <div class="learn-title">可視性タイムアウト</div>
+        <p class="learn-body">取り出し中のメッセージを他のコンシューマから一時的に隠す時間。処理が長引いてタイムアウトすると、メッセージは Queue に戻り再配信される。</p>
+      </div>
+      <div class="learn-item">
+        <div class="learn-num">03</div>
+        <div class="learn-title">at-least-once 配信</div>
+        <p class="learn-body">SQS は重複配信が起こり得る。処理は冪等（idempotent）に設計する必要がある。FIFO キューは exactly-once を保証する。</p>
+      </div>
+      <div class="learn-item">
+        <div class="learn-num">04</div>
+        <div class="learn-title">DLQ — デッドレターキュー</div>
+        <p class="learn-body">maxReceiveCount を超えた「毒メッセージ」を退避させ、本線が詰まるのを防ぐ。Standard は順不同、FIFO は順序保証と重複排除付き。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Reference -->
+  <div class="ref-block">
+    <strong>正式教材で深掘り:</strong>
+    <code>docs/learning/phase3/preview-sqs.md</code>
+    &nbsp;/&nbsp;
+    公式: <code>https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/welcome.html</code>
   </div>
 
-  <!-- 4. Learning points -->
-  <div class="section-title">学ぶポイント</div>
-  <ul class="takeaways">
-    <li>
-      <b>疎結合 — バッファとしてのキュー</b>
-      <span>Producer と Consumer を時間的に切り離し、急なスパイクをキューが吸収する。Consumer がダウンしていてもメッセージは失われない。</span>
-    </li>
-    <li>
-      <b>可視性タイムアウト</b>
-      <span>取り出し中のメッセージを他のコンシューマから一時的に隠す時間。処理が長引いてタイムアウトすると、メッセージは Queue に戻り再配信される。</span>
-    </li>
-    <li>
-      <b>at-least-once 配信（最低1回）</b>
-      <span>SQS は重複配信が起こり得る。処理は冪等（idempotent）に設計する必要がある。FIFO キューは exactly-once を保証する。</span>
-    </li>
-    <li>
-      <b>DLQ — デッドレターキュー</b>
-      <span>maxReceiveCount を超えた「毒メッセージ」を退避させ、本線のキューが詰まるのを防ぐ。Standard は順不同・FIFO は順序保証と重複排除付き。</span>
-    </li>
-  </ul>
-
-  <!-- 5. Material path -->
-  <div class="section-title">正式教材で深掘り</div>
-  <p class="note">
-    Phase 3 のプレビュー教材: <code>docs/learning/phase3/preview-sqs.md</code><br>
-    公式ドキュメント: <code>https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/welcome.html</code>
-  </p>
-
-  <!-- 6. Footer -->
-  <div class="footer">
-    ⚠️ これはブラウザ内シミュレーションです。実際の AWS SQS は呼び出していません。タイムアウトや DLQ の挙動はデモ用に簡略化されています。
+  <!-- CTA: Real AWS -->
+  <div class="cta-block">
+    <div class="cta-label">実物で動かす（実 AWS）</div>
+    <p class="cta-body">
+      このデモの概念は Terraform で実 AWS に立てて CloudWatch で観測できます。<br>
+      <code>make sandbox-test-phase3</code>（無料検証）→
+      <code>make sandbox-up-phase3</code>（apply）→
+      <code>make sandbox-load-phase3</code> →
+      <code>make sandbox-watch-phase3</code>（CloudWatch 観測）→
+      <code>make sandbox-down-phase3</code>（課金停止）<br>
+      設計: <code>docs/superpowers/specs/2026-05-31-aws-phase-sandboxes-design.md</code>
+    </p>
   </div>
-</div>
+
+  <!-- Footer -->
+  <div class="footer-note" role="note">
+    <span class="footer-icon" aria-hidden="true">ℹ</span>
+    <span>これはブラウザ内シミュレーションです。実際の AWS SQS は呼び出していません。タイムアウトや DLQ の挙動はデモ用に簡略化されています。</span>
+  </div>
+
+</main>
 
 <script>
 // ===========================
@@ -281,9 +918,6 @@ let isFifo = false;
 let vtSeconds = 10;
 let maxReceiveCount = 3;
 
-// queue: [{id, body, receiveCount, fifoSeq}]
-// inflight: [{id, body, receiveCount, fifoSeq, vtRemain, timer}]
-// dlq, consumer: [{id, body, receiveCount}]
 let queue = [];
 let inflight = [];
 let dlq = [];
@@ -292,32 +926,32 @@ let consumer = [];
 // ===========================
 // Elements
 // ===========================
-const laneQueue    = document.getElementById('laneQueue');
-const laneInflight = document.getElementById('laneInflight');
-const laneProducer = document.getElementById('laneProducer');
-const laneConsumer = document.getElementById('laneConsumer');
-const laneDlq      = document.getElementById('laneDlq');
-const eventLog     = document.getElementById('eventLog');
-const btnSend      = document.getElementById('btnSend');
-const btnPoll      = document.getElementById('btnPoll');
-const btnReset     = document.getElementById('btnReset');
-const btnClearLog  = document.getElementById('btnClearLog');
-const vtSlider     = document.getElementById('vtSlider');
-const mrcSlider    = document.getElementById('mrcSlider');
-const vtLabel      = document.getElementById('vtLabel');
-const mrcLabel     = document.getElementById('mrcLabel');
-const fifoToggle   = document.getElementById('fifoToggle');
+const laneQueue      = document.getElementById('laneQueue');
+const laneInflight   = document.getElementById('laneInflight');
+const laneProducer   = document.getElementById('laneProducer');
+const laneConsumer   = document.getElementById('laneConsumer');
+const laneDlq        = document.getElementById('laneDlq');
+const eventLog       = document.getElementById('eventLog');
+const btnSend        = document.getElementById('btnSend');
+const btnPoll        = document.getElementById('btnPoll');
+const btnReset       = document.getElementById('btnReset');
+const btnClearLog    = document.getElementById('btnClearLog');
+const vtSlider       = document.getElementById('vtSlider');
+const mrcSlider      = document.getElementById('mrcSlider');
+const vtLabel        = document.getElementById('vtLabel');
+const mrcLabel       = document.getElementById('mrcLabel');
+const fifoToggle     = document.getElementById('fifoToggle');
 const queueModeLabel = document.getElementById('queueModeLabel');
-const statQueue    = document.getElementById('statQueue');
-const statInflight = document.getElementById('statInflight');
-const statDlq      = document.getElementById('statDlq');
-const statProcessed= document.getElementById('statProcessed');
+const statQueue      = document.getElementById('statQueue');
+const statInflight   = document.getElementById('statInflight');
+const statDlq        = document.getElementById('statDlq');
+const statProcessed  = document.getElementById('statProcessed');
 
 // ===========================
 // Logging
 // ===========================
 function addLog(text, cls) {
-  const ts = new Date().toLocaleTimeString('ja-JP', {hour12:false});
+  const ts = new Date().toLocaleTimeString('ja-JP', { hour12: false });
   const line = document.createElement('div');
   if (cls) line.className = cls;
   line.textContent = `[${ts}] ${text}`;
@@ -343,14 +977,14 @@ function renderQueueLane() {
     card.className = 'msg-card';
     card.innerHTML = `<div class="msg-id">${msg.id}${isFifo ? `<span class="fifo-badge">#${msg.fifoSeq}</span>` : ''}</div>
       <div class="msg-body">${msg.body}</div>
-      ${msg.receiveCount > 0 ? `<div class="recv-badge">⚠️ receiveCount: ${msg.receiveCount}</div>` : ''}`;
+      ${msg.receiveCount > 0 ? `<div class="recv-badge">⚠ receiveCount: ${msg.receiveCount}</div>` : ''}`;
     laneQueue.appendChild(card);
   });
 }
 
 function renderInflightLane() {
   laneInflight.innerHTML = '';
-  if (inflight.length === 0) { laneInflight.appendChild(makeEmptyHint('処理中なし')); return; }
+  if (inflight.length === 0) { laneInflight.appendChild(makeEmptyHint('なし')); return; }
   inflight.forEach(msg => {
     const wrap = document.createElement('div');
     wrap.className = 'inflight-item';
@@ -362,35 +996,35 @@ function renderInflightLane() {
         <div class="recv-badge">receiveCount: ${msg.receiveCount} / ${maxReceiveCount}</div>
         <div class="vt-bar-wrap"><div class="vt-bar" id="bar-${msg.id}" style="width:${pct}%"></div></div>
         <div class="action-btns">
-          <button class="btn ok-btn" data-id="${msg.id}" aria-label="${msg.id} 処理成功">✅ 処理成功</button>
-          <button class="btn fail-btn" style="color:var(--red)" data-id="${msg.id}" aria-label="${msg.id} 処理失敗">❌ 処理失敗</button>
+          <button class="btn btn-ok ok-btn" data-id="${msg.id}" aria-label="${msg.id} 処理成功">✓ 成功</button>
+          <button class="btn btn-fail fail-btn" data-id="${msg.id}" aria-label="${msg.id} 処理失敗">✕ 失敗</button>
         </div>
       </div>`;
     laneInflight.appendChild(wrap);
   });
 
-  laneInflight.querySelectorAll('.ok-btn').forEach(b => b.addEventListener('click', () => handleSuccess(b.dataset.id)));
-  laneInflight.querySelectorAll('.fail-btn').forEach(b => b.addEventListener('click', () => handleFail(b.dataset.id)));
+  laneInflight.querySelectorAll('.ok-btn').forEach(b =>
+    b.addEventListener('click', () => handleSuccess(b.dataset.id)));
+  laneInflight.querySelectorAll('.fail-btn').forEach(b =>
+    b.addEventListener('click', () => handleFail(b.dataset.id)));
 }
 
 function renderProducerLane() {
   laneProducer.innerHTML = '';
-  const sent = msgCounter;
-  if (sent === 0) { laneProducer.appendChild(makeEmptyHint('送信済み')); return; }
+  if (msgCounter === 0) { laneProducer.appendChild(makeEmptyHint('待機中')); return; }
   const d = document.createElement('div');
   d.className = 'msg-card';
-  d.innerHTML = `<div class="msg-body" style="color:var(--muted)">送信済み: ${sent} 件</div>`;
+  d.innerHTML = `<div class="msg-body" style="color:var(--text-sub)">送信済み: ${msgCounter} 件</div>`;
   laneProducer.appendChild(d);
 }
 
 function renderConsumerLane() {
   laneConsumer.innerHTML = '';
-  if (consumer.length === 0) { laneConsumer.appendChild(makeEmptyHint('処理完了なし')); return; }
+  if (consumer.length === 0) { laneConsumer.appendChild(makeEmptyHint('なし')); return; }
   consumer.slice(-5).reverse().forEach(msg => {
     const card = document.createElement('div');
-    card.className = 'msg-card';
-    card.style.borderColor = 'var(--green)';
-    card.innerHTML = `<div class="msg-id">${msg.id}</div><div class="msg-body" style="color:var(--green)">✅ 処理完了</div>`;
+    card.className = 'msg-card consumer-card';
+    card.innerHTML = `<div class="msg-id">${msg.id}</div><div class="msg-body">処理完了</div>`;
     laneConsumer.appendChild(card);
   });
 }
@@ -403,15 +1037,15 @@ function renderDlqLane() {
     card.className = 'msg-card dlq-card';
     card.innerHTML = `<div class="msg-id">${msg.id}</div>
       <div class="msg-body">${msg.body}</div>
-      <div class="recv-badge" style="color:var(--red)">receiveCount: ${msg.receiveCount} ≥ ${maxReceiveCount}</div>`;
+      <div class="recv-badge">receiveCount: ${msg.receiveCount} ≥ ${maxReceiveCount}</div>`;
     laneDlq.appendChild(card);
   });
 }
 
 function renderStats() {
-  statQueue.textContent    = queue.length;
-  statInflight.textContent = inflight.length;
-  statDlq.textContent      = dlq.length;
+  statQueue.textContent     = queue.length;
+  statInflight.textContent  = inflight.length;
+  statDlq.textContent       = dlq.length;
   statProcessed.textContent = processedCount;
 }
 
@@ -425,14 +1059,13 @@ function renderAll() {
 }
 
 // ===========================
-// VT bar animation (tick every 500ms)
+// VT bar tick (every 500ms)
 // ===========================
 let tickInterval = null;
 function startTick() {
   if (tickInterval) return;
   tickInterval = setInterval(() => {
     if (inflight.length === 0) { clearInterval(tickInterval); tickInterval = null; return; }
-    let changed = false;
     const expired = [];
     inflight.forEach(msg => {
       msg.vtRemain -= 0.5;
@@ -441,11 +1074,10 @@ function startTick() {
         const pct = Math.max(0, Math.round((msg.vtRemain / vtSeconds) * 100));
         bar.style.width = pct + '%';
       }
-      if (msg.vtRemain <= 0) { expired.push(msg.id); }
-      changed = true;
+      if (msg.vtRemain <= 0) expired.push(msg.id);
     });
     expired.forEach(id => handleTimeout(id));
-    if (changed) renderStats();
+    renderStats();
   }, 500);
 }
 
@@ -462,13 +1094,12 @@ function handleSend() {
   const seq = msgCounter;
   const bodyBase = SAMPLE_BODIES[(seq - 1) % SAMPLE_BODIES.length];
   const msg = {
-    id: `msg-${seq.toString().padStart(3,'0')}`,
+    id: `msg-${seq.toString().padStart(3, '0')}`,
     body: bodyBase + seq,
     receiveCount: 0,
     fifoSeq: seq
   };
   if (isFifo) {
-    // FIFO: deduplicate body — skip if same body already in queue
     const dup = queue.find(m => m.body === msg.body);
     if (dup) {
       addLog(`[FIFO] 重複排除: ${msg.id} は既にキューに存在 → 破棄`, 'l-warn');
@@ -481,8 +1112,6 @@ function handleSend() {
     queue.push(msg);
     addLog(`[SendMessage] ${msg.id} → Queue`, 'l-info');
   }
-
-  // Flash new card
   renderAll();
   const cards = laneQueue.querySelectorAll('.msg-card');
   if (cards.length > 0) cards[cards.length - 1].classList.add('new-flash');
@@ -495,10 +1124,8 @@ function handlePoll() {
   }
   let msg;
   if (isFifo) {
-    // FIFO: take front (order guaranteed)
     msg = queue.shift();
   } else {
-    // Standard: random pick (simulate non-FIFO)
     const idx = Math.floor(Math.random() * queue.length);
     msg = queue.splice(idx, 1)[0];
   }
@@ -523,7 +1150,7 @@ function handleSuccess(id) {
 function handleFail(id) {
   const idx = inflight.findIndex(m => m.id === id);
   if (idx === -1) return;
-  inflight[idx].vtRemain = 0; // force immediate timeout
+  inflight[idx].vtRemain = 0;
   addLog(`[ProcessFail] ${id} 処理失敗 → 可視性タイムアウト強制満了`, 'l-err');
 }
 
@@ -562,14 +1189,13 @@ mrcSlider.addEventListener('input', () => {
   maxReceiveCount = parseInt(mrcSlider.value);
   mrcLabel.textContent = maxReceiveCount;
   addLog(`[Config] maxReceiveCount → ${maxReceiveCount}`, 'l-dim');
-  renderAll(); // re-render receive count indicators
+  renderAll();
 });
 
 fifoToggle.addEventListener('change', () => {
   isFifo = fifoToggle.checked;
-  queueModeLabel.textContent = isFifo ? 'FIFO キュー' : 'Standard キュー';
+  queueModeLabel.textContent = isFifo ? 'FIFO' : 'Standard';
   addLog(`[Config] キューモード → ${isFifo ? 'FIFO (順序保証・重複排除)' : 'Standard (高スループット)'}`, 'l-dim');
-  // Flush inflight on mode change for clarity
   if (tickInterval) { clearInterval(tickInterval); tickInterval = null; }
   inflight = [];
   renderAll();
@@ -583,9 +1209,8 @@ btnClearLog.addEventListener('click', () => { eventLog.innerHTML = ''; });
 // ===========================
 // Init
 // ===========================
-addLog('デモ開始。「メッセージ送信」でキューに積み、「ポーリング」で取り出してみよう。', 'l-dim');
+addLog('デモ開始。「送信」でキューに積み、「ポーリング」で取り出してみよう。', 'l-dim');
 renderAll();
 </script>
-<div class="wrap"><p class="note">🧪 <b>実物で動かす（実 AWS）:</b> このデモの概念は Terraform で実 AWS に立てて CloudWatch で観測できます。<br><code>make sandbox-test-phase3</code>（無料検証）→ <code>make sandbox-up-phase3</code>（apply）→ <code>make sandbox-load-phase3</code> → <code>make sandbox-watch-phase3</code>（CloudWatch 観測）→ <code>make sandbox-down-phase3</code>（課金停止）。<br>設計: <code>docs/superpowers/specs/2026-05-31-aws-phase-sandboxes-design.md</code></p></div>
 </body>
 </html>

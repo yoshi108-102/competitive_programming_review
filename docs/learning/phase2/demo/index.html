@@ -4,337 +4,1037 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AWS 学習デモ — Phase 2: S3 オブジェクトストレージ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
-:root{
-  --bg:#0b0f14; --surface:#141b24; --surface-2:#1c2531; --surface-3:#243042;
-  --border:#2b3645; --text:#e6edf3; --muted:#93a1b3;
-  --accent:#ff9900; --accent-soft:#ffb84d; --cyan:#4dd0e1; --green:#3fb950;
-  --red:#f85149; --yellow:#e3b341; --purple:#bc8cff; --blue:#58a6ff;
-  --radius:14px; --radius-sm:8px; --shadow:0 8px 30px rgba(0,0,0,.35);
-  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
-  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+/* ─── Design Tokens ─────────────────────────────────────────────── */
+:root {
+  --bg:        #ffffff;
+  --bg-sub:    #f7f7f5;
+  --bg-input:  #fafafa;
+  --text:      #202124;
+  --text-sub:  #6b6f76;
+  --text-ph:   #b0b3b8;
+  --border:    #e8e8e6;
+  --border-md: #d6d6d4;
+  --accent:    #3b82f6;
+  --accent-lt: #eff6ff;
+  --accent-dim:rgba(59,130,246,.12);
+  --ok:        #16a34a;
+  --ok-lt:     #f0fdf4;
+  --warn:      #d97706;
+  --warn-lt:   #fffbeb;
+  --err:       #dc2626;
+  --err-lt:    #fef2f2;
+  --info:      #0369a1;
+  --info-lt:   #f0f9ff;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.06);
+  --shadow-md: 0 2px 8px rgba(0,0,0,.08);
+  --r:         10px;
+  --mono:      ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --sans:      "Noto Sans JP",system-ui,"Hiragino Kaku Gothic ProN",sans-serif;
 }
-*{box-sizing:border-box}
-html{scroll-behavior:smooth}
-body{margin:0;background:radial-gradient(1200px 600px at 80% -10%,rgba(255,153,0,.08),transparent),var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
-a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
-.wrap{max-width:1080px;margin:0 auto;padding:28px 24px 80px}
-.topbar{position:sticky;top:0;z-index:20;backdrop-filter:blur(10px);background:rgba(11,15,20,.72);border-bottom:1px solid var(--border)}
-.topbar .inner{max-width:1080px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;gap:14px}
-.brand{font-weight:700;letter-spacing:.3px;display:flex;align-items:center;gap:10px}
-.brand .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
-.spacer{flex:1}
-.eyebrow{color:var(--accent);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase}
-h1{font-size:clamp(24px,4vw,38px);line-height:1.2;margin:.3em 0 .25em}
-.lead{color:var(--muted);font-size:17px;max-width:72ch}
-.section-title{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:34px 0 12px;font-weight:700}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;box-shadow:var(--shadow)}
-.card + .card{margin-top:18px}
-.grid{display:grid;gap:18px}
-.grid-2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
-.grid-3{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
-.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--surface-3);border:1px solid var(--border);color:var(--text)}
-.pill.accent{background:rgba(255,153,0,.14);border-color:rgba(255,153,0,.4);color:var(--accent-soft)}
-.badge{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px}
-.badge.ok{background:rgba(63,185,80,.15);color:var(--green)}
-.badge.err{background:rgba(248,81,73,.15);color:var(--red)}
-.badge.warn{background:rgba(227,179,65,.15);color:var(--yellow)}
-.badge.info{background:rgba(88,166,255,.15);color:var(--blue)}
-.btn{appearance:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;color:var(--text);background:var(--surface-3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 16px;transition:all .12s ease}
-.btn:hover{border-color:var(--muted)} .btn:active{transform:translateY(1px)}
-.btn:disabled{opacity:.45;cursor:not-allowed}
-.btn.accent{background:var(--accent);border-color:var(--accent);color:#1a1206}
-.btn.accent:hover{background:var(--accent-soft)}
-.btn.ghost{background:transparent}
-.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:4px 0 16px}
-label.field{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
-input[type=text],input[type=number],select,textarea{font-family:inherit;font-size:14px;color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 11px}
-input[type=range]{accent-color:var(--accent)}
-.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;user-select:none}
-.flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
-.flow-node{flex:1;min-width:120px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center;position:relative;transition:all .2s ease}
-.flow-node.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(255,153,0,.25);background:var(--surface-3)}
-.flow-node.ok{border-color:var(--green)} .flow-node.err{border-color:var(--red)}
-.flow-arrow{display:flex;align-items:center;color:var(--muted);padding:0 8px;font-size:20px}
-.log{font-family:var(--mono);font-size:13px;background:#0a0e13;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;max-height:300px;overflow:auto;white-space:pre-wrap;line-height:1.6}
-.log .l-ok{color:var(--green)} .log .l-err{color:var(--red)} .log .l-warn{color:var(--yellow)} .log .l-info{color:var(--blue)} .log .l-dim{color:var(--muted)}
-code,kbd{font-family:var(--mono);font-size:.92em}
-.kbd{background:var(--surface-3);border:1px solid var(--border);border-bottom-width:2px;border-radius:6px;padding:1px 6px;font-size:12px}
-pre{font-family:var(--mono);font-size:13px;background:#0a0e13;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;overflow:auto}
-pre .hl{background:rgba(255,153,0,.18);display:block;margin:0 -14px;padding:0 14px}
-.takeaways{list-style:none;padding:0;margin:0;display:grid;gap:10px}
-.takeaways li{display:flex;flex-direction:column;gap:3px;background:var(--surface-2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--radius-sm);padding:12px 14px;font-size:14px}
-.takeaways li b{color:var(--accent-soft)}
-.note{font-size:13px;color:var(--muted);border-left:3px solid var(--border);padding-left:12px;margin:14px 0}
-.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:13px}
-.kv dt{color:var(--muted)} .kv dd{margin:0;font-family:var(--mono)}
-.muted{color:var(--muted)} hr.sep{border:none;border-top:1px solid var(--border);margin:28px 0}
-.footer{color:var(--muted);font-size:13px;margin-top:48px;border-top:1px solid var(--border);padding-top:20px}
-@media (max-width:640px){.flow{flex-direction:column}.flow-arrow{transform:rotate(90deg);padding:6px 0}}
 
-/* Page-specific */
-.bucket-header{display:flex;align-items:center;gap:10px;margin-bottom:14px}
-.bucket-name{font-size:15px;font-weight:700;font-family:var(--mono);color:var(--accent-soft)}
-.obj-table{width:100%;border-collapse:collapse;font-size:13px}
-.obj-table th{color:var(--muted);font-weight:600;text-align:left;padding:6px 10px;border-bottom:1px solid var(--border)}
-.obj-table td{padding:7px 10px;border-bottom:1px solid rgba(43,54,69,.6);vertical-align:middle}
-.obj-table tr.selected td{background:rgba(255,153,0,.07)}
-.obj-table tr:hover td{background:var(--surface-2);cursor:pointer}
-.obj-table tr.folder-row td{color:var(--cyan)}
-.key-cell{font-family:var(--mono);word-break:break-all}
-.prefix-bar{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:13px;color:var(--muted);margin-bottom:10px;flex-wrap:wrap}
-.prefix-part{color:var(--accent-soft);cursor:pointer}
-.prefix-part:hover{text-decoration:underline}
-.flat-vis{background:#0a0e13;border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;font-family:var(--mono);font-size:12px;line-height:2;overflow-x:auto;white-space:pre}
-.flat-key{color:var(--cyan)} .flat-slash{color:var(--muted)} .flat-file{color:var(--text)}
-.presign-url{font-family:var(--mono);font-size:12px;word-break:break-all;color:var(--blue);background:rgba(88,166,255,.06);border:1px solid rgba(88,166,255,.2);border-radius:var(--radius-sm);padding:10px 12px;margin:10px 0}
-.countdown{font-size:28px;font-weight:800;color:var(--accent);font-family:var(--mono)}
-.countdown.expired{color:var(--red)}
-.sc-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:8px}
-.sc-card{background:var(--surface-2);border:2px solid var(--border);border-radius:var(--radius-sm);padding:16px;cursor:pointer;transition:all .15s ease}
-.sc-card.selected{border-color:var(--accent);background:rgba(255,153,0,.07)}
-.sc-card h4{margin:0 0 6px;font-size:14px;color:var(--accent-soft)}
-.sc-card .sc-cost{font-size:20px;font-weight:800;margin:4px 0}
-.sc-card .sc-latency{font-size:12px;color:var(--muted)}
-.sc-detail{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-top:12px;font-size:13px}
-.upload-form{display:grid;gap:10px;max-width:520px}
-.upload-form input[type=text],.upload-form textarea{width:100%}
-.upload-form textarea{resize:vertical;min-height:80px}
+/* ─── Reset & Base ──────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.9;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, kbd {
+  font-family: var(--mono);
+  font-size: .875em;
+  background: var(--bg-sub);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: var(--text);
+}
+
+/* ─── Fade-in animation ──────────────────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-1 { animation: fadeInUp .5s ease both; animation-delay: .05s; }
+.fade-2 { animation: fadeInUp .5s ease both; animation-delay: .12s; }
+.fade-3 { animation: fadeInUp .5s ease both; animation-delay: .20s; }
+.fade-4 { animation: fadeInUp .5s ease both; animation-delay: .28s; }
+.fade-5 { animation: fadeInUp .5s ease both; animation-delay: .36s; }
+.fade-6 { animation: fadeInUp .5s ease both; animation-delay: .44s; }
+.fade-7 { animation: fadeInUp .5s ease both; animation-delay: .52s; }
+
+/* ─── Layout ─────────────────────────────────────────────────────── */
+.topbar {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.topbar-inner {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.brand {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-sub);
+  letter-spacing: -.01em;
+}
+.topbar-spacer { flex: 1; }
+.phase-chip {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-lt);
+  border: 1px solid var(--accent-dim);
+  border-radius: 999px;
+  padding: 2px 12px;
+  letter-spacing: .02em;
+}
+
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 56px 24px 100px;
+}
+
+/* ─── Hero ───────────────────────────────────────────────────────── */
+.hero {
+  margin-bottom: 52px;
+}
+.eyebrow {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent);
+  letter-spacing: .04em;
+  margin-bottom: 10px;
+}
+.hero h1 {
+  font-size: clamp(22px, 4.5vw, 32px);
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -.03em;
+  color: var(--text);
+  margin-bottom: 14px;
+}
+.hero-desc {
+  font-size: 16px;
+  color: var(--text-sub);
+  line-height: 1.8;
+  margin-bottom: 20px;
+  max-width: 64ch;
+}
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tag {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-sub);
+  background: var(--bg-sub);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 10px;
+}
+
+/* ─── Section heading ────────────────────────────────────────────── */
+.sec-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.sec-num {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-lt);
+  border-radius: 5px;
+  padding: 2px 8px;
+  letter-spacing: .04em;
+}
+.sec-heading h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -.02em;
+}
+
+/* ─── Module wrapper ─────────────────────────────────────────────── */
+.module {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-sm);
+  padding: 28px;
+  margin-bottom: 48px;
+}
+.module-intro {
+  font-size: 14px;
+  color: var(--text-sub);
+  line-height: 1.8;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+.module-intro code { font-size: .85em; }
+
+/* ─── Bucket header ──────────────────────────────────────────────── */
+.bucket-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.bucket-icon {
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  background: var(--accent-lt);
+  border: 1px solid var(--accent-dim);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.bucket-name {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+.bucket-sub {
+  font-size: 12px;
+  color: var(--text-sub);
+}
+
+/* ─── Upload collapsible ─────────────────────────────────────────── */
+.upload-section {
+  background: var(--bg-sub);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+.upload-section summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+.upload-section summary::-webkit-details-marker { display: none; }
+.upload-section summary::before {
+  content: '▶';
+  font-size: 10px;
+  color: var(--text-sub);
+  transition: transform .2s;
+  display: inline-block;
+}
+.upload-section[open] summary::before { transform: rotate(90deg); }
+.upload-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 16px;
+}
+@media (max-width: 580px) { .upload-grid { grid-template-columns: 1fr; } }
+
+/* ─── Form controls ──────────────────────────────────────────────── */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-sub);
+  letter-spacing: .02em;
+}
+.field-input {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border-md);
+  border-radius: 7px;
+  padding: 8px 12px;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.field-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.field-input::placeholder { color: var(--text-ph); }
+textarea.field-input { resize: vertical; min-height: 72px; }
+select.field-input { cursor: pointer; }
+
+/* ─── Buttons ────────────────────────────────────────────────────── */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin: 16px 0;
+}
+.btn {
+  appearance: none;
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border-md);
+  border-radius: 7px;
+  padding: 8px 18px;
+  transition: background .15s, border-color .15s;
+  line-height: 1;
+}
+.btn:hover { background: var(--bg-sub); border-color: var(--border-md); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn-primary {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.btn-primary:hover { background: #2563eb; border-color: #2563eb; }
+
+/* ─── Prefix bar ─────────────────────────────────────────────────── */
+.prefix-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-sub);
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: var(--bg-sub);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.prefix-part {
+  color: var(--accent);
+  cursor: pointer;
+  transition: opacity .15s;
+}
+.prefix-part:hover { opacity: .7; text-decoration: underline; }
+
+/* ─── Object table ───────────────────────────────────────────────── */
+.obj-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.obj-table th {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: var(--text-sub);
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 2px solid var(--border);
+}
+.obj-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  transition: background .1s;
+}
+.obj-table tr:hover td { background: var(--bg-sub); cursor: pointer; }
+.obj-table tr.selected td { background: var(--accent-lt); }
+.obj-table tr.folder-row td { color: var(--accent); }
+.key-cell { font-family: var(--mono); word-break: break-all; }
+
+/* ─── Metadata panel ─────────────────────────────────────────────── */
+.meta-box {
+  background: var(--bg-sub);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin-top: 16px;
+}
+.meta-box-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-sub);
+  letter-spacing: .04em;
+  margin-bottom: 12px;
+}
+.kv-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 20px;
+  font-size: 12px;
+}
+.kv-grid dt {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-sub);
+  letter-spacing: .03em;
+  padding-top: 3px;
+}
+.kv-grid dd {
+  margin: 0;
+  font-family: var(--mono);
+  color: var(--text);
+  word-break: break-all;
+  font-size: 12px;
+}
+
+/* ─── Log panel ──────────────────────────────────────────────────── */
+.log-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-sub);
+  letter-spacing: .04em;
+  margin: 16px 0 6px;
+}
+.log-panel {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--bg-sub);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  max-height: 200px;
+  overflow: auto;
+  white-space: pre-wrap;
+  line-height: 1.7;
+  color: var(--text);
+}
+.log-panel .l-ok   { color: var(--ok); }
+.log-panel .l-err  { color: var(--err); }
+.log-panel .l-warn { color: var(--warn); }
+.log-panel .l-info { color: var(--info); }
+.log-panel .l-dim  { color: var(--text-ph); }
+
+/* ─── Badges ─────────────────────────────────────────────────────── */
+.badge {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 5px;
+  letter-spacing: .03em;
+}
+.badge-ok   { background: var(--ok-lt);   color: var(--ok);   border: 1px solid #bbf7d0; }
+.badge-err  { background: var(--err-lt);  color: var(--err);  border: 1px solid #fecaca; }
+.badge-warn { background: var(--warn-lt); color: var(--warn); border: 1px solid #fed7aa; }
+.badge-info { background: var(--info-lt); color: var(--info); border: 1px solid #bae6fd; }
+
+/* ─── Flat key vis ───────────────────────────────────────────────── */
+.flat-vis {
+  background: var(--bg-sub);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 18px;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 2;
+  overflow-x: auto;
+  white-space: pre;
+  color: var(--text-sub);
+}
+.flat-key  { color: var(--accent); }
+.flat-file { color: var(--text); }
+.flat-legend {
+  display: flex;
+  gap: 20px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-sub);
+}
+.flat-legend span { display: flex; align-items: center; gap: 6px; }
+
+/* ─── Presign ticket ─────────────────────────────────────────────── */
+.presign-ticket {
+  background: var(--bg-sub);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 14px 0;
+}
+.presign-ticket-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-sub);
+  letter-spacing: .04em;
+  margin-bottom: 8px;
+}
+.presign-url {
+  font-family: var(--mono);
+  font-size: 11px;
+  word-break: break-all;
+  color: var(--info);
+  line-height: 1.6;
+}
+.countdown-area {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin: 14px 0 8px;
+  flex-wrap: wrap;
+}
+.countdown-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-sub);
+  letter-spacing: .03em;
+  margin-bottom: 4px;
+}
+.countdown-num {
+  font-family: var(--mono);
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--warn);
+  line-height: 1;
+}
+.countdown-num.expired { color: var(--err); }
+.ttl-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+input[type=range] {
+  accent-color: var(--accent);
+  flex: 1;
+  min-width: 160px;
+}
+.ttl-val {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 48px;
+}
+
+/* ─── Storage class selector ─────────────────────────────────────── */
+.sc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px,1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.sc-card {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 18px;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .15s, background .15s;
+  position: relative;
+}
+.sc-card:hover { border-color: var(--accent); background: var(--accent-lt); }
+.sc-card.selected {
+  border-color: var(--accent);
+  background: var(--accent-lt);
+  box-shadow: 0 0 0 2px var(--accent-dim);
+}
+.sc-card.selected::after {
+  content: '✓';
+  position: absolute;
+  top: 10px; right: 12px;
+  font-size: 13px;
+  color: var(--accent);
+  font-weight: 700;
+}
+.sc-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.sc-cost {
+  font-family: var(--mono);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+  margin-bottom: 8px;
+}
+.sc-cost small { font-size: 13px; color: var(--text-sub); }
+.sc-meta {
+  font-size: 12px;
+  color: var(--text-sub);
+  line-height: 1.6;
+}
+
+.sc-detail-box {
+  background: var(--bg-sub);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  padding: 14px 18px;
+  font-size: 14px;
+  color: var(--text-sub);
+  line-height: 1.8;
+  margin-bottom: 14px;
+}
+.sc-detail-box b { color: var(--text); }
+
+/* ─── Divider ────────────────────────────────────────────────────── */
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0 0 48px;
+}
+
+/* ─── Takeaways ──────────────────────────────────────────────────── */
+.takeaways {
+  list-style: none;
+  display: grid;
+  gap: 12px;
+  margin-bottom: 48px;
+}
+.takeaway {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: 16px;
+  align-items: start;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-sm);
+  padding: 18px 20px;
+  transition: box-shadow .15s;
+}
+.takeaway:hover { box-shadow: var(--shadow-md); }
+.takeaway-num {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  padding-top: 2px;
+  opacity: .8;
+}
+.takeaway-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+  letter-spacing: -.01em;
+}
+.takeaway-body {
+  font-size: 13px;
+  color: var(--text-sub);
+  line-height: 1.75;
+}
+
+/* ─── Note box ───────────────────────────────────────────────────── */
+.note-box {
+  background: var(--bg-sub);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 18px;
+  font-size: 13px;
+  color: var(--text-sub);
+  line-height: 1.8;
+  margin-bottom: 32px;
+}
+
+/* ─── CTA / Sandbox ──────────────────────────────────────────────── */
+.cta-box {
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 24px 28px;
+  margin-bottom: 40px;
+}
+.cta-box-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-sub);
+  letter-spacing: .04em;
+  margin-bottom: 12px;
+}
+.cta-box p {
+  font-size: 13px;
+  color: var(--text-sub);
+  line-height: 1.9;
+  margin: 0;
+}
+.cta-box code {
+  font-size: .85em;
+  background: var(--bg-sub);
+  color: var(--text);
+}
+
+/* ─── Footer ─────────────────────────────────────────────────────── */
+.footer {
+  font-size: 12px;
+  color: var(--text-ph);
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+  line-height: 1.7;
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg-sub); }
+::-webkit-scrollbar-thumb { background: var(--border-md); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-ph); }
 </style>
 </head>
 <body>
 
+<!-- Topbar -->
 <nav class="topbar" aria-label="サイトナビゲーション">
-  <div class="inner">
-    <div class="brand">
-      <span class="dot" aria-hidden="true"></span>
-      AWS 学習デモ
-    </div>
-    <div class="spacer"></div>
-    <span class="pill accent">Phase 2</span>
+  <div class="topbar-inner">
+    <div class="brand">AWS 学習デモ</div>
+    <div class="topbar-spacer"></div>
+    <div class="phase-chip">Phase 2</div>
   </div>
 </nav>
 
-<main class="wrap">
+<main class="page">
+
   <!-- Hero -->
-  <section aria-labelledby="page-title">
-    <p class="eyebrow">Phase 2</p>
-    <h1 id="page-title">S3 — オブジェクトストレージを触ってみる</h1>
-    <p class="lead">バケットにファイルをアップロードし、キー空間・プリサインド URL・ストレージクラスのトレードオフを体感するインタラクティブ・デモ。</p>
-    <div class="badges" aria-label="使用サービス">
-      <span class="pill accent">🪣 S3</span>
+  <section class="hero fade-1" aria-labelledby="page-title">
+    <p class="eyebrow">Phase 2 / S3 オブジェクトストレージ</p>
+    <h1 id="page-title">S3 オブジェクトストレージ<br>インタラクティブ・デモ</h1>
+    <p class="hero-desc">バケットにオブジェクトを格納し、キー空間・プリサインド URL・ストレージクラスのトレードオフを体感するブラウザ内シミュレーター。</p>
+    <div class="tag-list">
+      <span class="tag">S3 バケット</span>
+      <span class="tag">フラットキー空間</span>
+      <span class="tag">プリサインド URL</span>
+      <span class="tag">ストレージクラス</span>
     </div>
   </section>
 
-  <hr class="sep">
-
-  <!-- DEMO 1: Bucket Explorer -->
-  <p class="section-title">デモ 1 — バケットエクスプローラ</p>
-  <div class="card" id="card-explorer">
-    <div class="bucket-header">
-      <span>🪣</span>
-      <span class="bucket-name" id="bucket-name-label">my-atcoder-bucket</span>
-      <span class="badge info" id="obj-count-badge">0 objects</span>
+  <!-- ── DEMO 1: Bucket Explorer ───────────────────────────────── -->
+  <section class="fade-2" aria-labelledby="heading-explorer">
+    <div class="sec-heading">
+      <span class="sec-num">DEMO 1</span>
+      <h2 id="heading-explorer">バケットエクスプローラ</h2>
     </div>
 
-    <!-- Upload form -->
-    <details open id="upload-details">
-      <summary style="cursor:pointer;font-weight:600;font-size:14px;margin-bottom:12px;color:var(--accent-soft)">📤 オブジェクトをアップロード</summary>
-      <div class="upload-form" style="margin-top:12px">
-        <label class="field" for="inp-prefix">
-          プリフィックス（フォルダパス）
-          <input type="text" id="inp-prefix" placeholder="例: submissions/2026/" value="submissions/2026/">
-        </label>
-        <label class="field" for="inp-filename">
-          ファイル名
-          <input type="text" id="inp-filename" placeholder="例: abc001.json" value="abc001.json">
-        </label>
-        <label class="field" for="inp-body">
-          本文（テキスト）
-          <textarea id="inp-body" placeholder='{"result":"AC","score":100}'>{&quot;result&quot;:&quot;AC&quot;,&quot;score&quot;:100}</textarea>
-        </label>
-        <label class="field" for="inp-sc-upload">
-          ストレージクラス
-          <select id="inp-sc-upload">
-            <option value="STANDARD">STANDARD</option>
-            <option value="STANDARD_IA">STANDARD_IA</option>
-            <option value="GLACIER">GLACIER</option>
+    <div class="module" id="card-explorer">
+      <p class="module-intro">
+        S3 はオブジェクトを「バケット」に格納します。PUT リクエストでオブジェクトを配置し、キーで一意に識別します。プリフィックス（例: <code>submissions/2026/</code>）を使ってオブジェクトを論理的にグループ化できます。
+      </p>
+
+      <!-- Bucket header -->
+      <div class="bucket-header">
+        <div class="bucket-icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M20 7H4L6 19H18L20 7Z"/><path d="M4 7C4 7 6 4 12 4C18 4 20 7 20 7"/>
+          </svg>
+        </div>
+        <div>
+          <div class="bucket-name" id="bucket-name-label">my-atcoder-bucket</div>
+          <div class="bucket-sub">ap-northeast-1 &nbsp;·&nbsp; <span id="obj-count-badge">0 objects</span></div>
+        </div>
+      </div>
+
+      <!-- Upload -->
+      <details class="upload-section" open id="upload-details">
+        <summary>PUT Object — アップロードフォーム</summary>
+        <div class="upload-grid" style="margin-top:16px">
+          <label class="field">
+            プリフィックス
+            <input type="text" class="field-input" id="inp-prefix" placeholder="submissions/2026/" value="submissions/2026/">
+          </label>
+          <label class="field">
+            ファイル名
+            <input type="text" class="field-input" id="inp-filename" placeholder="abc001.json" value="abc001.json">
+          </label>
+          <label class="field" style="grid-column:1/-1">
+            本文（テキスト）
+            <textarea class="field-input" id="inp-body" placeholder='{"result":"AC","score":100}'>{"result":"AC","score":100}</textarea>
+          </label>
+          <label class="field">
+            ストレージクラス
+            <select class="field-input" id="inp-sc-upload">
+              <option value="STANDARD">STANDARD</option>
+              <option value="STANDARD_IA">STANDARD_IA</option>
+              <option value="GLACIER">GLACIER</option>
+            </select>
+          </label>
+          <div class="controls" style="align-self:end;margin:0">
+            <button class="btn btn-primary" id="btn-upload">PUT Object</button>
+            <button class="btn" id="btn-reset-explorer">リセット</button>
+          </div>
+        </div>
+      </details>
+
+      <!-- Prefix bar -->
+      <div class="prefix-bar" id="prefix-bar" aria-label="現在のプリフィックス">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 4h5l2 2h5v8H2z"/></svg>
+        <span class="prefix-part" data-prefix="">（ルート）</span>
+      </div>
+
+      <!-- Object table -->
+      <div style="overflow-x:auto">
+        <table class="obj-table" aria-label="オブジェクト一覧">
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Size</th>
+              <th>Content-Type</th>
+              <th>Storage Class</th>
+            </tr>
+          </thead>
+          <tbody id="obj-list-body">
+            <tr>
+              <td colspan="4" style="padding:24px 12px;text-align:center;color:var(--text-ph);font-size:13px;">
+                まだオブジェクトがありません — 上のフォームでアップロードしてください
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Metadata panel -->
+      <div id="meta-panel" style="display:none">
+        <div class="meta-box">
+          <div class="meta-box-title">オブジェクトのメタデータ</div>
+          <dl class="kv-grid" id="meta-kv"></dl>
+        </div>
+      </div>
+
+      <!-- Log -->
+      <div class="log-label">操作ログ</div>
+      <div class="log-panel" id="log-explorer" role="log" aria-live="polite" aria-label="操作ログ"><span class="l-dim">準備完了。オブジェクトをアップロードしてください。
+</span></div>
+    </div>
+  </section>
+
+  <!-- ── DEMO 2: Flat Key Space ──────────────────────────────────── -->
+  <section class="fade-3" aria-labelledby="heading-flatkey">
+    <div class="sec-heading">
+      <span class="sec-num">DEMO 2</span>
+      <h2 id="heading-flatkey">キー空間はフラット</h2>
+    </div>
+
+    <div class="module">
+      <p class="module-intro">
+        S3 に「フォルダ」は存在しません。<code>/</code> を含むキー文字列があるだけです。下の可視化では、プリフィックス部分とファイル名部分を色分けして表示します。プリフィックスで一覧・権限を区切ることができます。
+      </p>
+      <div class="flat-vis" id="flat-vis" aria-label="キー空間の可視化">（DEMO 1 でオブジェクトをアップロードするとここに表示されます）</div>
+      <div class="flat-legend">
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--accent);"></span> プリフィックス部分</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--text);"></span> ファイル名部分</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── DEMO 3: Presigned URL ───────────────────────────────────── -->
+  <section class="fade-4" aria-labelledby="heading-presign">
+    <div class="sec-heading">
+      <span class="sec-num">DEMO 3</span>
+      <h2 id="heading-presign">プリサインド URL — 期限付きアクセスチケット</h2>
+    </div>
+
+    <div class="module" id="card-presign">
+      <p class="module-intro">
+        署名付き URL を発行すると、AWS 認証情報なしで一時的にオブジェクトへアクセスできます。TTL（有効期間）を設定して発行し、期限切れ後のアクセスは 403 Forbidden になります。
+      </p>
+
+      <div class="controls" style="margin-top:0">
+        <label class="field" for="sel-presign-obj" style="flex:1;min-width:200px">
+          対象オブジェクト
+          <select class="field-input" id="sel-presign-obj">
+            <option value="">-- オブジェクトを選択 --</option>
           </select>
         </label>
-        <div class="controls">
-          <button class="btn accent" id="btn-upload">PUT Object</button>
-          <button class="btn ghost" id="btn-reset-explorer">リセット</button>
-        </div>
       </div>
-    </details>
 
-    <!-- Prefix breadcrumb -->
-    <div class="prefix-bar" id="prefix-bar" aria-label="現在のプリフィックス">
-      <span>📁</span>
-      <span class="prefix-part" data-prefix="">（ルート）</span>
-    </div>
-
-    <!-- Object list -->
-    <div style="overflow-x:auto">
-      <table class="obj-table" aria-label="オブジェクト一覧">
-        <thead>
-          <tr>
-            <th>キー (Key)</th>
-            <th>サイズ</th>
-            <th>コンテンツタイプ</th>
-            <th>ストレージクラス</th>
-          </tr>
-        </thead>
-        <tbody id="obj-list-body">
-          <tr><td colspan="4" class="muted" style="padding:20px 10px;text-align:center;">まだオブジェクトがありません — 上のフォームでアップロードしてください</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Metadata panel -->
-    <div id="meta-panel" style="display:none;margin-top:18px">
-      <div style="font-size:13px;font-weight:700;color:var(--muted);margin-bottom:8px">📋 オブジェクトメタデータ</div>
-      <dl class="kv" id="meta-kv"></dl>
-    </div>
-
-    <!-- Activity log -->
-    <div style="margin-top:16px">
-      <div class="section-title" style="margin-top:0">操作ログ</div>
-      <div class="log" id="log-explorer" role="log" aria-live="polite" aria-label="操作ログ">準備完了。オブジェクトをアップロードしてください。
-</div>
-    </div>
-  </div>
-
-  <!-- DEMO 2: Flat Key Space Visualizer -->
-  <p class="section-title">デモ 2 — キー空間はフラット</p>
-  <div class="card">
-    <p style="font-size:14px;color:var(--muted);margin-top:0">S3 に「フォルダ」は存在しません。スラッシュを含むキー文字列があるだけです。プリフィックスで検索・権限を区切ります。</p>
-    <div class="flat-vis" id="flat-vis" aria-label="キー空間の可視化">（オブジェクトをアップロードするとここに表示されます）</div>
-    <div style="margin-top:10px;font-size:12px;color:var(--muted)">
-      <span style="color:var(--cyan)">■</span> プリフィックス部分 &nbsp;
-      <span style="color:var(--text)">■</span> ファイル名部分
-    </div>
-  </div>
-
-  <!-- DEMO 3: Presigned URL -->
-  <p class="section-title">デモ 3 — プリサインド URL</p>
-  <div class="card" id="card-presign">
-    <p style="font-size:14px;color:var(--muted);margin-top:0">署名付き URL を発行すると、AWS 認証情報なしで一時的にオブジェクトへアクセスできます。期限切れ後はアクセス不可 (403)。</p>
-
-    <div class="controls">
-      <label class="field" for="sel-presign-obj">
-        対象オブジェクト
-        <select id="sel-presign-obj" style="min-width:260px"><option value="">-- オブジェクトを選択 --</option></select>
-      </label>
-    </div>
-
-    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px">
-      <label class="field" for="slider-ttl" style="flex:1;min-width:200px">
-        TTL: <span id="ttl-label">30</span> 秒
-        <input type="range" id="slider-ttl" min="10" max="120" step="5" value="30">
-      </label>
-    </div>
-
-    <div class="controls">
-      <button class="btn accent" id="btn-presign">プリサインド URL を発行</button>
-      <button class="btn ghost" id="btn-reset-presign">リセット</button>
-    </div>
-
-    <div id="presign-result" style="display:none">
-      <div class="presign-url" id="presign-url-display" aria-label="プリサインド URL"></div>
-      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:8px 0">
-        <div>
-          <div class="muted" style="font-size:12px;margin-bottom:2px">残り有効時間</div>
-          <div class="countdown" id="countdown-display" aria-live="polite">30</div>
-        </div>
-        <div id="presign-status-badge"></div>
+      <div class="ttl-row">
+        <label class="field" style="flex:1" for="slider-ttl">
+          TTL（有効期限）
+          <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
+            <input type="range" id="slider-ttl" min="10" max="120" step="5" value="30" style="flex:1">
+            <span class="ttl-val"><span id="ttl-label">30</span>s</span>
+          </div>
+        </label>
       </div>
-      <button class="btn" id="btn-download" style="margin-top:8px">⬇ ダウンロード（アクセス試行）</button>
-      <div class="log" id="log-presign" style="margin-top:12px" role="log" aria-live="polite"></div>
-    </div>
-  </div>
 
-  <!-- DEMO 4: Storage Class Toggle -->
-  <p class="section-title">デモ 4 — ストレージクラスのトレードオフ</p>
-  <div class="card">
-    <p style="font-size:14px;color:var(--muted);margin-top:0">ストレージクラスを選んでコスト・取り出しコスト・待機時間のトレードオフを確認してください。</p>
-    <div class="sc-cards" role="group" aria-label="ストレージクラス選択">
-      <div class="sc-card selected" data-sc="STANDARD" tabindex="0" role="button" aria-pressed="true">
-        <h4>STANDARD</h4>
-        <div class="sc-cost" style="color:var(--yellow)">$0.023/GB</div>
-        <div class="sc-latency">取り出し: 即時 (ms)</div>
-        <div class="sc-latency" style="margin-top:4px">取り出し料金: なし</div>
-      </div>
-      <div class="sc-card" data-sc="STANDARD_IA" tabindex="0" role="button" aria-pressed="false">
-        <h4>STANDARD-IA</h4>
-        <div class="sc-cost" style="color:var(--blue)">$0.0125/GB</div>
-        <div class="sc-latency">取り出し: 即時 (ms)</div>
-        <div class="sc-latency" style="margin-top:4px">取り出し料金: $0.01/GB</div>
-      </div>
-      <div class="sc-card" data-sc="GLACIER" tabindex="0" role="button" aria-pressed="false">
-        <h4>GLACIER</h4>
-        <div class="sc-cost" style="color:var(--green)">$0.004/GB</div>
-        <div class="sc-latency">取り出し: 1〜12 時間</div>
-        <div class="sc-latency" style="margin-top:4px">取り出し料金: $0.03/GB</div>
-      </div>
-    </div>
-
-    <div class="sc-detail" id="sc-detail" aria-live="polite">
-      <b style="color:var(--accent-soft)">STANDARD</b> —
-      頻繁にアクセスされるデータ向け。取り出しは即時かつ無料。コストは最高だが運用がシンプル。
-      強整合モデル (read-after-write) により PUT 直後の GET も必ず最新データを返す。
-    </div>
-
-    <div style="margin-top:14px">
-      <div class="section-title" style="margin-top:0">取り出しシミュレーション</div>
       <div class="controls">
-        <button class="btn accent" id="btn-retrieve">オブジェクトを取り出す (GET)</button>
+        <button class="btn btn-primary" id="btn-presign">プリサインド URL を発行</button>
+        <button class="btn" id="btn-reset-presign">リセット</button>
       </div>
-      <div class="log" id="log-sc" role="log" aria-live="polite"></div>
-    </div>
-  </div>
 
-  <hr class="sep">
+      <div id="presign-result" style="display:none">
+        <div class="presign-ticket">
+          <div class="presign-ticket-label">PRESIGNED ACCESS TICKET</div>
+          <div class="presign-url" id="presign-url-display" aria-label="プリサインド URL"></div>
+        </div>
+
+        <div class="countdown-area">
+          <div>
+            <div class="countdown-label">残り有効時間</div>
+            <div class="countdown-num" id="countdown-display" aria-live="polite">30s</div>
+          </div>
+          <div id="presign-status-badge"></div>
+        </div>
+
+        <button class="btn" id="btn-download">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="margin-right:5px;vertical-align:middle"><path d="M8 2v9M4 8l4 4 4-4"/><path d="M2 14h12"/></svg>
+          ダウンロード（アクセス試行）
+        </button>
+
+        <div class="log-label">プリサイン操作ログ</div>
+        <div class="log-panel" id="log-presign" role="log" aria-live="polite"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── DEMO 4: Storage Class ───────────────────────────────────── -->
+  <section class="fade-5" aria-labelledby="heading-sc">
+    <div class="sec-heading">
+      <span class="sec-num">DEMO 4</span>
+      <h2 id="heading-sc">ストレージクラス — コスト × レイテンシのトレードオフ</h2>
+    </div>
+
+    <div class="module">
+      <p class="module-intro">
+        ストレージクラスを選択してコスト・取り出し料金・待機時間のトレードオフを確認してください。用途に応じて適切なクラスを選ぶことでコストを最適化できます。
+      </p>
+
+      <div class="sc-grid" role="group" aria-label="ストレージクラス選択">
+        <div class="sc-card selected" data-sc="STANDARD" tabindex="0" role="button" aria-pressed="true">
+          <div class="sc-name">STANDARD</div>
+          <div class="sc-cost">$0.023<small>/GB</small></div>
+          <div class="sc-meta">
+            取り出し: 即時 (ms)<br>
+            取り出し料金: <span style="color:var(--ok);font-weight:700">なし</span>
+          </div>
+        </div>
+        <div class="sc-card" data-sc="STANDARD_IA" tabindex="0" role="button" aria-pressed="false">
+          <div class="sc-name">STANDARD-IA</div>
+          <div class="sc-cost">$0.0125<small>/GB</small></div>
+          <div class="sc-meta">
+            取り出し: 即時 (ms)<br>
+            取り出し料金: <span style="color:var(--warn);font-weight:700">$0.01/GB</span>
+          </div>
+        </div>
+        <div class="sc-card" data-sc="GLACIER" tabindex="0" role="button" aria-pressed="false">
+          <div class="sc-name">GLACIER</div>
+          <div class="sc-cost">$0.004<small>/GB</small></div>
+          <div class="sc-meta">
+            取り出し: 1〜12 時間<br>
+            取り出し料金: <span style="color:var(--err);font-weight:700">$0.03/GB</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sc-detail-box" id="sc-detail" aria-live="polite">
+        <b>STANDARD</b> —
+        頻繁にアクセスされるデータ向け。取り出しは即時かつ無料。コストは最高だが運用がシンプル。
+        強整合モデル (read-after-write) により PUT 直後の GET も必ず最新データを返す。
+      </div>
+
+      <div class="controls">
+        <button class="btn btn-primary" id="btn-retrieve">オブジェクトを取り出す (GET)</button>
+      </div>
+
+      <div class="log-label">取り出しシミュレーション</div>
+      <div class="log-panel" id="log-sc" role="log" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <hr class="divider">
 
   <!-- Takeaways -->
-  <p class="section-title">学ぶポイント</p>
-  <ul class="takeaways">
-    <li>
-      <b>オブジェクトストレージ</b>
-      <span>ファイル/ブロックと違い「キー + メタデータ + 本体」の塊として扱う。部分更新はできず、常に丸ごと PUT/GET する。</span>
-    </li>
-    <li>
-      <b>キー空間はフラット</b>
-      <span>スラッシュは見た目のフォルダに過ぎず、実体はフラットなキー空間。プリフィックスで一覧・権限を区切る。</span>
-    </li>
-    <li>
-      <b>プリサインド URL</b>
-      <span>署名付き期限付き URL で、認証情報を渡さず一時的にアップロード/ダウンロードを許可できる。期限切れは 403。</span>
-    </li>
-    <li>
-      <b>ストレージクラス</b>
-      <span>Standard / IA / Glacier はコストと取り出し時間のトレードオフ。PUT 直後も強整合 (read-after-write) でデータは即座に読める。</span>
-    </li>
-  </ul>
+  <section class="fade-6" aria-labelledby="heading-takeaways">
+    <div class="sec-heading" style="margin-bottom:20px">
+      <span class="sec-num">まとめ</span>
+      <h2 id="heading-takeaways">学ぶポイント</h2>
+    </div>
 
-  <!-- Material note -->
-  <p class="section-title">正式教材で深掘り</p>
-  <p class="note">
-    📖 このデモの解説教材: <code>docs/learning/phase2/preview-s3.md</code>
-    &nbsp;—&nbsp; キー設計・バケットポリシー・署名 V4 の仕組みなど詳細はそちらで確認できます。
-  </p>
+    <ul class="takeaways" aria-label="学習のポイント">
+      <li class="takeaway">
+        <span class="takeaway-num">01</span>
+        <div>
+          <div class="takeaway-title">オブジェクトストレージ</div>
+          <div class="takeaway-body">ファイル/ブロックと違い「キー + メタデータ + 本体」の塊として扱う。部分更新はできず、常に丸ごと PUT/GET する。</div>
+        </div>
+      </li>
+      <li class="takeaway">
+        <span class="takeaway-num">02</span>
+        <div>
+          <div class="takeaway-title">キー空間はフラット</div>
+          <div class="takeaway-body">スラッシュは見た目のフォルダに過ぎず、実体はフラットなキー空間。プリフィックスで一覧・権限を区切る。</div>
+        </div>
+      </li>
+      <li class="takeaway">
+        <span class="takeaway-num">03</span>
+        <div>
+          <div class="takeaway-title">プリサインド URL</div>
+          <div class="takeaway-body">署名付き期限付き URL で、認証情報を渡さず一時的にアップロード/ダウンロードを許可できる。期限切れは 403 Forbidden。</div>
+        </div>
+      </li>
+      <li class="takeaway">
+        <span class="takeaway-num">04</span>
+        <div>
+          <div class="takeaway-title">ストレージクラス</div>
+          <div class="takeaway-body">Standard / IA / Glacier はコストと取り出し時間のトレードオフ。PUT 直後も強整合 (read-after-write) でデータは即座に読める。</div>
+        </div>
+      </li>
+    </ul>
+  </section>
 
-  <!-- Footer -->
-  <div class="footer" role="contentinfo">
-    ⚠️ このページはブラウザ内のシミュレーションです。実際の AWS / S3 API は呼び出していません。データはページをリロードすると消えます。
+  <!-- Material reference -->
+  <div class="sec-heading fade-7">
+    <span class="sec-num">参考</span>
+    <h2>正式教材で深掘り</h2>
   </div>
+  <div class="note-box fade-7">
+    教材ファイル: <code>docs/learning/phase2/preview-s3.md</code>
+    &nbsp;—&nbsp; キー設計・バケットポリシー・署名 V4 の仕組みなど詳細はそちらで確認できます。
+  </div>
+
+  <!-- CTA: sandbox -->
+  <div class="cta-box fade-7">
+    <div class="cta-box-title">実物で動かす（実 AWS）: make sandbox コマンド</div>
+    <p>
+      このデモの概念は Terraform で実 AWS に立てて CloudWatch で観測できます。<br>
+      <code>make sandbox-test-phase2</code>（無料検証）→
+      <code>make sandbox-up-phase2</code>（apply）→
+      <code>make sandbox-load-phase2</code> →
+      <code>make sandbox-watch-phase2</code>（CloudWatch 観測）→
+      <code>make sandbox-down-phase2</code>（課金停止）<br>
+      設計: <code>docs/superpowers/specs/2026-05-31-aws-phase-sandboxes-design.md</code>
+    </p>
+  </div>
+
+  <footer class="footer" role="contentinfo">
+    このページはブラウザ内のシミュレーションです。実際の AWS / S3 API は呼び出していません。データはページをリロードすると消えます。
+  </footer>
+
 </main>
 
 <script>
 // ─── State ───────────────────────────────────────────────────────────────────
 const state = {
-  objects: [],      // {key, body, size, contentType, storageClass, etag, lastModified}
+  objects: [],   // {key, body, size, contentType, storageClass, etag, lastModified}
   selectedKey: null,
   presignTimer: null,
   presignExpiry: 0,
@@ -342,19 +1042,19 @@ const state = {
 };
 
 function uid(){ return Math.random().toString(36).slice(2,10); }
-
 function nowIso(){ return new Date().toISOString().replace('T',' ').slice(0,19)+' UTC'; }
-
 function bytesLabel(n){
   if(n<1024) return n+'B';
   if(n<1024*1024) return (n/1024).toFixed(1)+'KB';
   return (n/1024/1024).toFixed(2)+'MB';
 }
-
 function guessContentType(filename){
   const ext = filename.split('.').pop().toLowerCase();
   const map={json:'application/json',txt:'text/plain',csv:'text/csv',html:'text/html',xml:'application/xml',png:'image/png',jpg:'image/jpeg',pdf:'application/pdf'};
-  return map[ext] || 'application/octet-stream';
+  return map[ext]||'application/octet-stream';
+}
+function escHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // ─── Log helpers ─────────────────────────────────────────────────────────────
@@ -380,27 +1080,27 @@ function renderExplorer(){
 
 function renderPrefixBar(){
   const bar = document.getElementById('prefix-bar');
-  bar.innerHTML = '<span>📁</span>';
+  bar.innerHTML = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 4h5l2 2h5v8H2z"/></svg>';
 
   const parts = currentPrefix.split('/').filter(Boolean);
   const root = document.createElement('span');
-  root.className='prefix-part';
-  root.textContent='（ルート）';
+  root.className = 'prefix-part';
+  root.textContent = '（ルート）';
   root.setAttribute('data-prefix','');
   root.addEventListener('click',()=>{ currentPrefix=''; renderExplorer(); });
   bar.appendChild(root);
 
   let built = '';
-  parts.forEach((p,i)=>{
+  parts.forEach((p)=>{
     built += p+'/';
-    const sep=document.createElement('span');
-    sep.textContent=' / ';
-    sep.style.color='var(--border)';
+    const sep = document.createElement('span');
+    sep.textContent = ' / ';
+    sep.style.color = 'var(--text-ph)';
     bar.appendChild(sep);
-    const s=document.createElement('span');
-    s.className='prefix-part';
-    s.textContent=p;
-    const captured=built;
+    const s = document.createElement('span');
+    s.className = 'prefix-part';
+    s.textContent = p;
+    const captured = built;
     s.addEventListener('click',()=>{ currentPrefix=captured; renderExplorer(); });
     bar.appendChild(s);
   });
@@ -408,9 +1108,8 @@ function renderPrefixBar(){
 
 function renderObjectList(){
   const tbody = document.getElementById('obj-list-body');
-  tbody.innerHTML='';
+  tbody.innerHTML = '';
 
-  // Collect immediate children of currentPrefix
   const prefixLen = currentPrefix.length;
   const seenFolders = new Set();
   const rows = [];
@@ -420,7 +1119,6 @@ function renderObjectList(){
     const rest = obj.key.slice(prefixLen);
     const slashIdx = rest.indexOf('/');
     if(slashIdx === -1){
-      // direct file
       rows.push({type:'file', obj, displayKey: rest});
     } else {
       const folder = rest.slice(0, slashIdx+1);
@@ -432,27 +1130,33 @@ function renderObjectList(){
   });
 
   if(rows.length === 0){
-    const tr=document.createElement('tr');
-    tr.innerHTML='<td colspan="4" class="muted" style="padding:20px 10px;text-align:center;">このプリフィックスにオブジェクトはありません</td>';
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td colspan="4" style="padding:24px 12px;text-align:center;color:var(--text-ph);font-size:13px;">このプリフィックスにオブジェクトはありません</td>';
     tbody.appendChild(tr);
     return;
   }
 
   rows.forEach(row=>{
-    const tr=document.createElement('tr');
+    const tr = document.createElement('tr');
     if(row.type==='folder'){
-      tr.className='folder-row';
-      tr.innerHTML=`
-        <td class="key-cell">📁 ${escHtml(row.folderName)}</td>
-        <td class="muted">—</td><td class="muted">—</td><td class="muted">—</td>`;
+      tr.className = 'folder-row';
+      tr.innerHTML = `
+        <td class="key-cell">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" style="margin-right:5px;vertical-align:middle"><path d="M2 4h5l2 2h5v8H2z"/></svg>${escHtml(row.folderName)}
+        </td>
+        <td style="color:var(--text-ph)">—</td>
+        <td style="color:var(--text-ph)">—</td>
+        <td style="color:var(--text-ph)">—</td>`;
       tr.addEventListener('click',()=>{ currentPrefix=row.fullPrefix; renderExplorer(); });
     } else {
-      const obj=row.obj;
+      const obj = row.obj;
       if(state.selectedKey===obj.key) tr.className='selected';
-      tr.innerHTML=`
-        <td class="key-cell">📄 ${escHtml(row.displayKey)}</td>
-        <td>${bytesLabel(obj.size)}</td>
-        <td><code>${escHtml(obj.contentType)}</code></td>
+      tr.innerHTML = `
+        <td class="key-cell">
+          <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" style="margin-right:5px;vertical-align:middle"><path d="M4 2h7l3 3v9H2V2z"/><path d="M11 2v3h3"/></svg>${escHtml(row.displayKey)}
+        </td>
+        <td style="font-family:var(--mono);font-size:12px;color:var(--text-sub)">${bytesLabel(obj.size)}</td>
+        <td style="font-family:var(--mono);font-size:11px;color:var(--text-sub)">${escHtml(obj.contentType)}</td>
         <td><span class="badge ${scBadgeClass(obj.storageClass)}">${escHtml(obj.storageClass)}</span></td>`;
       tr.addEventListener('click',()=>selectObject(obj.key));
     }
@@ -461,9 +1165,9 @@ function renderObjectList(){
 }
 
 function scBadgeClass(sc){
-  if(sc==='STANDARD') return 'ok';
-  if(sc==='STANDARD_IA') return 'info';
-  return 'warn';
+  if(sc==='STANDARD') return 'badge-ok';
+  if(sc==='STANDARD_IA') return 'badge-info';
+  return 'badge-warn';
 }
 
 function selectObject(key){
@@ -472,27 +1176,27 @@ function selectObject(key){
   const obj = state.objects.find(o=>o.key===key);
   if(!obj) return;
   const panel = document.getElementById('meta-panel');
-  panel.style.display='block';
+  panel.style.display = 'block';
   const kv = document.getElementById('meta-kv');
-  kv.innerHTML=`
+  kv.innerHTML = `
     <dt>Key</dt><dd>${escHtml(obj.key)}</dd>
     <dt>Size</dt><dd>${bytesLabel(obj.size)} (${obj.size} bytes)</dd>
     <dt>Content-Type</dt><dd>${escHtml(obj.contentType)}</dd>
     <dt>Storage-Class</dt><dd>${escHtml(obj.storageClass)}</dd>
     <dt>ETag</dt><dd>"${escHtml(obj.etag)}"</dd>
     <dt>Last-Modified</dt><dd>${escHtml(obj.lastModified)}</dd>
-    <dt>本文プレビュー</dt><dd>${escHtml(obj.body.slice(0,120))}${obj.body.length>120?'…':''}</dd>
+    <dt>Body Preview</dt><dd>${escHtml(obj.body.slice(0,120))}${obj.body.length>120?'…':''}</dd>
   `;
-  appendLog('log-explorer', `[200 OK] GET s3://my-atcoder-bucket/${key} — ${bytesLabel(obj.size)}`, 'l-ok');
+  appendLog('log-explorer',`[200 OK] GET s3://my-atcoder-bucket/${key} — ${bytesLabel(obj.size)}`,'l-ok');
 }
 
 function renderFlatVis(){
-  const el=document.getElementById('flat-vis');
+  const el = document.getElementById('flat-vis');
   if(state.objects.length===0){
-    el.textContent='（オブジェクトをアップロードするとここに表示されます）';
+    el.textContent='（DEMO 1 でオブジェクトをアップロードするとここに表示されます）';
     return;
   }
-  let out='';
+  let out = '';
   state.objects.forEach(obj=>{
     const parts = obj.key.split('/');
     const file = parts.pop();
@@ -500,47 +1204,42 @@ function renderFlatVis(){
     out += '<span class="flat-key">'+escHtml(prefix)+'</span>';
     out += '<span class="flat-file">'+escHtml(file)+'</span>\n';
   });
-  el.innerHTML=out;
+  el.innerHTML = out;
 }
 
 function updatePresignObjectSelect(){
   const sel = document.getElementById('sel-presign-obj');
   const prev = sel.value;
-  sel.innerHTML='<option value="">-- オブジェクトを選択 --</option>';
+  sel.innerHTML = '<option value="">-- オブジェクトを選択 --</option>';
   state.objects.forEach(obj=>{
-    const opt=document.createElement('option');
-    opt.value=obj.key;
-    opt.textContent=obj.key;
+    const opt = document.createElement('option');
+    opt.value = obj.key;
+    opt.textContent = obj.key;
     sel.appendChild(opt);
   });
-  if(prev && state.objects.find(o=>o.key===prev)) sel.value=prev;
-}
-
-function escHtml(s){
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  if(prev && state.objects.find(o=>o.key===prev)) sel.value = prev;
 }
 
 // ─── Upload ──────────────────────────────────────────────────────────────────
 document.getElementById('btn-upload').addEventListener('click',()=>{
-  const prefix = document.getElementById('inp-prefix').value.trim();
+  const prefix   = document.getElementById('inp-prefix').value.trim();
   const filename = document.getElementById('inp-filename').value.trim();
-  const body = document.getElementById('inp-body').value;
-  const sc = document.getElementById('inp-sc-upload').value;
+  const body     = document.getElementById('inp-body').value;
+  const sc       = document.getElementById('inp-sc-upload').value;
 
   if(!filename){ appendLog('log-explorer','[ERROR] ファイル名を入力してください','l-err'); return; }
 
   const key = prefix + filename;
   if(state.objects.find(o=>o.key===key)){
-    // overwrite
     const obj = state.objects.find(o=>o.key===key);
     obj.body=body; obj.size=new TextEncoder().encode(body).length;
     obj.etag=uid(); obj.lastModified=nowIso(); obj.storageClass=sc;
-    appendLog('log-explorer',`[200 OK] PUT s3://my-atcoder-bucket/${key} (上書き) — ${bytesLabel(obj.size)}  ETag:"${obj.etag}"`, 'l-warn');
+    appendLog('log-explorer',`[200 OK] PUT s3://my-atcoder-bucket/${key} (上書き) — ${bytesLabel(obj.size)}  ETag:"${obj.etag}"`,'l-warn');
   } else {
-    const size=new TextEncoder().encode(body).length;
-    const obj={key, body, size, contentType:guessContentType(filename), storageClass:sc, etag:uid(), lastModified:nowIso()};
+    const size = new TextEncoder().encode(body).length;
+    const obj = {key,body,size,contentType:guessContentType(filename),storageClass:sc,etag:uid(),lastModified:nowIso()};
     state.objects.push(obj);
-    appendLog('log-explorer',`[200 OK] PUT s3://my-atcoder-bucket/${key} — ${bytesLabel(size)}  ETag:"${obj.etag}"`, 'l-ok');
+    appendLog('log-explorer',`[200 OK] PUT s3://my-atcoder-bucket/${key} — ${bytesLabel(size)}  ETag:"${obj.etag}"`,'l-ok');
   }
   currentPrefix = prefix.endsWith('/') ? prefix : (prefix?prefix+'/':'');
   renderExplorer();
@@ -548,46 +1247,47 @@ document.getElementById('btn-upload').addEventListener('click',()=>{
 
 // ─── Reset Explorer ───────────────────────────────────────────────────────────
 document.getElementById('btn-reset-explorer').addEventListener('click',()=>{
-  state.objects=[];
-  state.selectedKey=null;
-  currentPrefix='';
+  state.objects = [];
+  state.selectedKey = null;
+  currentPrefix = '';
   document.getElementById('meta-panel').style.display='none';
-  document.getElementById('log-explorer').innerHTML='リセット完了。\n';
+  document.getElementById('log-explorer').innerHTML='';
+  appendLog('log-explorer','リセット完了。','l-dim');
   appendLog('log-explorer','準備完了。オブジェクトをアップロードしてください。','l-dim');
   renderExplorer();
 });
 
 // ─── Presigned URL ────────────────────────────────────────────────────────────
 document.getElementById('slider-ttl').addEventListener('input',function(){
-  document.getElementById('ttl-label').textContent=this.value;
+  document.getElementById('ttl-label').textContent = this.value;
 });
 
 document.getElementById('btn-presign').addEventListener('click',()=>{
   const key = document.getElementById('sel-presign-obj').value;
-  if(!key){ appendLog('log-presign','[ERROR] オブジェクトを選択してください','l-err'); showPresignResult(); return; }
+  if(!key){
+    const pr = document.getElementById('presign-result');
+    pr.style.display='block';
+    document.getElementById('log-presign').innerHTML='';
+    appendLog('log-presign','[ERROR] オブジェクトを選択してください','l-err');
+    return;
+  }
   const ttl = parseInt(document.getElementById('slider-ttl').value,10);
   const expires = Date.now() + ttl*1000;
   state.presignExpiry = expires;
   state.presignKey = key;
 
-  // Build fake presigned URL
   const ts = Math.floor(Date.now()/1000);
   const fakeUrl = `https://my-atcoder-bucket.s3.ap-northeast-1.amazonaws.com/${key}?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F${new Date().toISOString().slice(0,10).replace(/-/g,'')}%2Fap-northeast-1%2Fs3%2Faws4_request&X-Amz-Date=${ts}&X-Amz-Expires=${ttl}&X-Amz-SignedHeaders=host&X-Amz-Signature=${uid()}${uid()}`;
 
   document.getElementById('presign-url-display').textContent = fakeUrl;
-  document.getElementById('log-presign').innerHTML='';
-  showPresignResult();
-  appendLog('log-presign',`[presign] GeneratePresignedURL  key="${key}"  TTL=${ttl}s  expires at ${new Date(expires).toLocaleTimeString()}`, 'l-info');
+  document.getElementById('presign-result').style.display = 'block';
+  document.getElementById('log-presign').innerHTML = '';
+  appendLog('log-presign',`[presign] GeneratePresignedURL  key="${key}"  TTL=${ttl}s  expires at ${new Date(expires).toLocaleTimeString()}`,'l-info');
 
-  // Start countdown
   if(state.presignTimer) clearInterval(state.presignTimer);
   updateCountdown();
   state.presignTimer = setInterval(updateCountdown, 500);
 });
-
-function showPresignResult(){
-  document.getElementById('presign-result').style.display='block';
-}
 
 function updateCountdown(){
   const rem = Math.max(0, Math.ceil((state.presignExpiry - Date.now())/1000));
@@ -595,13 +1295,13 @@ function updateCountdown(){
   el.textContent = rem + 's';
   const badge = document.getElementById('presign-status-badge');
   if(rem > 0){
-    el.className='countdown';
-    badge.innerHTML='<span class="badge ok">有効</span>';
+    el.className = 'countdown-num';
+    badge.innerHTML = '<span class="badge badge-ok">有効</span>';
   } else {
-    el.className='countdown expired';
-    badge.innerHTML='<span class="badge err">期限切れ</span>';
+    el.className = 'countdown-num expired';
+    badge.innerHTML = '<span class="badge badge-err">期限切れ</span>';
     clearInterval(state.presignTimer);
-    state.presignTimer=null;
+    state.presignTimer = null;
   }
 }
 
@@ -610,7 +1310,7 @@ document.getElementById('btn-download').addEventListener('click',()=>{
   if(rem > 0){
     const obj = state.objects.find(o=>o.key===state.presignKey);
     if(obj){
-      appendLog('log-presign',`[200 OK] GET オブジェクト取得成功 — ${bytesLabel(obj.size)}  Body: ${obj.body.slice(0,60)}${obj.body.length>60?'…':''}`, 'l-ok');
+      appendLog('log-presign',`[200 OK] GET オブジェクト取得成功 — ${bytesLabel(obj.size)}  Body: ${obj.body.slice(0,60)}${obj.body.length>60?'…':''}`,'l-ok');
     } else {
       appendLog('log-presign','[200 OK] オブジェクト取得成功','l-ok');
     }
@@ -621,42 +1321,40 @@ document.getElementById('btn-download').addEventListener('click',()=>{
 
 document.getElementById('btn-reset-presign').addEventListener('click',()=>{
   if(state.presignTimer){ clearInterval(state.presignTimer); state.presignTimer=null; }
-  state.presignExpiry=0; state.presignKey=null;
-  document.getElementById('presign-result').style.display='none';
-  document.getElementById('log-presign').innerHTML='';
+  state.presignExpiry = 0;
+  state.presignKey = null;
+  document.getElementById('presign-result').style.display = 'none';
+  document.getElementById('log-presign').innerHTML = '';
 });
 
-// ─── Storage Class ───────────────────────────────────────────────────────────
+// ─── Storage Class ────────────────────────────────────────────────────────────
 const scDetails = {
   STANDARD:{
-    text:'<b style="color:var(--accent-soft)">STANDARD</b> — 頻繁にアクセスされるデータ向け。取り出しは即時かつ無料。コストは最高だが運用がシンプル。強整合モデル (read-after-write) により PUT 直後の GET も必ず最新データを返す。',
-    latency:'数ミリ秒',
-    retrievalCost:'なし',
+    text:'<b>STANDARD</b> — 頻繁にアクセスされるデータ向け。取り出しは即時かつ無料。コストは最高だが運用がシンプル。強整合モデル (read-after-write) により PUT 直後の GET も必ず最新データを返す。',
+    latency:'数ミリ秒',retrievalCost:'なし',
     log:[
-      {t:'l-info', m:'[PUT] オブジェクトを STANDARD で保存'},
-      {t:'l-ok',   m:'[200 OK] GET — 即座に返却  Latency: 12ms'},
-      {t:'l-ok',   m:'[強整合] read-after-write: 書き込み直後でも最新データを取得可能'},
+      {t:'l-info',m:'[PUT] オブジェクトを STANDARD で保存'},
+      {t:'l-ok',  m:'[200 OK] GET — 即座に返却  Latency: 12ms'},
+      {t:'l-ok',  m:'[強整合] read-after-write: 書き込み直後でも最新データを取得可能'},
     ]
   },
   STANDARD_IA:{
-    text:'<b style="color:var(--accent-soft)">STANDARD-IA</b> — アクセス頻度が低いが素早い取り出しが必要なデータ向け。取り出し料金が発生するため、頻繁に読む場合は Standard より高コストになる。',
-    latency:'数ミリ秒',
-    retrievalCost:'$0.01/GB',
+    text:'<b>STANDARD-IA</b> — アクセス頻度が低いが素早い取り出しが必要なデータ向け。取り出し料金が発生するため、頻繁に読む場合は Standard より高コストになる。',
+    latency:'数ミリ秒',retrievalCost:'$0.01/GB',
     log:[
-      {t:'l-info', m:'[PUT] オブジェクトを STANDARD_IA で保存（↓コスト/↑取り出し料金）'},
-      {t:'l-ok',   m:'[200 OK] GET — 即座に返却  Latency: 15ms'},
-      {t:'l-warn', m:'[課金] 取り出し料金: $0.01/GB が発生しました'},
+      {t:'l-info',m:'[PUT] オブジェクトを STANDARD_IA で保存（↓コスト/↑取り出し料金）'},
+      {t:'l-ok',  m:'[200 OK] GET — 即座に返却  Latency: 15ms'},
+      {t:'l-warn',m:'[課金] 取り出し料金: $0.01/GB が発生しました'},
     ]
   },
   GLACIER:{
-    text:'<b style="color:var(--accent-soft)">GLACIER</b> — 長期アーカイブ向け。ストレージコストは最安だが取り出しに 1〜12 時間かかる。取り出し前に Restore リクエストが必要。コスト重視で読み取り頻度が極めて低いデータに最適。',
-    latency:'1〜12 時間（Restore 後）',
-    retrievalCost:'$0.03/GB',
+    text:'<b>GLACIER</b> — 長期アーカイブ向け。ストレージコストは最安だが取り出しに 1〜12 時間かかる。取り出し前に Restore リクエストが必要。コスト重視で読み取り頻度が極めて低いデータに最適。',
+    latency:'1〜12 時間（Restore 後）',retrievalCost:'$0.03/GB',
     log:[
-      {t:'l-info', m:'[PUT] オブジェクトを GLACIER で保存（最安ストレージ）'},
-      {t:'l-warn', m:'[Restore] POST object-restore を送信...  (expedited / standard / bulk)'},
-      {t:'l-warn', m:'[待機中] 標準取り出しで約 3〜5 時間かかります...'},
-      {t:'l-err',  m:'[NoSuchKey-like] オブジェクトはまだ復元されていません。後でリトライしてください'},
+      {t:'l-info',m:'[PUT] オブジェクトを GLACIER で保存（最安ストレージ）'},
+      {t:'l-warn',m:'[Restore] POST object-restore を送信...  (expedited / standard / bulk)'},
+      {t:'l-warn',m:'[待機中] 標準取り出しで約 3〜5 時間かかります...'},
+      {t:'l-err', m:'[NoSuchKey-like] オブジェクトはまだ復元されていません。後でリトライしてください'},
     ]
   },
 };
@@ -665,49 +1363,46 @@ let selectedSc = 'STANDARD';
 
 document.querySelectorAll('.sc-card').forEach(card=>{
   card.addEventListener('click',()=>selectSc(card.dataset.sc));
-  card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectSc(card.dataset.sc);}});
+  card.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); selectSc(card.dataset.sc); }});
 });
 
 function selectSc(sc){
-  selectedSc=sc;
+  selectedSc = sc;
   document.querySelectorAll('.sc-card').forEach(c=>{
-    const active=c.dataset.sc===sc;
+    const active = c.dataset.sc === sc;
     c.classList.toggle('selected',active);
     c.setAttribute('aria-pressed',active?'true':'false');
   });
   document.getElementById('sc-detail').innerHTML = scDetails[sc].text +
-    ` <span class="muted">取り出し待機時間: ${scDetails[sc].latency} / 取り出し料金: ${scDetails[sc].retrievalCost}</span>`;
+    ` <span style="color:var(--text-sub);font-size:13px"> — 取り出し待機時間: ${scDetails[sc].latency} / 取り出し料金: ${scDetails[sc].retrievalCost}</span>`;
   document.getElementById('log-sc').innerHTML='';
 }
 
 document.getElementById('btn-retrieve').addEventListener('click',()=>{
-  const logEl=document.getElementById('log-sc');
+  const logEl = document.getElementById('log-sc');
   logEl.innerHTML='';
-  const lines=scDetails[selectedSc].log;
-  lines.forEach((l,i)=>{
-    setTimeout(()=>appendLog('log-sc', l.m, l.t), i*400);
+  scDetails[selectedSc].log.forEach((l,i)=>{
+    setTimeout(()=>appendLog('log-sc', l.m, l.t), i*420);
   });
 });
 
 // ─── Initial render ───────────────────────────────────────────────────────────
 renderExplorer();
 
-// Pre-populate a few sample objects for a nicer first experience
-const samples=[
+const samples = [
   {prefix:'submissions/2026/', name:'abc001.json', body:'{"problem":"ABC001A","result":"AC","score":100}', sc:'STANDARD'},
-  {prefix:'submissions/2026/', name:'abc002.json', body:'{"problem":"ABC001B","result":"WA","score":0}', sc:'STANDARD'},
-  {prefix:'reviews/',          name:'notes.txt',   body:'今日の復習: DFS, BFS, 二分探索', sc:'STANDARD_IA'},
+  {prefix:'submissions/2026/', name:'abc002.json', body:'{"problem":"ABC001B","result":"WA","score":0}',  sc:'STANDARD'},
+  {prefix:'reviews/',          name:'notes.txt',   body:'今日の復習: DFS, BFS, 二分探索',                sc:'STANDARD_IA'},
 ];
 samples.forEach(s=>{
-  const key=s.prefix+s.name;
-  const size=new TextEncoder().encode(s.body).length;
+  const key  = s.prefix + s.name;
+  const size = new TextEncoder().encode(s.body).length;
   state.objects.push({key,body:s.body,size,contentType:guessContentType(s.name),storageClass:s.sc,etag:uid(),lastModified:nowIso()});
 });
-currentPrefix='';
+currentPrefix = '';
 renderExplorer();
 document.getElementById('log-explorer').innerHTML='';
 appendLog('log-explorer','サンプルオブジェクトを 3 件ロードしました。クリックしてメタデータを確認してみてください。','l-dim');
 </script>
-<div class="wrap"><p class="note">🧪 <b>実物で動かす（実 AWS）:</b> このデモの概念は Terraform で実 AWS に立てて CloudWatch で観測できます。<br><code>make sandbox-test-phase2</code>（無料検証）→ <code>make sandbox-up-phase2</code>（apply）→ <code>make sandbox-load-phase2</code> → <code>make sandbox-watch-phase2</code>（CloudWatch 観測）→ <code>make sandbox-down-phase2</code>（課金停止）。<br>設計: <code>docs/superpowers/specs/2026-05-31-aws-phase-sandboxes-design.md</code></p></div>
 </body>
 </html>
