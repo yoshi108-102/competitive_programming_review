@@ -30,12 +30,12 @@ locals {
     { Name = "Stage", Value = var.api_gw_stage_name },
   ]
 
-  lambda_metrics = flatten([
-    for fn in var.lambda_function_names : [
-      ["AWS/Lambda", "Invocations", "FunctionName", fn, { stat = "Sum" }],
-      ["AWS/Lambda", "Errors", "FunctionName", fn, { stat = "Sum" }],
-    ]
-  ])
+  # CloudWatch の metrics は「メトリクス配列のリスト」。flatten すると各メトリクス配列
+  # まで平坦化されて1次元になり PutDashboard が不正になるため concat でリストを連結する。
+  lambda_metrics = concat(
+    [for fn in var.lambda_function_names : ["AWS/Lambda", "Invocations", "FunctionName", fn, { stat = "Sum" }]],
+    [for fn in var.lambda_function_names : ["AWS/Lambda", "Errors", "FunctionName", fn, { stat = "Sum" }]],
+  )
 
   dashboard_body = {
     widgets = [
