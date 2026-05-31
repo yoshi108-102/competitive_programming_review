@@ -6,5 +6,6 @@ variable "limit_usd" {
 
 variable "notify_email" {
   type        = string
-  description = "予算超過通知の送信先メールアドレス"
+  description = "予算超過通知の送信先メールアドレス (実際に受け取るなら自分のメールに上書き)"
+  default     = "sandbox@example.com"
 }
