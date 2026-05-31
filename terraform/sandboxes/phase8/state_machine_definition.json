@@ -1,0 +1,82 @@
+{
+  "Comment": "Phase8 Order Saga: validate -> charge -> inventory -> notify (with compensation)",
+  "StartAt": "ValidateOrder",
+  "States": {
+    "ValidateOrder": {
+      "Type": "Task",
+      "Resource": "${validate_order_arn}",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2,
+          "JitterStrategy": "FULL"
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "OrderFailed",
+          "ResultPath": "$.error"
+        }
+      ],
+      "Next": "ChargePayment"
+    },
+    "ChargePayment": {
+      "Type": "Task",
+      "Resource": "${charge_payment_arn}",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException"],
+          "IntervalSeconds": 3,
+          "MaxAttempts": 2,
+          "BackoffRate": 1.5,
+          "JitterStrategy": "FULL"
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "CompensateOrder",
+          "ResultPath": "$.error"
+        }
+      ],
+      "Next": "UpdateInventory"
+    },
+    "UpdateInventory": {
+      "Type": "Task",
+      "Resource": "${update_inventory_arn}",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "CompensateOrder",
+          "ResultPath": "$.error"
+        }
+      ],
+      "Next": "NotifyCustomer"
+    },
+    "NotifyCustomer": {
+      "Type": "Task",
+      "Resource": "${notify_customer_arn}",
+      "Next": "OrderSucceeded"
+    },
+    "CompensateOrder": {
+      "Type": "Task",
+      "Resource": "${compensate_order_arn}",
+      "Next": "OrderFailed"
+    },
+    "OrderSucceeded": {
+      "Type": "Succeed"
+    },
+    "OrderFailed": {
+      "Type": "Fail",
+      "Error": "OrderProcessingFailed",
+      "Cause": "One or more saga steps failed; compensation executed."
+    }
+  }
+}
