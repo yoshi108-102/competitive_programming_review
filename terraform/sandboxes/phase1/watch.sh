@@ -4,11 +4,15 @@ set -euo pipefail
 
 REGION="${AWS_DEFAULT_REGION:-ap-northeast-1}"
 DASHBOARD_NAME="phase1-sandbox"
-API_GW_ID="${API_GW_ID:?Please set API_GW_ID}"
 STAGE="${API_GW_STAGE:-prod}"
-LAMBDA_FUNCTION_NAMES="${LAMBDA_FUNCTION_NAMES:?Please set LAMBDA_FUNCTION_NAMES (space-separated)}"
-DYNAMODB_TABLE_NAME="${DYNAMODB_TABLE_NAME:?Please set DYNAMODB_TABLE_NAME}"
-USER_POOL_ID="${USER_POOL_ID:?Please set USER_POOL_ID}"
+# 既定は本番命名規則 (${project_name}-...-${environment} = atcoder-review / prod) に一致。
+# 本番を別名でデプロイした場合だけ env で上書きすればよい (無入力で動く)。
+API_GW_ID="${API_GW_ID:-atcoder-review-api-prod}"
+LAMBDA_FUNCTION_NAMES="${LAMBDA_FUNCTION_NAMES:-atcoder-review-save-user-prod atcoder-review-sync-submissions-prod atcoder-review-get-submissions-prod}"
+DYNAMODB_TABLE_NAME="${DYNAMODB_TABLE_NAME:-atcoder-review-submissions-prod}"
+# Cognito の UserPool ディメンションは Pool ID。本番 output から取得し、無ければ名前にフォールバック。
+PROD_TF="$(cd "$(dirname "$0")/../../.." && pwd)/terraform"
+USER_POOL_ID="${USER_POOL_ID:-$(terraform -chdir="$PROD_TF" output -raw cognito_user_pool_id 2>/dev/null || echo atcoder-review-prod)}"
 
 echo "INFO: CloudWatch メトリクスの反映には 1〜5 分かかります。"
 echo "INFO: SQS: load.sh 実行後 5 分待ってください (--period 300)"
