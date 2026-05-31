@@ -739,5 +739,6 @@ Via: <span id="h-via">-</span></pre>
   setInterval(updateRateMeter, 500);
 })();
 </script>
+<div class="wrap"><p class="note">🧪 <b>実物で動かす（実 AWS）:</b> このデモの概念は Terraform で実 AWS に立てて CloudWatch で観測できます。<br><code>make sandbox-test-phase5</code>（無料検証）→ <code>make sandbox-up-phase5</code>（apply）→ <code>make sandbox-load-phase5</code> → <code>make sandbox-watch-phase5</code>（CloudWatch 観測）→ <code>make sandbox-down-phase5</code>（課金停止）。<br>設計: <code>docs/superpowers/specs/2026-05-31-aws-phase-sandboxes-design.md</code></p></div>
 </body>
 </html>

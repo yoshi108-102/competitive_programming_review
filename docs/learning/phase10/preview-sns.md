@@ -223,3 +223,294 @@ FIFO Topic は SQS FIFO キューのみ Subscription 可能。Lambda を使い�
 - Amazon SNS の一般的なシナリオ — <https://docs.aws.amazon.com/sns/latest/dg/sns-common-scenarios.html>（閲覧日 2026-05-31）
 - Amazon SNS メッセージフィルタリング — <https://docs.aws.amazon.com/sns/latest/dg/sns-message-filtering.html>（閲覧日 2026-05-31）
 - Amazon SNS FIFO トピック — <https://docs.aws.amazon.com/sns/latest/dg/sns-fifo-topics.html>（閲覧日 2026-05-31）
+
+---
+
+## 関連・発展サービス
+
+### SNS → SQS ファンアウトの本質
+
+SNS の最大価値は「1 回の `Publish` で N 個のエンドポイントに同時配信できる」点にある。SQS 単体ではコンシューマが 1 本のポーリングを占有するため、同じメッセージを複数サービスが並列処理できない。SNS をハブにすることでキュー数を増やし、コンシューマを独立してスケールさせられる。
+
+```
+                ┌── SQS(fulfillment) ── Lambda/EC2 Worker
+SNS Topic ──── ┼── SQS(analytics)   ── Kinesis Firehose Consumer
+                ├── SQS(wholesale)   ── B2B 連携 Worker
+                └── Lambda(express)  ── 即時通知(Push)
+```
+
+**設計の勘所**:
+- SQS の `visibility_timeout` は Lambda の `timeout` の **6 倍以上**に設定するのが AWS 推奨。Lambda が処理中にタイムアウトするとメッセージが再表示され二重処理になる。
+- 各キューが独立しているため、analytics キューが詰まっても fulfillment キューには影響しない。障害が局所化されることが疎結合の最大のメリット。
+
+### SNS → Kinesis Data Firehose
+
+`protocol = "firehose"` で購読できる(2022 年 GA)。大量イベントを S3 に直送しつつ Athena で分析するパターン。Lambda 変換を噛ませなくてよいため運用コストが低い。
+
+```
+SNS Topic
+  └── Firehose Delivery Stream
+        ├── S3 (Parquet 変換 / Glue Data Catalog 統合)
+        └── (オプション) OpenSearch / Redshift Serverless
+```
+
+Terraform では `protocol = "firehose"` + `subscription_role_arn` を指定する。SNS が Firehose へ書き込む際のプリンシパルは `sns.amazonaws.com` になるので、Firehose の信頼ポリシーに `sns.amazonaws.com` を追加し忘れると `InvalidParameter: Invalid parameter: RoleArn` が出て詰まる。
+
+```hcl
+resource "aws_sns_topic_subscription" "to_firehose" {
+  topic_arn            = aws_sns_topic.orders.arn
+  protocol             = "firehose"
+  endpoint             = aws_kinesis_firehose_delivery_stream.s3.arn
+  subscription_role_arn = aws_iam_role.sns_to_firehose.arn
+}
+```
+
+### FIFO トピック ― いつ使うか・何が変わるか
+
+**いつ使うか**: 「在庫引き当て → 出荷指示」のように、後続の処理順序が業務的に意味を持つ場合。標準トピックは順序を保証しない。
+
+**制約と注意**:
+
+| 項目 | 標準トピック | FIFO トピック |
+|---|---|---|
+| スループット | 実質無制限 | 300 msg/sec(バッチで 3,000 msg/sec) |
+| 購読可能プロトコル | 全プロトコル | FIFO SQS / Lambda のみ |
+| 重複排除 | なし | コンテンツベース or `MessageDeduplicationId` |
+| 順序保証 | なし | `MessageGroupId` 単位で保証 |
+
+FIFO + SSE-KMS を組み合わせると KMS API 呼び出しがスループット制限に影響するため、KMS のリクエストレートクォータ(`GenerateDataKey` / `Decrypt`)をあらかじめ Service Quotas で確認しておくこと。
+
+### EventBridge との使い分け
+
+SNS と EventBridge はどちらも Pub/Sub 的に使えるが、適切な使い所が異なる。
+
+| 観点 | SNS | EventBridge |
+|---|---|---|
+| ルーティング粒度 | MessageAttributes ベース | JSON 全フィールド(ネスト可) |
+| ターゲット上限 | 購読数に比例(実質無制限) | ルールごとに最大 5 ターゲット |
+| スキーマレジストリ | なし | あり(コード生成も可) |
+| クロスアカウント | トピックポリシーで可 | バス間フォワード |
+| SaaS 統合 | なし | Shopify / Zendesk 等の Partner Event Source |
+| 遅延 | 低(ミリ秒) | 低〜中(ミリ秒〜数百 ms) |
+
+**実務の判断基準**: アプリ内部の単純なファンアウト(SQS/Lambda へ配信)なら SNS が軽量で最適。SaaS イベントの取り込み・CloudWatch/Config/CodePipeline のイベント処理・複雑なルーティングなら EventBridge。両者を組み合わせた「EventBridge → SNS → SQS」の multi-hop も実在する。
+
+### モバイルプッシュ / SMS / Email の落とし穴
+
+SNS はモバイル通知(APNs/FCM)・SMS・Email も購読プロトコルとして持つ。本格利用前に知っておくべき落とし穴:
+
+- **SMS sandbox**: デフォルトでは sandbox モードで、事前登録した電話番号へしか送れない。本番昇格(Production Access リクエスト)が必要。
+- **SMS コスト爆発リスク**: 東京リージョン向け SMS は $0.07〜/通。ループバグで数万通送ると数十万円の請求が来る。`SMSMonthToDateSpentUSD` に月次アラームを必ず設定する。
+- **Email の IaC 問題**: `protocol = "email"` は確認メールのリンクをクリックしないと有効にならないため、完全自動化が崩れる。本番では Email を Lambda 経由の Slack Webhook に置き換えるのがベストプラクティス。
+
+---
+
+## セキュリティ課題と対策
+
+### トピックポリシーの設計 ― デフォルトは過剰権限
+
+SNS トピックのデフォルトポリシーは `Principal: "*"` + `Condition: {AWS:SourceOwner: "<account_id>"}` で同一アカウント内の全 IAM エンティティに Publish/Subscribe を許可する。これは過剰。推奨設定は Publish 許可プリンシパルを明示列挙し、それ以外はデフォルト拒否。
+
+```json
+{
+  "Statement": [
+    {
+      "Sid": "DenyPublicPublish",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "sns:Publish",
+      "Resource": "*",
+      "Condition": {
+        "StringNotEquals": {
+          "aws:PrincipalArn": [
+            "arn:aws:iam::123456789012:role/phase10-publisher"
+          ]
+        }
+      }
+    }
+  ]
+}
+```
+
+Terraform では `aws_iam_policy_document` + `data.json` を `aws_sns_topic` の `policy` に渡す。
+
+### SSE-KMS の二重壁 ― つまずきポイント
+
+SNS の SSE-KMS は「SNS インフラ内に静止している間」のみ暗号化する。SNS → SQS の転送時は SQS 側のキーで再暗号化される。このとき **SNS サービスプリンシパル** が SQS キーに対して `GenerateDataKey` を呼ぶため、KMS キーポリシーには `sns.amazonaws.com` と `sqs.amazonaws.com` の両方を許可しなければならない。片方だけだと `KMS.KMSDisabledException` で購読が無音に失敗する。
+
+```hcl
+# キーポリシーに両プリンシパルを列挙する(phase10/main.tf の実装例)
+{
+  Sid    = "SNSEncrypt"
+  Effect = "Allow"
+  Principal = { Service = "sns.amazonaws.com" }
+  Action   = ["kms:GenerateDataKey*", "kms:Decrypt"]
+  Resource = "*"
+},
+{
+  Sid    = "SQSEncrypt"
+  Effect = "Allow"
+  Principal = { Service = "sqs.amazonaws.com" }
+  Action   = ["kms:GenerateDataKey*", "kms:Decrypt"]
+  Resource = "*"
+}
+```
+
+症状が `NumberOfNotificationsFailed` の増加として現れるため、このメトリクスの監視は必須。
+
+### フィルタポリシーはアクセス制御ではない
+
+よくある誤解: 「フィルタにかからないメッセージはあのキューに届かないから安全」。
+
+フィルタポリシーは **配信最適化** の機能であり、アクセス制御ではない。本当にアクセスを制限したいなら、SQS キューポリシーの `Condition` で `aws:SourceArn` を特定の SNS トピックに限定する。
+
+```json
+{
+  "Condition": {
+    "ArnEquals": {
+      "aws:SourceArn": "arn:aws:sns:ap-northeast-1:123456789012:phase10-orders"
+    }
+  }
+}
+```
+
+### 購読 DLQ ― 「無音の失敗」問題
+
+SNS が SQS/Lambda への配信を 3 回リトライして失敗すると、デフォルトではメッセージが**完全に消える**。これを「無音の失敗(silent failure)」と呼ぶ。
+
+DLQ は購読(サブスクリプション)ごとに独立して設定する(トピックレベルではなく)。Terraform では `redrive_policy` を `aws_sns_topic_subscription` に付ける。
+
+```hcl
+resource "aws_sns_topic_subscription" "fulfillment" {
+  ...
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.dlq["fulfillment"].arn
+  })
+}
+```
+
+本番では `ApproximateNumberOfMessagesVisible > 0` で DLQ アラームを仕掛け、PagerDuty/Slack に通知する運用が必須。
+
+### クロスアカウント購読のリスク
+
+別アカウントの SNS トピックを購読する場合、トピックポリシーに他アカウントの ARN を追加する必要がある。ソースアカウントを `Condition` で固定しないと、そのアカウントの任意ロールが Publish できてしまう。
+
+```json
+"Condition": {
+  "StringEquals": { "aws:SourceAccount": "999999999999" },
+  "ArnLike":      { "aws:SourceArn": "arn:aws:sns:*:999999999999:trusted-topic" }
+}
+```
+
+必ずアカウント ID と ARN パターンの両方を指定して二重に縛ること。
+
+### VPC エンドポイントでプライベート通信
+
+VPC 内の Lambda/EC2 から SNS に Publish するとき、デフォルトではインターネット経由(NAT Gateway)が必要になる。VPC エンドポイント(Interface 型)を使えば AWS バックボーンネットワーク内に閉じた通信になり、NAT Gateway コストを削減しつつセキュリティも向上する。
+
+```hcl
+resource "aws_vpc_endpoint" "sns" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.aws_region}.sns"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = aws_subnet.private[*].id
+  security_group_ids  = [aws_security_group.endpoints.id]
+  private_dns_enabled = true
+}
+```
+
+VPC エンドポイントポリシーで `sns:Publish` の対象トピック ARN を絞ることで、エンドポイントを経由できるアクションをさらに限定できる。
+
+---
+
+## インフラ応用パターン
+
+### パターン A: 通知基盤(Operational Alerting)
+
+CloudWatch Alarm → SNS → 複数出口のパターンは AWS 監視の定番構成。
+
+```
+CloudWatch Alarm
+  └── SNS Topic (alert-hub)
+        ├── Email 購読    ─ on-call エンジニア
+        ├── SQS 購読      ─ ITSM チケット自動起票 Lambda
+        └── Lambda 購読   ─ Slack Webhook 通知
+```
+
+**実装の勘所**:
+- CloudWatch Alarm が SNS に Publish するには `cloudwatch.amazonaws.com` を Publish 許可するトピックポリシーが必要。IaC で書く際に忘れやすい。
+- Slack 通知に使う Webhook URL は Lambda 環境変数に直書きせず、SSM Parameter Store(SecureString)から起動時に取得する設計にする。
+
+```python
+import boto3
+ssm = boto3.client("ssm")
+WEBHOOK_URL = ssm.get_parameter(
+    Name="/phase10/slack_webhook", WithDecryption=True
+)["Parameter"]["Value"]
+```
+
+### パターン B: イベントドリブン マイクロサービス
+
+```
+Order Service → SNS (orders) → SQS(per-service) → Inventory / Billing / Shipping
+```
+
+各サービスは自分のキューだけをポーリングする。サービス間の直接呼び出しを排除することで、Billing が落ちても Order Service に影響しない。
+
+**スケール設計の注意点**:
+- SQS + Lambda のオートスケーリングは `ReservedConcurrentExecutions` で上限を設け、バースト時のコスト爆発と下流 DB への過負荷を防ぐ。
+- Lambda Event Source Mapping の `MaximumConcurrency` をキューのポーリング concurrency に合わせること。
+
+### パターン C: マルチリージョン DR
+
+SNS はリージョナルサービスのため、リージョン障害に備えて冗長化するにはアプリ側のフェイルオーバーロジックが必要になる。実践的なアプローチは EventBridge Global Endpoints(2022 GA)と組み合わせて CloudWatch がリージョン間フェイルオーバーを自動化する形。SNS 単独でマルチリージョン HA を組む場合は Publisher 側で複数リージョンへ二重送信するのが現実的。
+
+### パターン D: SNS Message Archiving (2024 GA)
+
+`archive_policy` を設定すると、過去最大 365 日間のメッセージを再送(replay)できる。Kinesis Data Streams の「シャード巻き戻し」と同様の概念。障害後に SQS コンシューマを再起動したとき、すでに削除された SQS メッセージを SNS 側から再配信して補完できる。
+
+```hcl
+resource "aws_sns_topic" "orders_archived" {
+  name              = "phase10-orders-archived"
+  kms_master_key_id = aws_kms_key.phase10.arn
+  archive_policy    = jsonencode({ MessageRetentionPeriod = 30 })
+  # sandbox では 1 日に短縮して試すと destroy 前の課金を最小化できる
+}
+```
+
+### パターン E: Large Message Payloads(Extended Client Library)
+
+SNS のメッセージサイズ上限は **256 KB**。超える場合は本体を S3 に格納し、メッセージには S3 ポインタだけを入れる透過的な回避策がある。
+
+```bash
+pip install amazon-sns-extended-client
+```
+
+```python
+import boto3
+from sns_extended_client import SNSExtendedClientSession
+
+session = SNSExtendedClientSession()
+sns = session.client("sns", region_name="ap-northeast-1")
+sns.meta.config = {
+    "large_payload_support": "my-bucket",
+    "always_through_s3": False,   # 256 KB 超えた場合のみ S3 に退避
+}
+sns.publish(TopicArn="...", Message=large_json_string)
+```
+
+**注意**: 購読側(SQS コンシューマ)も同ライブラリでポーリングしないと、S3 ポインタが含まれる JSON をそのまま処理してしまう。Publisher と Subscriber でライブラリのバージョンを揃えること。
+
+### パターン F: E2E 死活監視(CloudWatch Synthetics Canary)
+
+Canary を定期実行して「SNS Publish → SQS Receive → メッセージ一致」をエンドツーエンドで検証する高度な監視パターン。
+
+```
+Canary (rate: 5 min)
+  1. SNS に test メッセージを Publish
+  2. SQS をポーリングして受信確認
+  3. 到達遅延を CloudWatch カスタムメトリクスに記録
+  4. タイムアウトなら ALARM → PagerDuty
+```
+
+単なるメトリクス監視では「SNS が Publish を受け付けた」は分かっても「エンドポイントまで届いた」は確認できない。Canary で確認することで購読経路の断線を能動的に検出できる。
