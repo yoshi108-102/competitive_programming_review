@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 7 — EventBridge スケジュール &amp; イベントバス | AWS 学習デモ</title>
+<style>
+:root{
+  --bg:#0b0f14; --surface:#141b24; --surface-2:#1c2531; --surface-3:#243042;
+  --border:#2b3645; --text:#e6edf3; --muted:#93a1b3;
+  --accent:#ff9900; --accent-soft:#ffb84d; --cyan:#4dd0e1; --green:#3fb950;
+  --red:#f85149; --yellow:#e3b341; --purple:#bc8cff; --blue:#58a6ff;
+  --radius:14px; --radius-sm:8px; --shadow:0 8px 30px rgba(0,0,0,.35);
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:radial-gradient(1200px 600px at 80% -10%,rgba(255,153,0,.08),transparent),var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
+.wrap{max-width:1080px;margin:0 auto;padding:28px 24px 80px}
+.topbar{position:sticky;top:0;z-index:20;backdrop-filter:blur(10px);background:rgba(11,15,20,.72);border-bottom:1px solid var(--border)}
+.topbar .inner{max-width:1080px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;gap:14px}
+.brand{font-weight:700;letter-spacing:.3px;display:flex;align-items:center;gap:10px}
+.brand .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+.spacer{flex:1}
+.eyebrow{color:var(--accent);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase}
+h1{font-size:clamp(24px,4vw,38px);line-height:1.2;margin:.3em 0 .25em}
+.lead{color:var(--muted);font-size:17px;max-width:72ch}
+.section-title{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:34px 0 12px;font-weight:700}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;box-shadow:var(--shadow)}
+.card + .card{margin-top:18px}
+.grid{display:grid;gap:18px}
+.grid-2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.grid-3{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--surface-3);border:1px solid var(--border);color:var(--text)}
+.pill.accent{background:rgba(255,153,0,.14);border-color:rgba(255,153,0,.4);color:var(--accent-soft)}
+.badge{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px}
+.badge.ok{background:rgba(63,185,80,.15);color:var(--green)}
+.badge.err{background:rgba(248,81,73,.15);color:var(--red)}
+.badge.warn{background:rgba(227,179,65,.15);color:var(--yellow)}
+.badge.info{background:rgba(88,166,255,.15);color:var(--blue)}
+.btn{appearance:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;color:var(--text);background:var(--surface-3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 16px;transition:all .12s ease}
+.btn:hover{border-color:var(--muted)} .btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.accent{background:var(--accent);border-color:var(--accent);color:#1a1206}
+.btn.accent:hover{background:var(--accent-soft)}
+.btn.ghost{background:transparent}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:4px 0 16px}
+label.field{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+input[type=text],input[type=number],select,textarea{font-family:inherit;font-size:14px;color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 11px}
+input[type=range]{accent-color:var(--accent)}
+.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;user-select:none}
+.flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
+.flow-node{flex:1;min-width:120px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center;position:relative;transition:all .2s ease}
+.flow-node.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(255,153,0,.25);background:var(--surface-3)}
+.flow-node.ok{border-color:var(--green);box-shadow:0 0 0 2px rgba(63,185,80,.2)} .flow-node.err{border-color:var(--red)}
+.flow-arrow{display:flex;align-items:center;color:var(--muted);padding:0 8px;font-size:20px}
+.log{font-family:var(--mono);font-size:13px;background:#0a0e13;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;max-height:300px;overflow:auto;white-space:pre-wrap;line-height:1.6}
+.log .l-ok{color:var(--green)} .log .l-err{color:var(--red)} .log .l-warn{color:var(--yellow)} .log .l-info{color:var(--blue)} .log .l-dim{color:var(--muted)}
+code,kbd{font-family:var(--mono);font-size:.92em}
+.kbd{background:var(--surface-3);border:1px solid var(--border);border-bottom-width:2px;border-radius:6px;padding:1px 6px;font-size:12px}
+pre{font-family:var(--mono);font-size:13px;background:#0a0e13;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;overflow:auto}
+pre .hl{background:rgba(255,153,0,.18);display:block;margin:0 -14px;padding:0 14px}
+.takeaways{list-style:none;padding:0;margin:0;display:grid;gap:10px}
+.takeaways li{display:flex;flex-direction:column;gap:3px;background:var(--surface-2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--radius-sm);padding:12px 14px;font-size:14px}
+.takeaways li b{color:var(--accent-soft)}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--border);padding-left:12px;margin:14px 0}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:13px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;font-family:var(--mono)}
+.muted{color:var(--muted)} hr.sep{border:none;border-top:1px solid var(--border);margin:28px 0}
+.footer{color:var(--muted);font-size:13px;margin-top:48px;border-top:1px solid var(--border);padding-top:20px}
+@media (max-width:640px){.flow{flex-direction:column}.flow-arrow{transform:rotate(90deg);padding:6px 0}}
+
+/* ページ固有スタイル */
+.card-title{font-size:16px;font-weight:700;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+.card-sub{font-size:13px;color:var(--muted);margin:0 0 18px}
+.schedule-expr{font-family:var(--mono);font-size:15px;color:var(--accent-soft);padding:10px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);margin:8px 0 16px;display:flex;align-items:center;gap:10px}
+.schedule-expr .expr-text{flex:1}
+.virtual-clock{font-family:var(--mono);font-size:28px;font-weight:700;color:var(--cyan);text-align:center;padding:10px 0;letter-spacing:.04em}
+.clock-label{font-size:11px;color:var(--muted);text-align:center;margin-top:-4px;margin-bottom:12px}
+.next-fires{margin-top:14px}
+.next-fires-title{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px}
+.next-fires-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:4px}
+.next-fires-list li{font-family:var(--mono);font-size:12px;padding:5px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;display:flex;justify-content:space-between;align-items:center}
+.lambda-icon{font-size:36px;transition:all .25s ease}
+.lambda-icon.fired{filter:drop-shadow(0 0 12px var(--green));animation:pulse .4s ease}
+@keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.25)}100%{transform:scale(1)}}
+.speed-row{display:flex;align-items:center;gap:12px;font-size:13px;color:var(--muted)}
+.speed-row input{flex:1}
+.expr-presets{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.expr-preset-btn{font-size:12px;font-family:var(--mono);padding:4px 10px;border-radius:6px}
+.pattern-editor{width:100%;min-height:80px;resize:vertical;font-family:var(--mono);font-size:13px}
+.event-editor{width:100%;min-height:120px;resize:vertical;font-family:var(--mono);font-size:13px}
+.match-result{padding:12px 14px;border-radius:var(--radius-sm);margin:12px 0;font-size:14px;font-weight:600;border:1px solid;display:flex;align-items:center;gap:10px}
+.match-result.matched{background:rgba(63,185,80,.1);border-color:var(--green);color:var(--green)}
+.match-result.dropped{background:rgba(248,81,73,.1);border-color:var(--red);color:var(--red)}
+.match-result.idle{background:var(--surface-2);border-color:var(--border);color:var(--muted)}
+.bus-flow{display:flex;flex-direction:column;gap:8px;margin:16px 0}
+.bus-node{padding:10px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface-2);font-size:13px;transition:all .25s ease}
+.bus-node .node-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px}
+.bus-node .node-val{font-family:var(--mono);font-size:13px}
+.bus-node.active{border-color:var(--accent);background:var(--surface-3)}
+.bus-node.ok{border-color:var(--green);background:rgba(63,185,80,.06)}
+.bus-node.dropped{border-color:var(--red);background:rgba(248,81,73,.06)}
+.stat-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+.stat-box{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 16px;flex:1;min-width:80px;text-align:center}
+.stat-num{font-size:26px;font-weight:700;font-family:var(--mono)}
+.stat-lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+</style>
+</head>
+<body>
+
+<nav class="topbar" aria-label="サイトナビゲーション">
+  <div class="inner">
+    <div class="brand">
+      <span class="dot" aria-hidden="true"></span>
+      AWS 学習デモ
+    </div>
+    <div class="spacer"></div>
+    <span class="pill accent">Phase 7</span>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <!-- ヒーロー -->
+  <div class="eyebrow">Phase 7</div>
+  <h1>EventBridge — スケジュール &amp; イベントバス</h1>
+  <p class="lead">cron/rate 式で Lambda を定時起動し、イベントパターンでルーティングする疎結合ハブ。触って仕組みを体感しよう。</p>
+  <div class="badges" aria-label="対象サービス">
+    <span class="pill accent">⚡ EventBridge</span>
+    <span class="pill">🕐 Scheduler</span>
+    <span class="pill">🔀 イベントバス</span>
+    <span class="pill">λ Lambda ターゲット</span>
+  </div>
+
+  <hr class="sep">
+
+  <!-- カード 1: スケジューラ -->
+  <section class="card" aria-labelledby="card1-title">
+    <h2 class="card-title" id="card1-title">🕐 カード 1 — EventBridge スケジューラ</h2>
+    <p class="card-sub">スケジュール式を選択・入力 → 仮想時計が進み、一致したら Lambda が発火する様子を確認</p>
+
+    <div class="section-title">スケジュール式プリセット</div>
+    <div class="expr-presets" role="group" aria-label="スケジュール式プリセット">
+      <button class="btn expr-preset-btn" data-expr="rate(1 minutes)" aria-pressed="false">rate(1 minutes)</button>
+      <button class="btn expr-preset-btn" data-expr="rate(5 minutes)" aria-pressed="false">rate(5 minutes)</button>
+      <button class="btn expr-preset-btn" data-expr="rate(1 hours)" aria-pressed="false">rate(1 hours)</button>
+      <button class="btn expr-preset-btn" data-expr="cron(0 9 * * ? *)" aria-pressed="false">cron(0 9 * * ? *)</button>
+      <button class="btn expr-preset-btn" data-expr="cron(0 0 1 * ? *)" aria-pressed="false">cron(0 0 1 * ? *)</button>
+    </div>
+
+    <label class="field" for="expr-input">カスタム式（rate(N minutes|hours|days) または cron(分 時 日 月 ? 年)）</label>
+    <div class="schedule-expr" id="schedule-expr-display" aria-live="polite">
+      <span>⚡</span>
+      <span class="expr-text" id="expr-display-text">rate(5 minutes)</span>
+    </div>
+    <input type="text" id="expr-input" value="rate(5 minutes)" style="width:100%;margin-bottom:14px" aria-label="スケジュール式">
+
+    <div class="speed-row">
+      <span>速度</span>
+      <input type="range" id="speed-slider" min="1" max="10" value="5" aria-label="仮想時計の速度">
+      <span id="speed-label">×5</span>
+      <span style="margin-left:auto;font-size:12px">1目盛り = 1秒 → 仮想N分</span>
+    </div>
+
+    <hr class="sep" style="margin:16px 0">
+
+    <div class="virtual-clock" id="virtual-clock" aria-live="polite" aria-label="仮想時計">09:00:00</div>
+    <div class="clock-label">仮想時刻（速度×でティック中）</div>
+
+    <div class="flow" aria-label="処理フロー">
+      <div class="flow-node" id="sched-node-eb" aria-label="EventBridge スケジューラ">
+        <div style="font-size:24px">⚡</div>
+        <div style="font-weight:700;font-size:14px;margin-top:4px">EventBridge<br>Scheduler</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:6px" id="sched-status-text">待機中</div>
+      </div>
+      <div class="flow-arrow" aria-hidden="true">→</div>
+      <div class="flow-node" id="sched-node-lambda" aria-label="Lambda ターゲット">
+        <div class="lambda-icon" id="lambda-icon">λ</div>
+        <div style="font-weight:700;font-size:14px;margin-top:4px">Lambda<br>ターゲット</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:6px" id="lambda-status-text">未発火</div>
+      </div>
+    </div>
+
+    <div class="next-fires" aria-live="polite">
+      <div class="next-fires-title">次回発火予定（仮想時刻）</div>
+      <ul class="next-fires-list" id="next-fires-list" aria-label="次回発火スケジュール">
+        <li><span>計算中...</span></li>
+      </ul>
+    </div>
+
+    <div class="controls" style="margin-top:16px">
+      <button class="btn accent" id="btn-sched-start" aria-label="スケジュール開始">▶ 開始</button>
+      <button class="btn" id="btn-sched-stop" disabled aria-label="スケジュール停止">⏸ 停止</button>
+      <button class="btn ghost" id="btn-sched-reset" aria-label="スケジュールリセット">↺ リセット</button>
+      <span class="badge info" id="fire-count-badge">発火: 0 回</span>
+    </div>
+
+    <div class="section-title">発火ログ</div>
+    <div class="log" id="sched-log" role="log" aria-label="スケジュール発火ログ" aria-live="polite">
+      <span class="l-dim">-- スケジューラを開始すると発火ログがここに表示されます --</span>
+    </div>
+  </section>
+
+  <!-- カード 2: イベントバス -->
+  <section class="card" aria-labelledby="card2-title">
+    <h2 class="card-title" id="card2-title">🔀 カード 2 — EventBridge イベントバス</h2>
+    <p class="card-sub">ルールのイベントパターンを設定し、サンプルイベントを「発行」してルーティングを確認</p>
+
+    <div class="stat-row" aria-label="統計">
+      <div class="stat-box">
+        <div class="stat-num l-ok" id="stat-matched" style="color:var(--green)">0</div>
+        <div class="stat-lbl">マッチ</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num" id="stat-dropped" style="color:var(--red)">0</div>
+        <div class="stat-lbl">ドロップ</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num" id="stat-total" style="color:var(--blue)">0</div>
+        <div class="stat-lbl">合計</div>
+      </div>
+    </div>
+
+    <div class="grid grid-2">
+      <div>
+        <label class="field" for="pattern-editor">
+          イベントパターン（JSON）
+          <span style="font-size:11px;color:var(--muted)">source / detail-type / detail のフィールドでフィルタ</span>
+        </label>
+        <textarea class="pattern-editor" id="pattern-editor" aria-label="イベントパターン JSON" spellcheck="false">{
+  "source": ["atcoder"],
+  "detail-type": ["submission"]
+}</textarea>
+        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">
+          <button class="btn expr-preset-btn" data-pattern='{"source":["atcoder"],"detail-type":["submission"]}' aria-label="AtCoder submission パターンをセット">AtCoder submission</button>
+          <button class="btn expr-preset-btn" data-pattern='{"source":["aws.s3"]}' aria-label="S3 イベントパターンをセット">S3 イベント</button>
+          <button class="btn expr-preset-btn" data-pattern='{"detail-type":["EC2 Instance State-change Notification"],"detail":{"state":["running"]}}' aria-label="EC2 State-change パターンをセット">EC2 State</button>
+        </div>
+      </div>
+      <div>
+        <label class="field" for="event-editor">
+          発行するイベント（JSON）
+          <span style="font-size:11px;color:var(--muted)">source / detail-type / detail を含む</span>
+        </label>
+        <textarea class="event-editor" id="event-editor" aria-label="発行イベント JSON" spellcheck="false">{
+  "source": "atcoder",
+  "detail-type": "submission",
+  "detail": {
+    "problem_id": "abc001_a",
+    "verdict": "AC",
+    "language": "Python3"
+  }
+}</textarea>
+        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">
+          <button class="btn expr-preset-btn" data-event='{"source":"atcoder","detail-type":"submission","detail":{"problem_id":"abc001_a","verdict":"AC","language":"Python3"}}' aria-label="AtCoder AC イベントをセット">AtCoder AC</button>
+          <button class="btn expr-preset-btn" data-event='{"source":"atcoder","detail-type":"contest_start","detail":{"contest_id":"abc300"}}' aria-label="AtCoder contest_start イベントをセット">contest_start</button>
+          <button class="btn expr-preset-btn" data-event='{"source":"aws.s3","detail-type":"Object Created","detail":{"bucket":"my-bucket"}}' aria-label="S3 イベントをセット">S3 Upload</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="bus-flow" id="bus-flow" aria-live="polite" aria-label="イベントバスフロー">
+      <div class="bus-node" id="bus-publisher">
+        <div class="node-label">Publisher</div>
+        <div class="node-val" id="bus-pub-val">—</div>
+      </div>
+      <div style="text-align:center;color:var(--muted);font-size:18px;padding:2px 0" aria-hidden="true">↓</div>
+      <div class="bus-node" id="bus-eventbus">
+        <div class="node-label">Event Bus（default）</div>
+        <div class="node-val">すべてのイベントを受信</div>
+      </div>
+      <div style="text-align:center;color:var(--muted);font-size:18px;padding:2px 0" aria-hidden="true">↓</div>
+      <div class="bus-node" id="bus-rule">
+        <div class="node-label">Rule — イベントパターンでフィルタ</div>
+        <div class="node-val" id="bus-rule-val">—</div>
+      </div>
+      <div style="text-align:center;color:var(--muted);font-size:18px;padding:2px 0" aria-hidden="true">↓</div>
+      <div class="bus-node" id="bus-target">
+        <div class="node-label">Target（Lambda）</div>
+        <div class="node-val" id="bus-target-val">待機中</div>
+      </div>
+    </div>
+
+    <div class="match-result idle" id="match-result" role="status" aria-live="assertive">
+      <span id="match-icon">🔍</span>
+      <span id="match-text">イベントを発行するとマッチング結果がここに表示されます</span>
+    </div>
+
+    <div class="controls">
+      <button class="btn accent" id="btn-publish" aria-label="イベントを発行">📤 イベントを発行</button>
+      <button class="btn ghost" id="btn-bus-reset" aria-label="イベントバスリセット">↺ リセット</button>
+    </div>
+
+    <div class="section-title">イベントログ</div>
+    <div class="log" id="bus-log" role="log" aria-label="イベントバスログ" aria-live="polite">
+      <span class="l-dim">-- イベントを発行するとルーティングログがここに表示されます --</span>
+    </div>
+  </section>
+
+  <!-- 学ぶポイント -->
+  <div class="section-title">学ぶポイント</div>
+  <ul class="takeaways" aria-label="学ぶポイント">
+    <li>
+      <b>スケジュール式: rate と cron</b>
+      <span><code>rate(5 minutes)</code> は5分ごとに繰り返す。<code>cron(0 9 * * ? *)</code> は毎日9時に実行。EventBridge Scheduler は1回限り・タイムゾーン指定にも対応。</span>
+    </li>
+    <li>
+      <b>イベントバス + ルール + ターゲット</b>
+      <span>イベントをパターンでフィルタし、複数ターゲット（Lambda・SQS・SNS等）へ配信する疎結合ハブ。発行側はターゲットを知らなくてよい。</span>
+    </li>
+    <li>
+      <b>イベントパターン</b>
+      <span><code>source</code> / <code>detail-type</code> / <code>detail</code> のフィールド値が一致したイベントのみターゲットへ配信。一致しないイベントは自動的に捨てられる（課金なし）。</span>
+    </li>
+    <li>
+      <b>cron ポーリングとの違い</b>
+      <span>EventBridge はポーリング不要のイベント駆動。AWS サービス間連携（S3→Lambda 等）も同じ仕組みで、スケールしてもコード変更なし。</span>
+    </li>
+  </ul>
+
+  <!-- 正式教材 -->
+  <div class="section-title">正式教材で深掘り</div>
+  <div class="note">
+    このデモで触れた概念の詳細は <code>docs/learning/phase7/preview-eventbridge.md</code> で学習できます。公式ドキュメント（EventBridge ユーザーガイド・Scheduler ユーザーガイド）も合わせて参照してください。
+  </div>
+
+  <div class="footer" role="contentinfo">
+    ⚠️ このページはデモ用シミュレーションです。実際の AWS / EventBridge API は一切呼び出していません。
+  </div>
+
+</main>
+
+<script>
+'use strict';
+
+/* ============================================================
+   ユーティリティ
+   ============================================================ */
+function ts() {
+  return new Date().toLocaleTimeString('ja-JP', { hour12: false });
+}
+
+function appendLog(el, html) {
+  if (el.querySelector('.l-dim')) el.innerHTML = '';
+  el.innerHTML += html + '\n';
+  el.scrollTop = el.scrollHeight;
+}
+
+function flashNode(node, cls, ms) {
+  node.classList.add(cls);
+  setTimeout(() => node.classList.remove(cls), ms || 600);
+}
+
+/* ============================================================
+   カード 1: スケジューラ
+   ============================================================ */
+const exprInput      = document.getElementById('expr-input');
+const exprDisplay    = document.getElementById('expr-display-text');
+const speedSlider    = document.getElementById('speed-slider');
+const speedLabel     = document.getElementById('speed-label');
+const virtualClock   = document.getElementById('virtual-clock');
+const nextFiresList  = document.getElementById('next-fires-list');
+const schedLog       = document.getElementById('sched-log');
+const schedNodeEb    = document.getElementById('sched-node-eb');
+const schedNodeLambda= document.getElementById('sched-node-lambda');
+const lambdaIcon     = document.getElementById('lambda-icon');
+const schedStatus    = document.getElementById('sched-status-text');
+const lambdaStatus   = document.getElementById('lambda-status-text');
+const fireCountBadge = document.getElementById('fire-count-badge');
+const btnSchedStart  = document.getElementById('btn-sched-start');
+const btnSchedStop   = document.getElementById('btn-sched-stop');
+const btnSchedReset  = document.getElementById('btn-sched-reset');
+
+let schedTimer = null;
+let virtualMinutes = 9 * 60; // 09:00
+let fireCount = 0;
+let lastFireMinute = -9999;
+
+function formatVirtual(totalMin) {
+  const h = Math.floor(totalMin / 60) % 24;
+  const m = totalMin % 60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`;
+}
+
+function parseExpr(expr) {
+  expr = expr.trim();
+  // rate(N unit)
+  const rateM = expr.match(/^rate\(\s*(\d+)\s+(minute|minutes|hour|hours|day|days)\s*\)$/i);
+  if (rateM) {
+    const n = parseInt(rateM[1], 10);
+    const u = rateM[2].toLowerCase();
+    let mins = u.startsWith('minute') ? n : u.startsWith('hour') ? n * 60 : n * 1440;
+    return { type: 'rate', intervalMins: mins };
+  }
+  // cron(min hour day month ? year)
+  const cronM = expr.match(/^cron\(\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+\?\s+(\S+)\s*\)$/i);
+  if (cronM) {
+    const minPart  = cronM[1];
+    const hourPart = cronM[2];
+    return { type: 'cron', minPart, hourPart };
+  }
+  return null;
+}
+
+function nextFireTimes(parsed, fromMinute, count) {
+  if (!parsed) return [];
+  const results = [];
+  let cur = fromMinute + 1;
+  if (parsed.type === 'rate') {
+    // find the first multiple
+    const base = Math.ceil(cur / parsed.intervalMins) * parsed.intervalMins;
+    for (let i = 0; i < count; i++) results.push(base + i * parsed.intervalMins);
+  } else if (parsed.type === 'cron') {
+    // simple: fixed hour and minute
+    const cronHour = parsed.hourPart === '*' ? 0 : parseInt(parsed.hourPart, 10);
+    const cronMin  = parsed.minPart  === '*' ? 0 : parseInt(parsed.minPart,  10);
+    if (isNaN(cronHour) || isNaN(cronMin)) return [];
+    const minuteOfDay = cronHour * 60 + cronMin;
+    let dayOffset = 0;
+    while (results.length < count) {
+      const candidate = dayOffset * 1440 + minuteOfDay;
+      if (candidate > fromMinute) results.push(candidate);
+      dayOffset++;
+      if (dayOffset > 400) break;
+    }
+  }
+  return results;
+}
+
+function renderNextFires(parsed, fromMinute) {
+  const times = nextFireTimes(parsed, fromMinute, 5);
+  if (!times.length) {
+    nextFiresList.innerHTML = '<li><span style="color:var(--red)">式が無効です</span></li>';
+    return;
+  }
+  nextFiresList.innerHTML = times.map((m, i) => {
+    const label = i === 0 ? '<span class="badge ok">次回</span>' : '';
+    return `<li><span>${formatVirtual(m)}</span>${label}</li>`;
+  }).join('');
+}
+
+function shouldFire(parsed, currentMinute) {
+  if (!parsed) return false;
+  if (parsed.type === 'rate') {
+    return currentMinute > 0 && (currentMinute % parsed.intervalMins === 0) && currentMinute !== lastFireMinute;
+  } else if (parsed.type === 'cron') {
+    const cronHour = parsed.hourPart === '*' ? -1 : parseInt(parsed.hourPart, 10);
+    const cronMin  = parsed.minPart  === '*' ? -1 : parseInt(parsed.minPart,  10);
+    const h = Math.floor(currentMinute / 60) % 24;
+    const m = currentMinute % 60;
+    const match = (cronHour === -1 || h === cronHour) && (cronMin === -1 || m === cronMin);
+    return match && currentMinute !== lastFireMinute;
+  }
+  return false;
+}
+
+function fireLambda(minute) {
+  lastFireMinute = minute;
+  fireCount++;
+  fireCountBadge.textContent = `発火: ${fireCount} 回`;
+  lambdaIcon.classList.add('fired');
+  schedNodeLambda.classList.add('ok');
+  lambdaStatus.textContent = `発火! (${fireCount}回目)`;
+  schedNodeEb.classList.add('active');
+  schedStatus.textContent = 'トリガー送信中';
+  setTimeout(() => {
+    lambdaIcon.classList.remove('fired');
+    schedNodeLambda.classList.remove('ok');
+    schedNodeEb.classList.remove('active');
+    schedStatus.textContent = '次回を待機中';
+    lambdaStatus.textContent = `最終: ${formatVirtual(minute)}`;
+  }, 600);
+  appendLog(schedLog,
+    `<span class="l-ok">[${formatVirtual(minute)}] ✅ Lambda 発火 #${fireCount} — スケジュール: ${exprInput.value.trim()}</span>`
+  );
+}
+
+function schedTick() {
+  const speed = parseInt(speedSlider.value, 10);
+  virtualMinutes += speed;
+  virtualClock.textContent = formatVirtual(virtualMinutes);
+  const parsed = parseExpr(exprInput.value);
+  if (shouldFire(parsed, virtualMinutes)) {
+    fireLambda(virtualMinutes);
+    renderNextFires(parsed, virtualMinutes);
+  }
+}
+
+function startScheduler() {
+  if (schedTimer) return;
+  const parsed = parseExpr(exprInput.value);
+  if (!parsed) {
+    appendLog(schedLog, `<span class="l-err">[${ts()}] ❌ スケジュール式が無効です: ${exprInput.value}</span>`);
+    return;
+  }
+  appendLog(schedLog, `<span class="l-info">[${ts()}] ▶ スケジューラ開始 — 式: ${exprInput.value.trim()}</span>`);
+  schedNodeEb.classList.add('active');
+  schedStatus.textContent = '次回を待機中';
+  renderNextFires(parsed, virtualMinutes);
+  btnSchedStart.disabled = true;
+  btnSchedStop.disabled = false;
+  schedTimer = setInterval(schedTick, 800);
+}
+
+function stopScheduler() {
+  clearInterval(schedTimer);
+  schedTimer = null;
+  schedNodeEb.classList.remove('active');
+  schedStatus.textContent = '停止中';
+  btnSchedStart.disabled = false;
+  btnSchedStop.disabled = true;
+  appendLog(schedLog, `<span class="l-warn">[${ts()}] ⏸ スケジューラ停止</span>`);
+}
+
+function resetScheduler() {
+  stopScheduler();
+  virtualMinutes = 9 * 60;
+  fireCount = 0;
+  lastFireMinute = -9999;
+  virtualClock.textContent = '09:00:00';
+  fireCountBadge.textContent = '発火: 0 回';
+  lambdaIcon.classList.remove('fired');
+  schedNodeLambda.classList.remove('ok');
+  schedNodeLambda.classList.remove('active');
+  lambdaStatus.textContent = '未発火';
+  schedStatus.textContent = '待機中';
+  schedLog.innerHTML = '<span class="l-dim">-- スケジューラを開始すると発火ログがここに表示されます --</span>';
+  nextFiresList.innerHTML = '<li><span>計算中...</span></li>';
+}
+
+btnSchedStart.addEventListener('click', startScheduler);
+btnSchedStop.addEventListener('click', stopScheduler);
+btnSchedReset.addEventListener('click', resetScheduler);
+
+exprInput.addEventListener('input', () => {
+  const v = exprInput.value.trim();
+  exprDisplay.textContent = v || '(式を入力)';
+  const parsed = parseExpr(v);
+  if (schedTimer) renderNextFires(parsed, virtualMinutes);
+});
+
+speedSlider.addEventListener('input', () => {
+  speedLabel.textContent = `×${speedSlider.value}`;
+});
+
+document.querySelectorAll('[data-expr]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const expr = btn.dataset.expr;
+    exprInput.value = expr;
+    exprDisplay.textContent = expr;
+    document.querySelectorAll('[data-expr]').forEach(b => b.setAttribute('aria-pressed','false'));
+    btn.setAttribute('aria-pressed','true');
+    const parsed = parseExpr(expr);
+    renderNextFires(parsed, virtualMinutes);
+    appendLog(schedLog, `<span class="l-dim">[${ts()}] 📋 式変更: ${expr}</span>`);
+  });
+});
+
+// init
+renderNextFires(parseExpr('rate(5 minutes)'), virtualMinutes);
+
+/* ============================================================
+   カード 2: イベントバス
+   ============================================================ */
+const patternEditor  = document.getElementById('pattern-editor');
+const eventEditor    = document.getElementById('event-editor');
+const btnPublish     = document.getElementById('btn-publish');
+const btnBusReset    = document.getElementById('btn-bus-reset');
+const busLog         = document.getElementById('bus-log');
+const matchResult    = document.getElementById('match-result');
+const matchIcon      = document.getElementById('match-icon');
+const matchText      = document.getElementById('match-text');
+const busPublisher   = document.getElementById('bus-publisher');
+const busEventbus    = document.getElementById('bus-eventbus');
+const busRule        = document.getElementById('bus-rule');
+const busTarget      = document.getElementById('bus-target');
+const busPubVal      = document.getElementById('bus-pub-val');
+const busRuleVal     = document.getElementById('bus-rule-val');
+const busTargetVal   = document.getElementById('bus-target-val');
+const statMatched    = document.getElementById('stat-matched');
+const statDropped    = document.getElementById('stat-dropped');
+const statTotal      = document.getElementById('stat-total');
+
+let busMatched = 0, busDropped = 0, busTotal = 0;
+
+// Deep pattern matching: EventBridge pattern matching logic
+function matchPattern(pattern, event) {
+  // For each key in pattern, event must satisfy
+  for (const key of Object.keys(pattern)) {
+    const patVal = pattern[key];
+    if (key === 'detail' && typeof patVal === 'object' && !Array.isArray(patVal)) {
+      // Nested detail matching
+      if (!event.detail || typeof event.detail !== 'object') return false;
+      if (!matchPattern(patVal, event.detail)) return false;
+    } else if (Array.isArray(patVal)) {
+      // Event value must be in the pattern array
+      const evVal = event[key];
+      if (!patVal.includes(evVal)) return false;
+    } else if (typeof patVal === 'object') {
+      const evVal = event[key];
+      if (!matchPattern(patVal, evVal)) return false;
+    } else {
+      if (event[key] !== patVal) return false;
+    }
+  }
+  return true;
+}
+
+function animateBusFlow(matched) {
+  // Reset all
+  [busPublisher, busEventbus, busRule, busTarget].forEach(n => {
+    n.classList.remove('active','ok','dropped');
+  });
+
+  setTimeout(() => busPublisher.classList.add('active'), 0);
+  setTimeout(() => { busPublisher.classList.remove('active'); busEventbus.classList.add('active'); }, 300);
+  setTimeout(() => { busEventbus.classList.remove('active'); busRule.classList.add('active'); }, 600);
+  setTimeout(() => {
+    busRule.classList.remove('active');
+    busRule.classList.add(matched ? 'ok' : 'dropped');
+    if (matched) {
+      busTarget.classList.add('ok');
+    } else {
+      busTarget.classList.add('dropped');
+    }
+  }, 900);
+}
+
+function publish() {
+  let pattern, event;
+  try {
+    pattern = JSON.parse(patternEditor.value);
+  } catch(e) {
+    appendLog(busLog, `<span class="l-err">[${ts()}] ❌ イベントパターンが無効な JSON: ${e.message}</span>`);
+    return;
+  }
+  try {
+    event = JSON.parse(eventEditor.value);
+  } catch(e) {
+    appendLog(busLog, `<span class="l-err">[${ts()}] ❌ イベント JSON が無効: ${e.message}</span>`);
+    return;
+  }
+
+  busTotal++;
+  statTotal.textContent = busTotal;
+
+  // Update publisher display
+  busPubVal.textContent = `source: "${event.source || '?'}" / detail-type: "${event['detail-type'] || '?'}"`;
+  busRuleVal.textContent = JSON.stringify(pattern).substring(0, 60) + (JSON.stringify(pattern).length > 60 ? '…' : '');
+
+  const matched = matchPattern(pattern, event);
+
+  appendLog(busLog,
+    `<span class="l-dim">[${ts()}] 📤 発行 — source: "${event.source}", detail-type: "${event['detail-type']}"</span>`
+  );
+  appendLog(busLog,
+    `<span class="l-dim">      イベント: ${JSON.stringify(event).substring(0,80)}</span>`
+  );
+
+  if (matched) {
+    busMatched++;
+    statMatched.textContent = busMatched;
+    matchResult.className = 'match-result matched';
+    matchIcon.textContent = '✅';
+    matchText.textContent = 'マッチ — Lambda ターゲットへルーティング';
+    busTargetVal.textContent = `受信 — ${event['detail-type'] || event.source} を処理中`;
+    appendLog(busLog, `<span class="l-ok">[${ts()}] ✅ MATCHED — Lambda に配信</span>`);
+  } else {
+    busDropped++;
+    statDropped.textContent = busDropped;
+    matchResult.className = 'match-result dropped';
+    matchIcon.textContent = '🗑️';
+    matchText.textContent = 'ドロップ — パターン不一致のためターゲットへ届きません';
+    busTargetVal.textContent = '待機中（このイベントは届かない）';
+    appendLog(busLog, `<span class="l-warn">[${ts()}] ⚠️ DROPPED — パターン不一致</span>`);
+    // Show which field didn't match
+    for (const key of Object.keys(pattern)) {
+      const patArr = pattern[key];
+      if (Array.isArray(patArr)) {
+        const evVal = event[key];
+        if (!patArr.includes(evVal)) {
+          appendLog(busLog, `<span class="l-warn">      └ "${key}": イベント="${evVal}", パターン=${JSON.stringify(patArr)}</span>`);
+        }
+      }
+    }
+  }
+
+  animateBusFlow(matched);
+}
+
+function resetBus() {
+  [busPublisher, busEventbus, busRule, busTarget].forEach(n => {
+    n.classList.remove('active','ok','dropped');
+  });
+  busMatched = 0; busDropped = 0; busTotal = 0;
+  statMatched.textContent = '0';
+  statDropped.textContent = '0';
+  statTotal.textContent = '0';
+  matchResult.className = 'match-result idle';
+  matchIcon.textContent = '🔍';
+  matchText.textContent = 'イベントを発行するとマッチング結果がここに表示されます';
+  busPubVal.textContent = '—';
+  busRuleVal.textContent = '—';
+  busTargetVal.textContent = '待機中';
+  busLog.innerHTML = '<span class="l-dim">-- イベントを発行するとルーティングログがここに表示されます --</span>';
+}
+
+btnPublish.addEventListener('click', publish);
+btnBusReset.addEventListener('click', resetBus);
+
+document.querySelectorAll('[data-pattern]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const raw = btn.dataset.pattern;
+    patternEditor.value = JSON.stringify(JSON.parse(raw), null, 2);
+  });
+});
+
+document.querySelectorAll('[data-event]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const raw = btn.dataset.event;
+    eventEditor.value = JSON.stringify(JSON.parse(raw), null, 2);
+  });
+});
+</script>
+</body>
+</html>

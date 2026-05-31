@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Phase 10 — SNS Pub/Sub ファンアウト通知</title>
+<style>
+:root{
+  --bg:#0b0f14; --surface:#141b24; --surface-2:#1c2531; --surface-3:#243042;
+  --border:#2b3645; --text:#e6edf3; --muted:#93a1b3;
+  --accent:#ff9900; --accent-soft:#ffb84d; --cyan:#4dd0e1; --green:#3fb950;
+  --red:#f85149; --yellow:#e3b341; --purple:#bc8cff; --blue:#58a6ff;
+  --radius:14px; --radius-sm:8px; --shadow:0 8px 30px rgba(0,0,0,.35);
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:radial-gradient(1200px 600px at 80% -10%,rgba(255,153,0,.08),transparent),var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
+.wrap{max-width:1080px;margin:0 auto;padding:28px 24px 80px}
+.topbar{position:sticky;top:0;z-index:20;backdrop-filter:blur(10px);background:rgba(11,15,20,.72);border-bottom:1px solid var(--border)}
+.topbar .inner{max-width:1080px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;gap:14px}
+.brand{font-weight:700;letter-spacing:.3px;display:flex;align-items:center;gap:10px}
+.brand .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+.spacer{flex:1}
+.eyebrow{color:var(--accent);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase}
+h1{font-size:clamp(24px,4vw,38px);line-height:1.2;margin:.3em 0 .25em}
+.lead{color:var(--muted);font-size:17px;max-width:72ch}
+.section-title{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:34px 0 12px;font-weight:700}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;box-shadow:var(--shadow)}
+.card + .card{margin-top:18px}
+.grid{display:grid;gap:18px}
+.grid-2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.grid-3{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--surface-3);border:1px solid var(--border);color:var(--text)}
+.pill.accent{background:rgba(255,153,0,.14);border-color:rgba(255,153,0,.4);color:var(--accent-soft)}
+.badge{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px}
+.badge.ok{background:rgba(63,185,80,.15);color:var(--green)}
+.badge.err{background:rgba(248,81,73,.15);color:var(--red)}
+.badge.warn{background:rgba(227,179,65,.15);color:var(--yellow)}
+.badge.info{background:rgba(88,166,255,.15);color:var(--blue)}
+.btn{appearance:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;color:var(--text);background:var(--surface-3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 16px;transition:all .12s ease}
+.btn:hover{border-color:var(--muted)} .btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.accent{background:var(--accent);border-color:var(--accent);color:#1a1206}
+.btn.accent:hover{background:var(--accent-soft)}
+.btn.ghost{background:transparent}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:4px 0 16px}
+label.field{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+input[type=text],input[type=number],select,textarea{font-family:inherit;font-size:14px;color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 11px}
+input[type=range]{accent-color:var(--accent)}
+.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;user-select:none}
+.flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
+.flow-node{flex:1;min-width:120px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center;position:relative;transition:all .2s ease}
+.flow-node.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(255,153,0,.25);background:var(--surface-3)}
+.flow-node.ok{border-color:var(--green)} .flow-node.err{border-color:var(--red)}
+.flow-arrow{display:flex;align-items:center;color:var(--muted);padding:0 8px;font-size:20px}
+.log{font-family:var(--mono);font-size:13px;background:#0a0e13;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;max-height:300px;overflow:auto;white-space:pre-wrap;line-height:1.6}
+.log .l-ok{color:var(--green)} .log .l-err{color:var(--red)} .log .l-warn{color:var(--yellow)} .log .l-info{color:var(--blue)} .log .l-dim{color:var(--muted)}
+code,kbd{font-family:var(--mono);font-size:.92em}
+.kbd{background:var(--surface-3);border:1px solid var(--border);border-bottom-width:2px;border-radius:6px;padding:1px 6px;font-size:12px}
+pre{font-family:var(--mono);font-size:13px;background:#0a0e13;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;overflow:auto}
+pre .hl{background:rgba(255,153,0,.18);display:block;margin:0 -14px;padding:0 14px}
+.takeaways{list-style:none;padding:0;margin:0;display:grid;gap:10px}
+.takeaways li{display:flex;flex-direction:column;gap:3px;background:var(--surface-2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--radius-sm);padding:12px 14px;font-size:14px}
+.takeaways li b{color:var(--accent-soft)}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--border);padding-left:12px;margin:14px 0}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:13px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;font-family:var(--mono)}
+.muted{color:var(--muted)} hr.sep{border:none;border-top:1px solid var(--border);margin:28px 0}
+.footer{color:var(--muted);font-size:13px;margin-top:48px;border-top:1px solid var(--border);padding-top:20px}
+@media (max-width:640px){.flow{flex-direction:column}.flow-arrow{transform:rotate(90deg);padding:6px 0}}
+
+/* ---- Page-specific styles ---- */
+.topic-center{
+  display:flex;flex-direction:column;align-items:center;gap:20px;padding:24px 0;
+}
+.topic-box{
+  background:rgba(255,153,0,.12);border:2px solid var(--accent);border-radius:var(--radius);
+  padding:18px 30px;text-align:center;min-width:200px;position:relative;
+}
+.topic-box .topic-label{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:4px}
+.topic-box .topic-name{font-size:20px;font-weight:700;color:var(--accent)}
+.topic-box .topic-type{font-size:11px;color:var(--muted);margin-top:4px}
+
+.fanout-row{
+  display:flex;flex-wrap:wrap;gap:14px;justify-content:center;width:100%;
+}
+.sub-card{
+  background:var(--surface-2);border:2px solid var(--border);border-radius:var(--radius-sm);
+  padding:14px 16px;min-width:150px;max-width:180px;flex:1;text-align:center;
+  transition:border-color .25s ease, box-shadow .25s ease, background .25s ease;
+  position:relative;
+}
+.sub-card .sub-icon{font-size:22px;margin-bottom:6px}
+.sub-card .sub-proto{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:3px}
+.sub-card .sub-name{font-size:13px;font-weight:600}
+.sub-card .sub-status{font-size:12px;margin-top:8px;min-height:18px}
+.sub-card.delivering{border-color:var(--accent);box-shadow:0 0 0 3px rgba(255,153,0,.2);background:var(--surface-3)}
+.sub-card.delivered{border-color:var(--green);box-shadow:0 0 0 2px rgba(63,185,80,.18)}
+.sub-card.filtered{border-color:var(--border);opacity:.55}
+.sub-card.disabled-sub{opacity:.4}
+
+.arrow-down{
+  color:var(--muted);font-size:24px;text-align:center;line-height:1;
+  transition:color .2s ease;
+}
+.arrow-down.active-arrow{color:var(--accent)}
+
+.filter-editor{
+  background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:10px 12px;margin-top:10px;font-size:12px;
+}
+.filter-editor textarea{
+  width:100%;font-size:12px;padding:6px 8px;min-height:60px;resize:vertical;
+  font-family:var(--mono);color:var(--cyan);background:#0a0e13;border-color:var(--border);
+}
+.filter-editor .filter-label{font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.filter-err{color:var(--red);font-size:11px;margin-top:3px;font-family:var(--mono)}
+
+.msg-compose{
+  display:flex;flex-direction:column;gap:10px;
+}
+.msg-compose textarea{
+  width:100%;min-height:56px;resize:vertical;font-family:var(--mono);font-size:13px;
+  color:var(--text);background:var(--surface-2);border-color:var(--border);border-radius:var(--radius-sm);padding:9px 11px;
+}
+.attr-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.attr-row input[type=text]{flex:1;min-width:100px}
+
+.fifo-banner{
+  background:rgba(188,140,255,.08);border:1px solid rgba(188,140,255,.3);
+  border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:var(--purple);
+  display:flex;align-items:center;gap:8px;margin-top:6px;
+}
+
+.stat-row{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px}
+.stat-box{
+  background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:10px 16px;text-align:center;min-width:90px;
+}
+.stat-box .stat-val{font-size:22px;font-weight:700;font-family:var(--mono)}
+.stat-box .stat-key{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<!-- 1. Topbar -->
+<nav class="topbar" aria-label="サイトナビゲーション">
+  <div class="inner">
+    <div class="brand"><span class="dot" aria-hidden="true"></span>AWS 学習デモ</div>
+    <div class="spacer"></div>
+    <span class="pill accent">Phase 10</span>
+  </div>
+</nav>
+
+<!-- 2. Hero -->
+<div class="wrap">
+  <div class="eyebrow">Phase 10</div>
+  <h1>SNS — Pub/Sub ファンアウト通知</h1>
+  <p class="lead">Amazon SNS の Topic にメッセージを Publish すると、すべての Subscriber へ同時に配信される「ファンアウト」を体験する。フィルタポリシーで条件に合う購読者だけに届ける仕組みも確認できる。</p>
+  <div class="badges">
+    <span class="pill accent">SNS</span>
+    <span class="pill">Topic / Subscription</span>
+    <span class="pill">ファンアウト</span>
+    <span class="pill">フィルタポリシー</span>
+    <span class="pill">FIFO トピック</span>
+  </div>
+
+  <hr class="sep">
+
+  <!-- 3a. メインデモ: ファンアウト -->
+  <div class="card" id="demo-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+      <div>
+        <div class="section-title" style="margin:0 0 4px">インタラクティブデモ — SNS ファンアウト</div>
+        <div style="font-size:13px;color:var(--muted)">メッセージ属性を設定して「Publish」するとファンアウトが走る。フィルタポリシーに合わない購読者はスキップされる。</div>
+      </div>
+      <button class="btn ghost" id="btn-reset" aria-label="デモをリセット">↺ リセット</button>
+    </div>
+
+    <!-- FIFO toggle -->
+    <div class="controls" style="margin-bottom:12px">
+      <label class="switch">
+        <input type="checkbox" id="fifo-toggle" role="switch" aria-checked="false">
+        <span>FIFO トピック（順序保証モード）</span>
+      </label>
+      <div class="fifo-banner" id="fifo-banner" style="display:none" role="status">
+        🔢 FIFO トピック有効 — MessageGroupId でメッセージ順序が保証されます。スループット上限: 300 msg/s。
+      </div>
+    </div>
+
+    <!-- Topic center visual -->
+    <div class="topic-center" id="topic-visual">
+      <div class="topic-box">
+        <div class="topic-label">SNS Topic</div>
+        <div class="topic-name" id="topic-name-display">arn:aws:sns:ap-northeast-1:123456789012:MyTopic</div>
+        <div class="topic-type" id="topic-type-label">Standard（順序不保証）</div>
+      </div>
+      <div class="arrow-down" id="arrow-main" aria-hidden="true">↓</div>
+      <!-- Fanout subscribers -->
+      <div class="fanout-row" id="fanout-row" role="list" aria-label="購読者一覧">
+        <!-- filled by JS -->
+      </div>
+    </div>
+
+    <!-- 統計 -->
+    <div class="stat-row" id="stat-row">
+      <div class="stat-box"><div class="stat-val" id="stat-published">0</div><div class="stat-key">Published</div></div>
+      <div class="stat-box"><div class="stat-val" id="stat-delivered">0</div><div class="stat-key">Delivered</div></div>
+      <div class="stat-box"><div class="stat-val" id="stat-filtered">0</div><div class="stat-key">Filtered</div></div>
+    </div>
+
+    <hr class="sep" style="margin:18px 0">
+
+    <!-- メッセージ作成 -->
+    <div class="section-title" style="margin:0 0 10px">メッセージを作成して Publish</div>
+    <div class="msg-compose">
+      <label class="field" for="msg-body">
+        メッセージ本文
+        <textarea id="msg-body" rows="2" placeholder='{"orderId":"ORD-001","amount":2980}'></textarea>
+      </label>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        <label class="field" style="flex:1;min-width:180px" for="attr-type">
+          属性: type (MessageAttribute)
+          <input type="text" id="attr-type" value="order" placeholder="order / notification / alert">
+        </label>
+        <label class="field" style="flex:1;min-width:180px" for="attr-env">
+          属性: env
+          <input type="text" id="attr-env" value="prod" placeholder="prod / dev / staging">
+        </label>
+      </div>
+      <div id="fifo-group-row" style="display:none">
+        <label class="field" for="fifo-group">
+          MessageGroupId <span style="font-size:11px;color:var(--muted)">(FIFO必須)</span>
+          <input type="text" id="fifo-group" value="orders" placeholder="orders / payments / ...">
+        </label>
+      </div>
+    </div>
+    <div class="controls" style="margin-top:14px">
+      <button class="btn accent" id="btn-publish" aria-label="メッセージをパブリッシュ">▶ Publish</button>
+    </div>
+
+    <!-- ログ -->
+    <div class="section-title" style="margin:0 0 8px">配信ログ</div>
+    <div class="log" id="main-log" role="log" aria-live="polite" aria-label="配信ログ"><span class="l-dim">// Publish ボタンで配信ログがここに表示されます</span></div>
+  </div>
+
+  <!-- 3b. フィルタポリシーエディタ -->
+  <div class="card">
+    <div class="section-title" style="margin:0 0 4px">フィルタポリシー設定</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:16px">各購読者のフィルタポリシーを JSON で編集できます。空 <code>{}</code> にするとフィルタなし（全メッセージ受信）。</div>
+    <div class="grid grid-2" id="filter-editors">
+      <!-- filled by JS -->
+    </div>
+  </div>
+
+  <!-- 3c. SNS vs SQS 比較 -->
+  <div class="card">
+    <div class="section-title" style="margin:0 0 12px">SNS (Pub/Sub) vs SQS (Queue) — 構造の違い</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px">
+      <div>
+        <div style="font-weight:700;color:var(--accent);margin-bottom:8px">📣 SNS — Push 型</div>
+        <div class="flow" style="flex-direction:column;gap:6px">
+          <div class="flow-node" style="flex:none;text-align:left;padding:10px 14px">
+            <div style="font-size:12px;color:var(--muted)">Publisher</div>
+            <div style="font-size:13px;font-weight:600">Producer アプリ</div>
+          </div>
+          <div style="text-align:center;color:var(--accent);font-size:18px">↓ Publish</div>
+          <div class="flow-node active" style="flex:none;text-align:left;padding:10px 14px">
+            <div style="font-size:12px;color:var(--muted)">SNS Topic</div>
+            <div style="font-size:13px;font-weight:600">ブロードキャスト</div>
+          </div>
+          <div style="text-align:center;color:var(--green);font-size:18px">↓ Push（同時配信）</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <div class="flow-node ok" style="flex:none;font-size:12px;padding:8px 10px">Email</div>
+            <div class="flow-node ok" style="flex:none;font-size:12px;padding:8px 10px">SQS</div>
+            <div class="flow-node ok" style="flex:none;font-size:12px;padding:8px 10px">Lambda</div>
+          </div>
+        </div>
+        <p style="font-size:13px;color:var(--muted);margin-top:10px">Publish 1回で全購読者へ即時配信。購読者が増えても Publisher は変更不要。</p>
+      </div>
+      <div>
+        <div style="font-weight:700;color:var(--blue);margin-bottom:8px">📦 SQS — Pull 型</div>
+        <div class="flow" style="flex-direction:column;gap:6px">
+          <div class="flow-node" style="flex:none;text-align:left;padding:10px 14px">
+            <div style="font-size:12px;color:var(--muted)">Producer</div>
+            <div style="font-size:13px;font-weight:600">Producer アプリ</div>
+          </div>
+          <div style="text-align:center;color:var(--blue);font-size:18px">↓ SendMessage</div>
+          <div class="flow-node" style="flex:none;text-align:left;padding:10px 14px;border-color:var(--blue)">
+            <div style="font-size:12px;color:var(--muted)">SQS Queue</div>
+            <div style="font-size:13px;font-weight:600">キュー（蓄積）</div>
+          </div>
+          <div style="text-align:center;color:var(--blue);font-size:18px">↑ ReceiveMessage（Pull）</div>
+          <div class="flow-node" style="flex:none;text-align:left;padding:10px 14px">
+            <div style="font-size:12px;color:var(--muted)">Consumer（1件ずつ取得）</div>
+            <div style="font-size:13px;font-weight:600">Consumer アプリ</div>
+          </div>
+        </div>
+        <p style="font-size:13px;color:var(--muted);margin-top:10px">Consumer が能動的に取得。スケーリングしやすく、処理失敗時に DLQ で保護できる。</p>
+      </div>
+    </div>
+    <div class="fifo-banner" style="margin-top:14px;color:var(--cyan);background:rgba(77,208,225,.07);border-color:rgba(77,208,225,.3)">
+      💡 <strong>定番パターン:</strong> SNS → 複数 SQS のファンアウト。各 SQS Queue を独立したサービス（注文処理・在庫更新・通知）が Pull。疎結合な扇形配信を実現。
+    </div>
+  </div>
+
+  <!-- 4. 学ぶポイント -->
+  <div class="section-title">学ぶポイント</div>
+  <ul class="takeaways">
+    <li>
+      <b>Pub/Sub と Queue の違い</b>
+      <span>SNS は push 型で複数購読者へ同時配信、SQS は pull 型で 1 コンシューマが取り出す。SNS は「広報」、SQS は「郵便受け」のイメージ。</span>
+    </li>
+    <li>
+      <b>Topic / Subscription / Protocol</b>
+      <span>1 トピックに Email / SMS / SQS / Lambda / HTTP など多様な購読を束ねる。配信先のプロトコルを変えても Publisher 側のコードは変わらない。</span>
+    </li>
+    <li>
+      <b>ファンアウトパターン</b>
+      <span>SNS → 複数 SQS で各サービスが独立に処理。疎結合な扇形配信の定番パターン。サービス追加は SNS に Subscription を追加するだけ。</span>
+    </li>
+    <li>
+      <b>メッセージフィルタリング</b>
+      <span>属性に対するフィルタポリシーで購読側が必要なメッセージだけ受け取る。FIFO トピックで MessageGroupId ごとの順序保証が可能（スループット制限あり）。</span>
+    </li>
+  </ul>
+
+  <!-- 5. 正式教材 -->
+  <div class="section-title">正式教材で深掘り</div>
+  <div class="note">
+    📘 このデモの完全版解説は <code>docs/learning/phase10/preview-sns.md</code> を参照してください。SNS 公式ドキュメント・フィルタポリシー仕様・FIFO トピックの制限事項を詳しく解説しています。
+  </div>
+
+  <!-- 6. Footer -->
+  <div class="footer">
+    ⚠️ このページはブラウザ内のみで動作するシミュレーションです。実際の AWS SNS・SQS・Lambda・HTTP エンドポイントへの通信は一切行っていません。
+  </div>
+</div>
+
+<script>
+// ---- State ----
+const SUBS = [
+  { id:'email',    proto:'Email',  icon:'📧', name:'admin@example.com',    color:'var(--yellow)',  filter:{} },
+  { id:'sms',      proto:'SMS',    icon:'📱', name:'+81-90-XXXX-XXXX',     color:'var(--cyan)',    filter:{"type":["alert","notification"]} },
+  { id:'sqs-order',proto:'SQS',   icon:'📦', name:'OrderQueue',           color:'var(--green)',   filter:{"type":["order"]} },
+  { id:'sqs-notify',proto:'SQS',  icon:'📦', name:'NotifyQueue',          color:'var(--blue)',    filter:{"type":["notification","alert"]} },
+  { id:'lambda',   proto:'Lambda', icon:'λ',  name:'ProcessorFunction',    color:'var(--purple)',  filter:{} },
+  { id:'http',     proto:'HTTP',   icon:'🌐', name:'https://webhook.example.com', color:'var(--muted)', filter:{"env":["prod"]} },
+];
+
+let stats = { published:0, delivered:0, filtered:0 };
+let publishing = false;
+let fifoMode = false;
+
+// ---- DOM refs ----
+const logEl       = document.getElementById('main-log');
+const fanoutRow   = document.getElementById('fanout-row');
+const filterEditors = document.getElementById('filter-editors');
+const arrowMain   = document.getElementById('arrow-main');
+const topicTypeLabel = document.getElementById('topic-type-label');
+const topicNameDisplay = document.getElementById('topic-name-display');
+const fifoBanner  = document.getElementById('fifo-banner');
+const fifoToggle  = document.getElementById('fifo-toggle');
+const fifoGroupRow = document.getElementById('fifo-group-row');
+
+// ---- Helpers ----
+function ts() {
+  const d = new Date();
+  return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}:${d.getSeconds().toString().padStart(2,'0')}.${d.getMilliseconds().toString().padStart(3,'0')}`;
+}
+
+function appendLog(html) {
+  const isBottom = logEl.scrollHeight - logEl.scrollTop <= logEl.clientHeight + 10;
+  logEl.innerHTML += '\n' + html;
+  if (isBottom) logEl.scrollTop = logEl.scrollHeight;
+}
+
+function clearLog() { logEl.innerHTML = '<span class="l-dim">// Publish ボタンで配信ログがここに表示されます</span>'; }
+
+function updateStats() {
+  document.getElementById('stat-published').textContent = stats.published;
+  document.getElementById('stat-delivered').textContent = stats.delivered;
+  document.getElementById('stat-filtered').textContent  = stats.filtered;
+}
+
+// ---- Build subscriber cards ----
+function buildFanoutRow() {
+  fanoutRow.innerHTML = '';
+  SUBS.forEach(sub => {
+    const div = document.createElement('div');
+    div.className = 'sub-card';
+    div.id = 'sub-card-' + sub.id;
+    div.setAttribute('role','listitem');
+    div.innerHTML = `
+      <div class="sub-icon">${sub.icon}</div>
+      <div class="sub-proto">${sub.proto}</div>
+      <div class="sub-name" style="font-size:12px;word-break:break-all">${sub.name}</div>
+      <div class="sub-status" id="sub-status-${sub.id}"></div>
+    `;
+    fanoutRow.appendChild(div);
+  });
+}
+
+// ---- Build filter editors ----
+function buildFilterEditors() {
+  filterEditors.innerHTML = '';
+  SUBS.forEach(sub => {
+    const wrap = document.createElement('div');
+    wrap.className = 'filter-editor';
+    const ta = document.createElement('textarea');
+    ta.id = 'filter-ta-' + sub.id;
+    ta.setAttribute('aria-label', sub.name + ' フィルタポリシー');
+    ta.value = JSON.stringify(sub.filter, null, 2);
+    const errEl = document.createElement('div');
+    errEl.className = 'filter-err';
+    errEl.id = 'filter-err-' + sub.id;
+    ta.addEventListener('input', () => {
+      try {
+        sub.filter = JSON.parse(ta.value);
+        errEl.textContent = '';
+      } catch(e) {
+        errEl.textContent = 'JSON エラー: ' + e.message;
+      }
+    });
+    wrap.innerHTML = `<div class="filter-label">${sub.icon} ${sub.proto} — ${sub.name}</div>`;
+    wrap.appendChild(ta);
+    wrap.appendChild(errEl);
+    filterEditors.appendChild(wrap);
+  });
+}
+
+// ---- Filter matching ----
+function matchesFilter(filter, attrs) {
+  if (!filter || Object.keys(filter).length === 0) return true;
+  for (const [key, allowed] of Object.entries(filter)) {
+    const val = attrs[key];
+    if (!val) return false;
+    if (Array.isArray(allowed)) {
+      if (!allowed.includes(val)) return false;
+    }
+  }
+  return true;
+}
+
+// ---- Publish animation ----
+async function publish() {
+  if (publishing) return;
+  publishing = true;
+  document.getElementById('btn-publish').disabled = true;
+
+  const body   = document.getElementById('msg-body').value || '(本文なし)';
+  const attrType = document.getElementById('attr-type').value.trim() || 'order';
+  const attrEnv  = document.getElementById('attr-env').value.trim() || 'prod';
+  const msgAttrs = { type: attrType, env: attrEnv };
+  const msgId  = 'msg-' + Math.random().toString(36).slice(2,9).toUpperCase();
+
+  let fifoGroup = '';
+  if (fifoMode) {
+    fifoGroup = document.getElementById('fifo-group').value.trim() || 'default';
+  }
+
+  stats.published++;
+  updateStats();
+
+  // Highlight topic
+  const topicBox = document.querySelector('.topic-box');
+  topicBox.style.boxShadow = '0 0 0 4px rgba(255,153,0,.35)';
+  arrowMain.classList.add('active-arrow');
+
+  appendLog(`<span class="l-info">[${ts()}] PUBLISH  MessageId=${msgId}</span>`);
+  appendLog(`<span class="l-dim">  Body:   ${body.slice(0,80)}${body.length>80?'…':''}</span>`);
+  appendLog(`<span class="l-dim">  Attrs:  ${JSON.stringify(msgAttrs)}</span>`);
+  if (fifoMode) appendLog(`<span class="l-dim">  FIFO:   MessageGroupId=${fifoGroup}</span>`);
+
+  await delay(400);
+  topicBox.style.boxShadow = '';
+  arrowMain.classList.remove('active-arrow');
+
+  // Fan out to each subscriber
+  const results = [];
+  for (const sub of SUBS) {
+    const card = document.getElementById('sub-card-' + sub.id);
+    const statusEl = document.getElementById('sub-status-' + sub.id);
+
+    card.classList.add('delivering');
+    statusEl.innerHTML = '<span class="badge warn">配信中…</span>';
+    await delay(220);
+
+    const matches = matchesFilter(sub.filter, msgAttrs);
+    if (matches) {
+      stats.delivered++;
+      card.classList.remove('delivering');
+      card.classList.add('delivered');
+      statusEl.innerHTML = '<span class="badge ok">✓ 配信済</span>';
+      appendLog(`<span class="l-ok">[${ts()}] DELIVERED → ${sub.proto}:${sub.name}</span>`);
+      results.push({ sub, ok: true });
+    } else {
+      stats.filtered++;
+      card.classList.remove('delivering');
+      card.classList.add('filtered');
+      statusEl.innerHTML = '<span class="badge warn">フィルタ</span>';
+      appendLog(`<span class="l-warn">[${ts()}] FILTERED  → ${sub.proto}:${sub.name}  (filterPolicy=${JSON.stringify(sub.filter)})</span>`);
+      results.push({ sub, ok: false });
+    }
+    await delay(80);
+  }
+
+  updateStats();
+  const deliveredCount = results.filter(r=>r.ok).length;
+  const filteredCount  = results.filter(r=>!r.ok).length;
+  appendLog(`<span class="l-info">[${ts()}] DONE     Delivered=${deliveredCount}, Filtered=${filteredCount}</span>`);
+  appendLog(`<span class="l-dim">─────────────────────────────────────────</span>`);
+
+  // Keep delivered state for 1.8s, then soft-reset cards
+  await delay(1800);
+  SUBS.forEach(sub => {
+    const card = document.getElementById('sub-card-' + sub.id);
+    const statusEl = document.getElementById('sub-status-' + sub.id);
+    card.classList.remove('delivering','delivered','filtered');
+    statusEl.innerHTML = '';
+  });
+
+  publishing = false;
+  document.getElementById('btn-publish').disabled = false;
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ---- Reset ----
+function resetDemo() {
+  stats = { published:0, delivered:0, filtered:0 };
+  updateStats();
+  clearLog();
+  SUBS.forEach(sub => {
+    const card = document.getElementById('sub-card-' + sub.id);
+    if (card) card.classList.remove('delivering','delivered','filtered');
+    const statusEl = document.getElementById('sub-status-' + sub.id);
+    if (statusEl) statusEl.innerHTML = '';
+  });
+  publishing = false;
+  document.getElementById('btn-publish').disabled = false;
+  document.querySelector('.topic-box').style.boxShadow = '';
+  arrowMain.classList.remove('active-arrow');
+}
+
+// ---- FIFO toggle ----
+fifoToggle.addEventListener('change', () => {
+  fifoMode = fifoToggle.checked;
+  fifoToggle.setAttribute('aria-checked', fifoMode ? 'true' : 'false');
+  fifoBanner.style.display = fifoMode ? 'flex' : 'none';
+  fifoGroupRow.style.display = fifoMode ? 'block' : 'none';
+  topicTypeLabel.textContent = fifoMode ? 'FIFO（MessageGroupId による順序保証）' : 'Standard（順序不保証）';
+  topicNameDisplay.textContent = fifoMode
+    ? 'arn:aws:sns:ap-northeast-1:123456789012:MyTopic.fifo'
+    : 'arn:aws:sns:ap-northeast-1:123456789012:MyTopic';
+});
+
+// ---- Wire buttons ----
+document.getElementById('btn-publish').addEventListener('click', publish);
+document.getElementById('btn-reset').addEventListener('click', resetDemo);
+
+// ---- Init ----
+buildFanoutRow();
+buildFilterEditors();
+updateStats();
+</script>
+</body>
+</html>

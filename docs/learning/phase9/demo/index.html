@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>X-Ray — 分散トレースを読む | AWS 学習デモ</title>
+<style>
+:root{
+  --bg:#0b0f14; --surface:#141b24; --surface-2:#1c2531; --surface-3:#243042;
+  --border:#2b3645; --text:#e6edf3; --muted:#93a1b3;
+  --accent:#ff9900; --accent-soft:#ffb84d; --cyan:#4dd0e1; --green:#3fb950;
+  --red:#f85149; --yellow:#e3b341; --purple:#bc8cff; --blue:#58a6ff;
+  --radius:14px; --radius-sm:8px; --shadow:0 8px 30px rgba(0,0,0,.35);
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:radial-gradient(1200px 600px at 80% -10%,rgba(255,153,0,.08),transparent),var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
+.wrap{max-width:1080px;margin:0 auto;padding:28px 24px 80px}
+.topbar{position:sticky;top:0;z-index:20;backdrop-filter:blur(10px);background:rgba(11,15,20,.72);border-bottom:1px solid var(--border)}
+.topbar .inner{max-width:1080px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;gap:14px}
+.brand{font-weight:700;letter-spacing:.3px;display:flex;align-items:center;gap:10px}
+.brand .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+.spacer{flex:1}
+.eyebrow{color:var(--accent);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase}
+h1{font-size:clamp(24px,4vw,38px);line-height:1.2;margin:.3em 0 .25em}
+.lead{color:var(--muted);font-size:17px;max-width:72ch}
+.section-title{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:34px 0 12px;font-weight:700}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;box-shadow:var(--shadow)}
+.card + .card{margin-top:18px}
+.grid{display:grid;gap:18px}
+.grid-2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.grid-3{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--surface-3);border:1px solid var(--border);color:var(--text)}
+.pill.accent{background:rgba(255,153,0,.14);border-color:rgba(255,153,0,.4);color:var(--accent-soft)}
+.badge{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px}
+.badge.ok{background:rgba(63,185,80,.15);color:var(--green)}
+.badge.err{background:rgba(248,81,73,.15);color:var(--red)}
+.badge.warn{background:rgba(227,179,65,.15);color:var(--yellow)}
+.badge.info{background:rgba(88,166,255,.15);color:var(--blue)}
+.btn{appearance:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;color:var(--text);background:var(--surface-3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 16px;transition:all .12s ease}
+.btn:hover{border-color:var(--muted)} .btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.accent{background:var(--accent);border-color:var(--accent);color:#1a1206}
+.btn.accent:hover{background:var(--accent-soft)}
+.btn.ghost{background:transparent}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:4px 0 16px}
+label.field{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+input[type=text],input[type=number],select,textarea{font-family:inherit;font-size:14px;color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 11px}
+input[type=range]{accent-color:var(--accent)}
+.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;user-select:none}
+.flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
+.flow-node{flex:1;min-width:120px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center;position:relative;transition:all .2s ease}
+.flow-node.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(255,153,0,.25);background:var(--surface-3)}
+.flow-node.ok{border-color:var(--green)} .flow-node.err{border-color:var(--red)}
+.flow-arrow{display:flex;align-items:center;color:var(--muted);padding:0 8px;font-size:20px}
+.log{font-family:var(--mono);font-size:13px;background:#0a0e13;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;max-height:300px;overflow:auto;white-space:pre-wrap;line-height:1.6}
+.log .l-ok{color:var(--green)} .log .l-err{color:var(--red)} .log .l-warn{color:var(--yellow)} .log .l-info{color:var(--blue)} .log .l-dim{color:var(--muted)}
+code,kbd{font-family:var(--mono);font-size:.92em}
+.kbd{background:var(--surface-3);border:1px solid var(--border);border-bottom-width:2px;border-radius:6px;padding:1px 6px;font-size:12px}
+pre{font-family:var(--mono);font-size:13px;background:#0a0e13;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;overflow:auto}
+pre .hl{background:rgba(255,153,0,.18);display:block;margin:0 -14px;padding:0 14px}
+.takeaways{list-style:none;padding:0;margin:0;display:grid;gap:10px}
+.takeaways li{display:flex;flex-direction:column;gap:3px;background:var(--surface-2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--radius-sm);padding:12px 14px;font-size:14px}
+.takeaways li b{color:var(--accent-soft)}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--border);padding-left:12px;margin:14px 0}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:13px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;font-family:var(--mono)}
+.muted{color:var(--muted)} hr.sep{border:none;border-top:1px solid var(--border);margin:28px 0}
+.footer{color:var(--muted);font-size:13px;margin-top:48px;border-top:1px solid var(--border);padding-top:20px}
+@media (max-width:640px){.flow{flex-direction:column}.flow-arrow{transform:rotate(90deg);padding:6px 0}}
+
+/* ===== Page-specific styles ===== */
+.waterfall-container{position:relative;overflow-x:auto;margin-top:16px}
+.waterfall-header{display:grid;grid-template-columns:200px 1fr;gap:0;margin-bottom:4px;font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.05em}
+.waterfall-header .wh-timeline{display:flex;justify-content:space-between;padding:0 4px;border-bottom:1px solid var(--border);padding-bottom:4px}
+.wf-row{display:grid;grid-template-columns:200px 1fr;gap:0;align-items:center;margin-bottom:3px;cursor:pointer;border-radius:6px;transition:background .1s}
+.wf-row:hover{background:var(--surface-2)}
+.wf-row.selected{background:var(--surface-3)}
+.wf-label{padding:6px 10px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
+.wf-label .indent{display:inline-block}
+.wf-bar-area{position:relative;height:32px;padding:4px}
+.wf-bar{position:absolute;top:6px;height:20px;border-radius:4px;display:flex;align-items:center;padding:0 6px;font-size:11px;font-weight:700;color:#fff;transition:all .3s ease;overflow:hidden;white-space:nowrap;min-width:4px}
+.wf-bar.seg-apigw{background:var(--purple)}
+.wf-bar.seg-lambda{background:var(--accent)}
+.wf-bar.seg-dynamo{background:var(--cyan)}
+.wf-bar.seg-http{background:var(--blue)}
+.wf-bar.seg-err{background:var(--red) !important}
+.wf-bar.seg-init{background:var(--surface-3);border:1px dashed var(--border);color:var(--muted)}
+
+.detail-panel{margin-top:16px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;min-height:80px}
+.detail-panel h3{margin:0 0 12px;font-size:14px;color:var(--accent-soft)}
+
+/* Service Map */
+.svc-map{position:relative;width:100%;height:320px;background:#0a0e13;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}
+.svc-map svg{width:100%;height:100%}
+.svc-node{cursor:pointer;transition:all .2s}
+.svc-node circle{transition:fill .2s,stroke .2s}
+.svc-node text{font-family:var(--sans);font-size:12px;fill:var(--text);text-anchor:middle;pointer-events:none}
+.svc-node .node-label{font-size:11px;fill:var(--muted)}
+.edge-label{font-size:10px;fill:var(--muted);font-family:var(--mono)}
+
+.sampling-bar{height:8px;border-radius:4px;background:var(--surface-3);overflow:hidden;margin-top:6px}
+.sampling-fill{height:100%;border-radius:4px;background:var(--accent);transition:width .3s}
+
+.toggle-fault{display:flex;align-items:center;gap:10px}
+.fault-toggle{position:relative;width:44px;height:24px;cursor:pointer}
+.fault-toggle input{opacity:0;width:0;height:0}
+.fault-slider{position:absolute;inset:0;background:var(--surface-3);border:1px solid var(--border);border-radius:12px;transition:.2s}
+.fault-slider::before{content:"";position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:var(--muted);transition:.2s}
+.fault-toggle input:checked + .fault-slider{background:rgba(248,81,73,.25);border-color:var(--red)}
+.fault-toggle input:checked + .fault-slider::before{background:var(--red);transform:translateX(20px)}
+</style>
+</head>
+<body>
+
+<nav class="topbar" aria-label="サイトナビゲーション">
+  <div class="inner">
+    <div class="brand"><span class="dot"></span>AWS 学習デモ</div>
+    <div class="spacer"></div>
+    <span class="pill accent">Phase 9</span>
+  </div>
+</nav>
+
+<main class="wrap">
+  <div class="eyebrow">Phase 9</div>
+  <h1>X-Ray — 分散トレースを読む</h1>
+  <p class="lead">AWS X-Ray はリクエスト 1 本の旅路をトレースし、複数サービスにまたがるレイテンシとエラーの原因を特定するサービスです。ウォーターフォールとサービスマップで体験しましょう。</p>
+  <div class="badges">
+    <span class="pill">🔍 X-Ray</span>
+    <span class="pill">📊 Trace / Segment</span>
+    <span class="pill">🗺️ Service Map</span>
+  </div>
+
+  <hr class="sep">
+
+  <!-- DEMO CARD 1: Waterfall Timeline -->
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+      <div style="flex:1">
+        <div class="eyebrow" style="margin-bottom:4px">トレース ウォーターフォール</div>
+        <p style="margin:0;font-size:14px;color:var(--muted)">セグメント/サブセグメントを時系列棒グラフで確認。バーをクリックで詳細を表示。</p>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn accent" id="btn-run" aria-label="リクエストを実行してトレースを生成">▶ リクエスト実行</button>
+      <div class="toggle-fault" style="margin-left:8px">
+        <label for="fault-toggle" style="font-size:14px;color:var(--muted)">障害注入 (DynamoDB スロットリング)</label>
+        <label class="fault-toggle">
+          <input type="checkbox" id="fault-toggle" aria-label="DynamoDB スロットリング障害を注入">
+          <span class="fault-slider"></span>
+        </label>
+      </div>
+      <button class="btn ghost" id="btn-reset" style="margin-left:auto">↺ リセット</button>
+    </div>
+
+    <div id="trace-status" style="margin-bottom:10px;font-size:13px;color:var(--muted)">リクエストを実行するとトレースが生成されます</div>
+
+    <div class="waterfall-container" id="waterfall-wrap" aria-label="ウォーターフォールタイムライン">
+      <div class="waterfall-header">
+        <div style="padding:0 10px;padding-bottom:4px;border-bottom:1px solid var(--border)">セグメント</div>
+        <div class="wh-timeline">
+          <span>0 ms</span><span id="wh-mid"></span><span id="wh-end"></span>
+        </div>
+      </div>
+      <div id="waterfall-rows"></div>
+    </div>
+
+    <div class="detail-panel" id="detail-panel">
+      <p style="margin:0;color:var(--muted);font-size:13px">バーをクリックするとセグメントの詳細がここに表示されます</p>
+    </div>
+  </div>
+
+  <!-- DEMO CARD 2: Service Map -->
+  <div class="card">
+    <div class="eyebrow" style="margin-bottom:4px">サービスマップ</div>
+    <p style="margin:0 0 16px;font-size:14px;color:var(--muted)">サービス間の依存関係をグラフで俯瞰。各エッジに平均レイテンシとエラー率を表示。ノードをクリックで詳細。</p>
+
+    <div class="svc-map" id="svc-map" role="img" aria-label="サービスマップ">
+      <svg id="svc-svg" viewBox="0 0 700 300" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+
+    <div class="detail-panel" id="map-detail" style="margin-top:12px">
+      <p style="margin:0;color:var(--muted);font-size:13px">ノードをクリックするとサービス詳細がここに表示されます</p>
+    </div>
+  </div>
+
+  <!-- DEMO CARD 3: Sampling Rate -->
+  <div class="card">
+    <div class="eyebrow" style="margin-bottom:4px">サンプリングレート シミュレーター</div>
+    <p style="margin:0 0 16px;font-size:14px;color:var(--muted)">X-Ray は全リクエストではなく一定割合だけ記録します。スライダーで変化を確認しましょう。</p>
+
+    <div class="controls" style="align-items:flex-start;gap:24px;flex-wrap:wrap">
+      <label class="field" style="flex:1;min-width:180px">
+        サンプリングレート: <strong id="rate-val" style="color:var(--accent)">5%</strong>
+        <input type="range" id="sample-rate" min="1" max="100" value="5" aria-label="サンプリングレートを選択">
+      </label>
+      <label class="field" style="flex:1;min-width:180px">
+        RPS (リクエスト/秒): <strong id="rps-val" style="color:var(--blue)">100</strong>
+        <input type="range" id="rps" min="1" max="1000" value="100" aria-label="RPSを選択">
+      </label>
+    </div>
+
+    <div style="font-size:13px;color:var(--muted);margin-bottom:8px">
+      実際に記録されるリクエスト/秒: <strong id="sampled-rps" style="color:var(--green)">5</strong>
+      &nbsp;/&nbsp; コスト概算: <strong id="cost-est" style="color:var(--yellow)">$0.005</strong>/100万トレース換算
+    </div>
+    <div class="sampling-bar" role="progressbar" aria-valuenow="5" aria-valuemin="0" aria-valuemax="100" id="sample-progress-bar">
+      <div class="sampling-fill" id="sample-fill" style="width:5%"></div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-top:6px">サンプリング割合 (青=記録、灰=スキップ)</div>
+
+    <div style="margin-top:16px;display:flex;flex-wrap:wrap;gap:6px" id="sample-dots" aria-label="サンプリング可視化"></div>
+  </div>
+
+  <!-- Takeaways -->
+  <div class="section-title">学ぶポイント</div>
+  <ul class="takeaways">
+    <li>
+      <b>トレース・セグメント・サブセグメント</b>
+      <span>トレースは 1 リクエストの全体。サービス単位の記録が segment、その下位呼び出し (DB・HTTP) が subsegment に分解される。</span>
+    </li>
+    <li>
+      <b>サンプリングでコスト最適化</b>
+      <span>全リクエストを記録すると費用がかさむため、X-Ray はデフォルトで先頭 1 req/秒 + 5% をサンプリング。レートはルールで調整できる。</span>
+    </li>
+    <li>
+      <b>annotation vs metadata</b>
+      <span>annotation はインデックス化されてコンソールで検索可能。metadata は任意の付帯情報を格納できるが検索対象外。</span>
+    </li>
+    <li>
+      <b>サービスマップでボトルネック特定</b>
+      <span>ノード＋エッジのグラフでエラー源と高レイテンシ箇所を俯瞰し、ウォーターフォールで時系列の内訳を深掘りする。</span>
+    </li>
+  </ul>
+
+  <div class="section-title">正式教材で深掘り</div>
+  <div class="note">
+    このデモの対応教材: <code>docs/learning/phase9/preview-xray.md</code> — セグメント JSON の詳細・サンプリングルール設定・X-Ray SDK の組み込み方を解説しています。
+  </div>
+
+  <div class="footer">
+    ⚠️ これはブラウザ完結のシミュレーションです。実際の AWS X-Ray は呼び出していません。
+  </div>
+</main>
+
+<script>
+// ===== データ定義 =====
+const SEGMENTS_NORMAL = [
+  { id:'apigw',   label:'API Gateway',         depth:0, color:'seg-apigw', start:0,   dur:220, code:200, type:'segment',
+    annotations:{environment:'prod', version:'v2'}, metadata:{requestId:'abc-123', stage:'prod'} },
+  { id:'lambda',  label:'Lambda (handler)',     depth:1, color:'seg-lambda', start:8,   dur:195, code:200, type:'segment',
+    annotations:{function:'get_submissions', coldStart:'false'}, metadata:{memoryLimit:'256MB', region:'ap-northeast-1'} },
+  { id:'init',    label:'Init (cold start)',    depth:2, color:'seg-init',   start:8,   dur:30,  code:'-',  type:'subsegment',
+    annotations:{}, metadata:{runtimeVersion:'python3.12'} },
+  { id:'dynamo',  label:'DynamoDB GetItem',     depth:2, color:'seg-dynamo', start:42,  dur:35,  code:200, type:'subsegment',
+    annotations:{tableName:'Submissions', operation:'GetItem'}, metadata:{consumedCapacity:'1.0 RCU'} },
+  { id:'dynamo2', label:'DynamoDB Query',       depth:2, color:'seg-dynamo', start:82,  dur:58,  code:200, type:'subsegment',
+    annotations:{tableName:'Submissions', operation:'Query'}, metadata:{scannedCount:'12', count:'12'} },
+  { id:'http',    label:'External HTTP (AtCoder)', depth:2, color:'seg-http', start:148, dur:48,  code:200, type:'subsegment',
+    annotations:{url:'atcoder.jp/api', method:'GET'}, metadata:{responseSize:'2048B'} },
+];
+
+const SEGMENTS_FAULT = [
+  { id:'apigw',   label:'API Gateway',         depth:0, color:'seg-apigw', start:0,   dur:380, code:500, type:'segment',
+    annotations:{environment:'prod', version:'v2'}, metadata:{requestId:'def-456', stage:'prod'} },
+  { id:'lambda',  label:'Lambda (handler)',     depth:1, color:'seg-lambda', start:8,   dur:365, code:500, type:'segment',
+    annotations:{function:'get_submissions', coldStart:'false', error:'true'}, metadata:{memoryLimit:'256MB'} },
+  { id:'init',    label:'Init (cold start)',    depth:2, color:'seg-init',   start:8,   dur:30,  code:'-',  type:'subsegment',
+    annotations:{}, metadata:{runtimeVersion:'python3.12'} },
+  { id:'dynamo',  label:'DynamoDB GetItem',     depth:2, color:'seg-dynamo', start:42,  dur:35,  code:200, type:'subsegment',
+    annotations:{tableName:'Submissions', operation:'GetItem'}, metadata:{consumedCapacity:'1.0 RCU'} },
+  { id:'dynamo2', label:'DynamoDB Query (Throttled)', depth:2, color:'seg-err', start:82, dur:270, code:400, type:'subsegment',
+    annotations:{tableName:'Submissions', operation:'Query', error:'ThrottlingException'}, metadata:{retries:'3', backoff:'exponential'} },
+  { id:'http',    label:'External HTTP (AtCoder)', depth:2, color:'seg-http', start:358, dur:18, code:'-',  type:'subsegment',
+    annotations:{url:'atcoder.jp/api', method:'GET', skipped:'true'}, metadata:{note:'skipped due to upstream error'} },
+];
+
+// ===== State =====
+let currentSegments = null;
+let selectedSeg = null;
+let traceGenerated = false;
+let faultMode = false;
+let animStep = 0;
+let animTimer = null;
+
+// ===== Waterfall =====
+function totalDur(segs){ return Math.max(...segs.map(s=>s.start+s.dur)); }
+
+function renderWaterfall(segs, step){
+  const wrap = document.getElementById('waterfall-rows');
+  const total = totalDur(segs);
+  const mid = Math.round(total/2);
+  document.getElementById('wh-mid').textContent = mid + ' ms';
+  document.getElementById('wh-end').textContent = total + ' ms';
+  wrap.innerHTML = '';
+
+  segs.forEach((seg, i) => {
+    const row = document.createElement('div');
+    row.className = 'wf-row' + (selectedSeg === seg.id ? ' selected':'');
+    row.setAttribute('role','button');
+    row.setAttribute('tabindex','0');
+    row.setAttribute('aria-label', seg.label);
+
+    const leftPct  = (seg.start / total) * 100;
+    const widthPct = Math.max((seg.dur / total) * 100, 0.5);
+    const visible = step > i;
+
+    const label = document.createElement('div');
+    label.className = 'wf-label';
+    const indent = document.createElement('span');
+    indent.className = 'indent';
+    indent.style.width = (seg.depth * 16) + 'px';
+    indent.style.display = 'inline-block';
+    label.appendChild(indent);
+
+    const icon = seg.type === 'segment' ? '📦' : '↳';
+    label.innerHTML += `${icon} ${seg.label}`;
+
+    const barArea = document.createElement('div');
+    barArea.className = 'wf-bar-area';
+
+    if(visible){
+      const bar = document.createElement('div');
+      bar.className = 'wf-bar ' + seg.color;
+      bar.style.left = leftPct + '%';
+      bar.style.width = widthPct + '%';
+      const durationLabel = seg.dur >= 20 ? seg.dur + ' ms' : '';
+      bar.textContent = durationLabel;
+      bar.setAttribute('aria-hidden','true');
+      barArea.appendChild(bar);
+    }
+
+    row.appendChild(label);
+    row.appendChild(barArea);
+
+    const onClick = () => {
+      selectedSeg = seg.id;
+      renderWaterfall(segs, animStep);
+      showDetail(seg);
+    };
+    row.addEventListener('click', onClick);
+    row.addEventListener('keydown', e => { if(e.key==='Enter'||e.key===' '){onClick();} });
+    wrap.appendChild(row);
+  });
+}
+
+function showDetail(seg){
+  const panel = document.getElementById('detail-panel');
+  const codeClass = seg.code >= 400 ? 'err' : seg.code === 200 ? 'ok' : 'info';
+  const codeLabel = seg.code === '-' ? '—' : seg.code;
+
+  const annEntries = Object.entries(seg.annotations).map(([k,v])=>
+    `<dt>${k}</dt><dd>${v}</dd>`).join('');
+  const metaEntries = Object.entries(seg.metadata).map(([k,v])=>
+    `<dt>${k}</dt><dd>${v}</dd>`).join('');
+
+  panel.innerHTML = `
+    <h3>${seg.label} <span class="badge ${codeClass}" style="font-size:11px">${seg.type}</span></h3>
+    <div class="kv" style="margin-bottom:12px">
+      <dt>Duration</dt><dd>${seg.dur} ms</dd>
+      <dt>Start offset</dt><dd>${seg.start} ms</dd>
+      <dt>HTTP status</dt><dd><span class="badge ${codeClass}">${codeLabel}</span></dd>
+      <dt>Type</dt><dd>${seg.type}</dd>
+    </div>
+    ${annEntries ? `<div style="margin-bottom:8px"><span class="badge info" style="margin-bottom:6px;display:inline-block">annotations (検索可)</span><dl class="kv">${annEntries}</dl></div>` : ''}
+    ${metaEntries ? `<div><span class="badge warn" style="margin-bottom:6px;display:inline-block">metadata (検索不可)</span><dl class="kv">${metaEntries}</dl></div>` : ''}
+  `;
+}
+
+function animateTrace(segs){
+  clearInterval(animTimer);
+  animStep = 0;
+  renderWaterfall(segs, 0);
+  animTimer = setInterval(()=>{
+    animStep++;
+    renderWaterfall(segs, animStep);
+    if(animStep >= segs.length){ clearInterval(animTimer); }
+  }, 180);
+}
+
+document.getElementById('btn-run').addEventListener('click', ()=>{
+  faultMode = document.getElementById('fault-toggle').checked;
+  const segs = faultMode ? SEGMENTS_FAULT : SEGMENTS_NORMAL;
+  currentSegments = segs;
+  traceGenerated = true;
+  selectedSeg = null;
+  const total = totalDur(segs);
+  const statusEl = document.getElementById('trace-status');
+  const traceId = '1-' + Date.now().toString(16).slice(-8) + '-' + Math.random().toString(16).slice(2,18);
+  const statusClass = faultMode ? '<span style="color:var(--red)">❌ Error (500)</span>' : '<span style="color:var(--green)">✅ OK (200)</span>';
+  statusEl.innerHTML = `Trace ID: <code>${traceId}</code> &nbsp;|&nbsp; 合計時間: <strong>${total} ms</strong> &nbsp;|&nbsp; ステータス: ${statusClass}`;
+  animateTrace(segs);
+  updateServiceMap(faultMode);
+  document.getElementById('detail-panel').innerHTML = '<p style="margin:0;color:var(--muted);font-size:13px">バーをクリックするとセグメントの詳細がここに表示されます</p>';
+});
+
+document.getElementById('btn-reset').addEventListener('click', ()=>{
+  clearInterval(animTimer);
+  currentSegments = null;
+  selectedSeg = null;
+  traceGenerated = false;
+  animStep = 0;
+  document.getElementById('waterfall-rows').innerHTML = '';
+  document.getElementById('trace-status').textContent = 'リクエストを実行するとトレースが生成されます';
+  document.getElementById('wh-mid').textContent = '';
+  document.getElementById('wh-end').textContent = '';
+  document.getElementById('detail-panel').innerHTML = '<p style="margin:0;color:var(--muted);font-size:13px">バーをクリックするとセグメントの詳細がここに表示されます</p>';
+  document.getElementById('fault-toggle').checked = false;
+  updateServiceMap(false);
+});
+
+// ===== Service Map =====
+const NODES = [
+  { id:'client',  label:'Client',       sub:'Internet',      x:70,  y:150 },
+  { id:'apigw',   label:'API Gateway',  sub:'Segment',       x:210, y:150 },
+  { id:'lambda',  label:'Lambda',       sub:'Segment',       x:370, y:150 },
+  { id:'dynamo',  label:'DynamoDB',     sub:'Subsegment',    x:530, y:80  },
+  { id:'http',    label:'AtCoder API',  sub:'Subsegment',    x:530, y:220 },
+];
+
+const EDGES = [
+  { from:'client',  to:'apigw',  latency:8,   errRate:0   },
+  { from:'apigw',   to:'lambda', latency:5,   errRate:0   },
+  { from:'lambda',  to:'dynamo', latency:47,  errRate:0   },
+  { from:'lambda',  to:'http',   latency:48,  errRate:0   },
+];
+
+const EDGES_FAULT = [
+  { from:'client',  to:'apigw',  latency:8,   errRate:0    },
+  { from:'apigw',   to:'lambda', latency:5,   errRate:100  },
+  { from:'lambda',  to:'dynamo', latency:152, errRate:100  },
+  { from:'lambda',  to:'http',   latency:18,  errRate:0    },
+];
+
+function updateServiceMap(isFault){
+  const svg = document.getElementById('svc-svg');
+  svg.innerHTML = '';
+  const edges = isFault ? EDGES_FAULT : EDGES;
+
+  // defs for arrow marker
+  const defs = document.createElementNS('http://www.w3.org/2000/svg','defs');
+  ['normal','err'].forEach(type => {
+    const marker = document.createElementNS('http://www.w3.org/2000/svg','marker');
+    marker.setAttribute('id','arrow-'+type);
+    marker.setAttribute('markerWidth','8');
+    marker.setAttribute('markerHeight','8');
+    marker.setAttribute('refX','6');
+    marker.setAttribute('refY','3');
+    marker.setAttribute('orient','auto');
+    const poly = document.createElementNS('http://www.w3.org/2000/svg','polygon');
+    poly.setAttribute('points','0 0, 8 3, 0 6');
+    poly.setAttribute('fill', type==='err' ? '#f85149' : '#2b3645');
+    marker.appendChild(poly);
+    defs.appendChild(marker);
+  });
+  svg.appendChild(defs);
+
+  // draw edges
+  edges.forEach(e => {
+    const from = NODES.find(n=>n.id===e.from);
+    const to   = NODES.find(n=>n.id===e.to);
+    if(!from||!to) return;
+    const isErr = isFault && e.errRate > 0;
+    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    const scaleX = 1;
+    const fx = from.x * scaleX + 26, fy = from.y;
+    const tx = to.x * scaleX - 26,   ty = to.y;
+    line.setAttribute('x1', fx); line.setAttribute('y1', fy);
+    line.setAttribute('x2', tx); line.setAttribute('y2', ty);
+    line.setAttribute('stroke', isErr ? '#f85149' : '#2b3645');
+    line.setAttribute('stroke-width', isErr ? '2.5' : '1.5');
+    line.setAttribute('marker-end', 'url(#arrow-'+(isErr?'err':'normal')+')');
+    svg.appendChild(line);
+
+    // edge label
+    const mx = (fx+tx)/2, my = (fy+ty)/2 - 8;
+    const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
+    txt.setAttribute('x', mx); txt.setAttribute('y', my);
+    txt.setAttribute('text-anchor','middle');
+    txt.setAttribute('class','edge-label');
+    txt.setAttribute('fill', isErr ? '#f85149' : '#93a1b3');
+    txt.textContent = e.latency+'ms' + (e.errRate > 0 ? ' ⚠️'+e.errRate+'%err' : '');
+    svg.appendChild(txt);
+  });
+
+  // draw nodes
+  NODES.forEach(node => {
+    const isErrNode = isFault && (node.id==='dynamo'||node.id==='lambda'||node.id==='apigw');
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.setAttribute('class','svc-node');
+    g.setAttribute('transform',`translate(${node.x},${node.y})`);
+    g.setAttribute('role','button');
+    g.setAttribute('tabindex','0');
+    g.setAttribute('aria-label',node.label);
+
+    const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    circle.setAttribute('r','26');
+    circle.setAttribute('fill', isErrNode ? 'rgba(248,81,73,.18)' : 'var(--surface-2,#1c2531)');
+    circle.setAttribute('stroke', isErrNode ? '#f85149' : (node.id==='client'?'#2b3645':'#ff9900'));
+    circle.setAttribute('stroke-width', isErrNode ? '2.5' : '1.5');
+    g.appendChild(circle);
+
+    const emoji = {client:'👤', apigw:'🌐', lambda:'λ', dynamo:'🗄️', http:'🌍'}[node.id]||'⬡';
+    const t1 = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t1.setAttribute('y','-6'); t1.setAttribute('text-anchor','middle');
+    t1.setAttribute('font-size','16'); t1.setAttribute('fill','var(--text)');
+    t1.textContent = emoji;
+    g.appendChild(t1);
+
+    const t2 = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t2.setAttribute('y','8'); t2.setAttribute('text-anchor','middle');
+    t2.setAttribute('font-size','10'); t2.setAttribute('fill', isErrNode ? '#f85149' : 'var(--text)');
+    t2.textContent = node.label;
+    g.appendChild(t2);
+
+    const t3 = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t3.setAttribute('y','42'); t3.setAttribute('text-anchor','middle');
+    t3.setAttribute('font-size','10'); t3.setAttribute('fill','#93a1b3');
+    t3.textContent = node.sub;
+    g.appendChild(t3);
+
+    g.addEventListener('click', () => showMapDetail(node, isFault));
+    g.addEventListener('keydown', e => { if(e.key==='Enter'||e.key===' ') showMapDetail(node, isFault); });
+    svg.appendChild(g);
+  });
+}
+
+function showMapDetail(node, isFault){
+  const panel = document.getElementById('map-detail');
+  const isErrNode = isFault && (node.id==='dynamo'||node.id==='lambda'||node.id==='apigw');
+
+  const stats = {
+    client:  { reqCount:1,    okRate:100,  avgLat:'—' },
+    apigw:   { reqCount:1,    okRate: isFault?0:100,  avgLat: isFault?'380ms':'220ms' },
+    lambda:  { reqCount:1,    okRate: isFault?0:100,  avgLat: isFault?'365ms':'195ms' },
+    dynamo:  { reqCount:isFault?4:2, okRate: isFault?25:100, avgLat: isFault?'152ms':'47ms' },
+    http:    { reqCount:1,    okRate:100,  avgLat:'48ms' },
+  }[node.id];
+
+  panel.innerHTML = `
+    <h3>${node.label} ${isErrNode ? '<span class="badge err">ERROR</span>' : '<span class="badge ok">正常</span>'}</h3>
+    <div class="kv">
+      <dt>トレース数</dt><dd>${stats.reqCount}</dd>
+      <dt>成功率</dt><dd><span style="color:${stats.okRate>=100?'var(--green)':'var(--red)'}">${stats.okRate}%</span></dd>
+      <dt>平均レイテンシ</dt><dd>${stats.avgLat}</dd>
+      <dt>タイプ</dt><dd>${node.sub}</dd>
+    </div>
+    ${isErrNode ? '<div style="margin-top:10px;font-size:13px;color:var(--red)">⚠️ このノードでエラーが発生しています。ウォーターフォールで詳細を確認してください。</div>' : ''}
+  `;
+}
+
+// init map
+updateServiceMap(false);
+
+// ===== Sampling Simulator =====
+function updateSampling(){
+  const rate = parseInt(document.getElementById('sample-rate').value);
+  const rps  = parseInt(document.getElementById('rps').value);
+  const sampled = Math.ceil(rps * rate / 100);
+  document.getElementById('rate-val').textContent = rate + '%';
+  document.getElementById('rps-val').textContent  = rps;
+  document.getElementById('sampled-rps').textContent = sampled;
+  const costPer1M = ((sampled / rps) * 0.005).toFixed(4);
+  document.getElementById('cost-est').textContent = '$' + costPer1M;
+  document.getElementById('sample-fill').style.width = rate + '%';
+  const bar = document.getElementById('sample-progress-bar');
+  bar.setAttribute('aria-valuenow', rate);
+
+  // dot visualization (max 50 dots)
+  const container = document.getElementById('sample-dots');
+  container.innerHTML = '';
+  const total = Math.min(rps, 50);
+  const sampledCount = Math.round(total * rate / 100);
+  for(let i = 0; i < total; i++){
+    const dot = document.createElement('div');
+    dot.style.cssText = `width:12px;height:12px;border-radius:50%;background:${i < sampledCount ? 'var(--accent)' : 'var(--surface-3)'};border:1px solid var(--border);flex-shrink:0;transition:background .2s`;
+    dot.setAttribute('title', i < sampledCount ? 'トレース記録' : 'スキップ');
+    container.appendChild(dot);
+  }
+  if(rps > 50){
+    const more = document.createElement('span');
+    more.style.cssText = 'font-size:12px;color:var(--muted);align-self:center;margin-left:4px';
+    more.textContent = `... + ${rps - 50} req`;
+    container.appendChild(more);
+  }
+}
+
+document.getElementById('sample-rate').addEventListener('input', updateSampling);
+document.getElementById('rps').addEventListener('input', updateSampling);
+updateSampling();
+
+// fault toggle auto-runs trace if already generated
+document.getElementById('fault-toggle').addEventListener('change', ()=>{
+  if(traceGenerated){
+    document.getElementById('btn-run').click();
+  }
+});
+</script>
+</body>
+</html>

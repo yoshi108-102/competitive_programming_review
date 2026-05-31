@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SQS — 非同期キューの仕組みを体験 | AWS 学習デモ Phase 3</title>
+<style>
+:root{
+  --bg:#0b0f14; --surface:#141b24; --surface-2:#1c2531; --surface-3:#243042;
+  --border:#2b3645; --text:#e6edf3; --muted:#93a1b3;
+  --accent:#ff9900; --accent-soft:#ffb84d; --cyan:#4dd0e1; --green:#3fb950;
+  --red:#f85149; --yellow:#e3b341; --purple:#bc8cff; --blue:#58a6ff;
+  --radius:14px; --radius-sm:8px; --shadow:0 8px 30px rgba(0,0,0,.35);
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:radial-gradient(1200px 600px at 80% -10%,rgba(255,153,0,.08),transparent),var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
+.wrap{max-width:1080px;margin:0 auto;padding:28px 24px 80px}
+.topbar{position:sticky;top:0;z-index:20;backdrop-filter:blur(10px);background:rgba(11,15,20,.72);border-bottom:1px solid var(--border)}
+.topbar .inner{max-width:1080px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;gap:14px}
+.brand{font-weight:700;letter-spacing:.3px;display:flex;align-items:center;gap:10px}
+.brand .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+.spacer{flex:1}
+.eyebrow{color:var(--accent);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase}
+h1{font-size:clamp(24px,4vw,38px);line-height:1.2;margin:.3em 0 .25em}
+.lead{color:var(--muted);font-size:17px;max-width:72ch}
+.section-title{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:34px 0 12px;font-weight:700}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;box-shadow:var(--shadow)}
+.card + .card{margin-top:18px}
+.grid{display:grid;gap:18px}
+.grid-2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.grid-3{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--surface-3);border:1px solid var(--border);color:var(--text)}
+.pill.accent{background:rgba(255,153,0,.14);border-color:rgba(255,153,0,.4);color:var(--accent-soft)}
+.badge{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px}
+.badge.ok{background:rgba(63,185,80,.15);color:var(--green)}
+.badge.err{background:rgba(248,81,73,.15);color:var(--red)}
+.badge.warn{background:rgba(227,179,65,.15);color:var(--yellow)}
+.badge.info{background:rgba(88,166,255,.15);color:var(--blue)}
+.btn{appearance:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;color:var(--text);background:var(--surface-3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 16px;transition:all .12s ease}
+.btn:hover{border-color:var(--muted)} .btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.accent{background:var(--accent);border-color:var(--accent);color:#1a1206}
+.btn.accent:hover{background:var(--accent-soft)}
+.btn.ghost{background:transparent}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:4px 0 16px}
+label.field{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+input[type=text],input[type=number],select,textarea{font-family:inherit;font-size:14px;color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 11px}
+input[type=range]{accent-color:var(--accent)}
+.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;user-select:none}
+.flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
+.flow-node{flex:1;min-width:120px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center;position:relative;transition:all .2s ease}
+.flow-node.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(255,153,0,.25);background:var(--surface-3)}
+.flow-node.ok{border-color:var(--green)} .flow-node.err{border-color:var(--red)}
+.flow-arrow{display:flex;align-items:center;color:var(--muted);padding:0 8px;font-size:20px}
+.log{font-family:var(--mono);font-size:13px;background:#0a0e13;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;max-height:300px;overflow:auto;white-space:pre-wrap;line-height:1.6}
+.log .l-ok{color:var(--green)} .log .l-err{color:var(--red)} .log .l-warn{color:var(--yellow)} .log .l-info{color:var(--blue)} .log .l-dim{color:var(--muted)}
+code,kbd{font-family:var(--mono);font-size:.92em}
+.kbd{background:var(--surface-3);border:1px solid var(--border);border-bottom-width:2px;border-radius:6px;padding:1px 6px;font-size:12px}
+pre{font-family:var(--mono);font-size:13px;background:#0a0e13;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;overflow:auto}
+pre .hl{background:rgba(255,153,0,.18);display:block;margin:0 -14px;padding:0 14px}
+.takeaways{list-style:none;padding:0;margin:0;display:grid;gap:10px}
+.takeaways li{display:flex;flex-direction:column;gap:3px;background:var(--surface-2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--radius-sm);padding:12px 14px;font-size:14px}
+.takeaways li b{color:var(--accent-soft)}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--border);padding-left:12px;margin:14px 0}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:13px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;font-family:var(--mono)}
+.muted{color:var(--muted)} hr.sep{border:none;border-top:1px solid var(--border);margin:28px 0}
+.footer{color:var(--muted);font-size:13px;margin-top:48px;border-top:1px solid var(--border);padding-top:20px}
+@media (max-width:640px){.flow{flex-direction:column}.flow-arrow{transform:rotate(90deg);padding:6px 0}}
+
+/* ===== Page-specific styles ===== */
+.lanes{display:grid;grid-template-columns:repeat(5,1fr);gap:0;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;min-height:260px}
+.lane{display:flex;flex-direction:column;border-right:1px solid var(--border);background:var(--surface-2)}
+.lane:last-child{border-right:none}
+.lane-header{padding:10px 8px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;text-align:center;border-bottom:1px solid var(--border);background:var(--surface-3);color:var(--muted)}
+.lane-header.producer{color:var(--blue)}
+.lane-header.queue{color:var(--accent)}
+.lane-header.inflight{color:var(--yellow)}
+.lane-header.consumer{color:var(--green)}
+.lane-header.dlq{color:var(--red)}
+.lane-body{flex:1;padding:8px;display:flex;flex-direction:column;gap:6px;min-height:160px;overflow-y:auto}
+.msg-card{position:relative;background:var(--surface-3);border:1px solid var(--border);border-radius:6px;padding:7px 9px;font-size:12px;font-family:var(--mono);cursor:default;transition:all .2s ease}
+.msg-card.new-flash{animation:flash-in .35s ease}
+.msg-card .msg-id{color:var(--muted);font-size:10px}
+.msg-card .msg-body{color:var(--text);margin-top:2px;word-break:break-all}
+.msg-card .recv-badge{font-size:10px;margin-top:4px;color:var(--yellow)}
+.msg-card.inflight-card{border-color:var(--yellow);background:rgba(227,179,65,.07)}
+.msg-card.dlq-card{border-color:var(--red);background:rgba(248,81,73,.07)}
+@keyframes flash-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+
+/* Visibility timeout progress bar */
+.vt-bar-wrap{margin-top:6px;background:var(--surface);border-radius:3px;height:5px;overflow:hidden}
+.vt-bar{height:100%;border-radius:3px;background:var(--yellow);transition:width .25s linear}
+
+/* Toggle (switch) */
+.toggle-wrap{display:flex;align-items:center;gap:10px;font-size:14px}
+.toggle-track{position:relative;display:inline-block;width:42px;height:24px;cursor:pointer}
+.toggle-track input{opacity:0;width:0;height:0;position:absolute}
+.toggle-slider{position:absolute;inset:0;background:var(--surface-3);border:1px solid var(--border);border-radius:999px;transition:.2s}
+.toggle-slider::before{content:"";position:absolute;left:3px;top:3px;width:16px;height:16px;background:var(--muted);border-radius:50%;transition:.2s}
+.toggle-track input:checked + .toggle-slider{background:rgba(255,153,0,.2);border-color:var(--accent)}
+.toggle-track input:checked + .toggle-slider::before{transform:translateX(18px);background:var(--accent)}
+
+.sliders-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+@media(max-width:640px){.sliders-row{grid-template-columns:1fr}.lanes{grid-template-columns:1fr 1fr}}
+.slider-label{font-size:13px;color:var(--muted);margin-bottom:4px}
+.slider-val{font-weight:700;color:var(--accent-soft);font-family:var(--mono)}
+
+.inflight-item{position:relative}
+.action-btns{display:flex;gap:6px;margin-top:5px;flex-wrap:wrap}
+.action-btns .btn{font-size:11px;padding:4px 8px}
+
+.empty-hint{font-size:12px;color:var(--muted);text-align:center;padding:20px 0;opacity:.6}
+
+.fifo-badge{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:rgba(188,140,255,.15);color:var(--purple);margin-left:4px}
+
+.stats-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.stat-box{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 16px;min-width:90px;text-align:center}
+.stat-num{font-size:22px;font-weight:700;font-family:var(--mono);color:var(--accent)}
+.stat-label{font-size:11px;color:var(--muted);margin-top:2px}
+</style>
+</head>
+<body>
+
+<!-- 1. Topbar -->
+<nav class="topbar" role="navigation" aria-label="サイトナビゲーション">
+  <div class="inner">
+    <div class="brand">
+      <span class="dot" aria-hidden="true"></span>
+      AWS 学習デモ
+    </div>
+    <div class="spacer"></div>
+    <span class="pill accent">Phase 3</span>
+  </div>
+</nav>
+
+<!-- 2. Hero -->
+<div class="wrap">
+  <div class="eyebrow">Phase 3</div>
+  <h1>SQS — 非同期キューの仕組みを体験</h1>
+  <p class="lead">Producer がキューにメッセージを積み、Consumer がポーリングで取り出す。可視性タイムアウト・DLQ・FIFO 順序保証を実際に操作して体験しよう。</p>
+  <div class="badges">
+    <span class="pill accent">SQS</span>
+    <span class="pill">非同期処理</span>
+    <span class="pill">DLQ</span>
+    <span class="pill">FIFO</span>
+  </div>
+
+  <hr class="sep">
+
+  <!-- 3. Main demo card -->
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <span style="font-weight:700;font-size:16px">🔄 SQS インタラクティブ・デモ</span>
+      <div class="toggle-wrap" style="margin-left:auto">
+        <label class="toggle-track" for="fifoToggle" title="Standard / FIFO切替">
+          <input type="checkbox" id="fifoToggle" aria-label="FIFOキューを有効にする">
+          <span class="toggle-slider"></span>
+        </label>
+        <span id="queueModeLabel">Standard キュー</span>
+      </div>
+    </div>
+
+    <!-- Sliders -->
+    <div class="sliders-row">
+      <div>
+        <div class="slider-label">可視性タイムアウト: <span class="slider-val" id="vtLabel">10</span> 秒</div>
+        <input type="range" id="vtSlider" min="3" max="30" value="10" step="1" style="width:100%" aria-label="可視性タイムアウト秒数">
+      </div>
+      <div>
+        <div class="slider-label">maxReceiveCount: <span class="slider-val" id="mrcLabel">3</span></div>
+        <input type="range" id="mrcSlider" min="1" max="6" value="3" step="1" style="width:100%" aria-label="最大受信回数">
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-box"><div class="stat-num" id="statQueue">0</div><div class="stat-label">Queue</div></div>
+      <div class="stat-box"><div class="stat-num" id="statInflight">0</div><div class="stat-label">In-flight</div></div>
+      <div class="stat-box"><div class="stat-num" id="statDlq">0</div><div class="stat-label">DLQ</div></div>
+      <div class="stat-box"><div class="stat-num" id="statProcessed">0</div><div class="stat-label">処理済み</div></div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <button class="btn accent" id="btnSend" aria-label="メッセージを送信">📨 メッセージ送信</button>
+      <button class="btn" id="btnPoll" aria-label="キューをポーリング">🔍 ポーリング</button>
+      <button class="btn ghost" id="btnReset" aria-label="状態をリセット">↺ リセット</button>
+    </div>
+
+    <!-- 5 lane diagram -->
+    <div class="lanes" role="region" aria-label="SQS キュー状態図">
+      <div class="lane">
+        <div class="lane-header producer">Producer</div>
+        <div class="lane-body" id="laneProducer">
+          <div class="empty-hint">送信済み</div>
+        </div>
+      </div>
+      <div class="lane">
+        <div class="lane-header queue">Queue</div>
+        <div class="lane-body" id="laneQueue">
+          <div class="empty-hint">空</div>
+        </div>
+      </div>
+      <div class="lane">
+        <div class="lane-header inflight">In-flight</div>
+        <div class="lane-body" id="laneInflight">
+          <div class="empty-hint">処理中なし</div>
+        </div>
+      </div>
+      <div class="lane">
+        <div class="lane-header consumer">Consumer</div>
+        <div class="lane-body" id="laneConsumer">
+          <div class="empty-hint">処理完了なし</div>
+        </div>
+      </div>
+      <div class="lane">
+        <div class="lane-header dlq">DLQ</div>
+        <div class="lane-body" id="laneDlq">
+          <div class="empty-hint">退避なし</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Event log -->
+  <div class="card" style="margin-top:18px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <span style="font-weight:700;font-size:14px">イベントログ</span>
+      <button class="btn ghost" id="btnClearLog" style="font-size:12px;padding:4px 10px;margin-left:auto" aria-label="ログをクリア">クリア</button>
+    </div>
+    <div class="log" id="eventLog" aria-live="polite" aria-label="イベントログ"></div>
+  </div>
+
+  <!-- 4. Learning points -->
+  <div class="section-title">学ぶポイント</div>
+  <ul class="takeaways">
+    <li>
+      <b>疎結合 — バッファとしてのキュー</b>
+      <span>Producer と Consumer を時間的に切り離し、急なスパイクをキューが吸収する。Consumer がダウンしていてもメッセージは失われない。</span>
+    </li>
+    <li>
+      <b>可視性タイムアウト</b>
+      <span>取り出し中のメッセージを他のコンシューマから一時的に隠す時間。処理が長引いてタイムアウトすると、メッセージは Queue に戻り再配信される。</span>
+    </li>
+    <li>
+      <b>at-least-once 配信（最低1回）</b>
+      <span>SQS は重複配信が起こり得る。処理は冪等（idempotent）に設計する必要がある。FIFO キューは exactly-once を保証する。</span>
+    </li>
+    <li>
+      <b>DLQ — デッドレターキュー</b>
+      <span>maxReceiveCount を超えた「毒メッセージ」を退避させ、本線のキューが詰まるのを防ぐ。Standard は順不同・FIFO は順序保証と重複排除付き。</span>
+    </li>
+  </ul>
+
+  <!-- 5. Material path -->
+  <div class="section-title">正式教材で深掘り</div>
+  <p class="note">
+    Phase 3 のプレビュー教材: <code>docs/learning/phase3/preview-sqs.md</code><br>
+    公式ドキュメント: <code>https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/welcome.html</code>
+  </p>
+
+  <!-- 6. Footer -->
+  <div class="footer">
+    ⚠️ これはブラウザ内シミュレーションです。実際の AWS SQS は呼び出していません。タイムアウトや DLQ の挙動はデモ用に簡略化されています。
+  </div>
+</div>
+
+<script>
+// ===========================
+// State
+// ===========================
+let msgCounter = 0;
+let processedCount = 0;
+let isFifo = false;
+let vtSeconds = 10;
+let maxReceiveCount = 3;
+
+// queue: [{id, body, receiveCount, fifoSeq}]
+// inflight: [{id, body, receiveCount, fifoSeq, vtRemain, timer}]
+// dlq, consumer: [{id, body, receiveCount}]
+let queue = [];
+let inflight = [];
+let dlq = [];
+let consumer = [];
+
+// ===========================
+// Elements
+// ===========================
+const laneQueue    = document.getElementById('laneQueue');
+const laneInflight = document.getElementById('laneInflight');
+const laneProducer = document.getElementById('laneProducer');
+const laneConsumer = document.getElementById('laneConsumer');
+const laneDlq      = document.getElementById('laneDlq');
+const eventLog     = document.getElementById('eventLog');
+const btnSend      = document.getElementById('btnSend');
+const btnPoll      = document.getElementById('btnPoll');
+const btnReset     = document.getElementById('btnReset');
+const btnClearLog  = document.getElementById('btnClearLog');
+const vtSlider     = document.getElementById('vtSlider');
+const mrcSlider    = document.getElementById('mrcSlider');
+const vtLabel      = document.getElementById('vtLabel');
+const mrcLabel     = document.getElementById('mrcLabel');
+const fifoToggle   = document.getElementById('fifoToggle');
+const queueModeLabel = document.getElementById('queueModeLabel');
+const statQueue    = document.getElementById('statQueue');
+const statInflight = document.getElementById('statInflight');
+const statDlq      = document.getElementById('statDlq');
+const statProcessed= document.getElementById('statProcessed');
+
+// ===========================
+// Logging
+// ===========================
+function addLog(text, cls) {
+  const ts = new Date().toLocaleTimeString('ja-JP', {hour12:false});
+  const line = document.createElement('div');
+  if (cls) line.className = cls;
+  line.textContent = `[${ts}] ${text}`;
+  eventLog.appendChild(line);
+  eventLog.scrollTop = eventLog.scrollHeight;
+}
+
+// ===========================
+// Render helpers
+// ===========================
+function makeEmptyHint(text) {
+  const d = document.createElement('div');
+  d.className = 'empty-hint';
+  d.textContent = text;
+  return d;
+}
+
+function renderQueueLane() {
+  laneQueue.innerHTML = '';
+  if (queue.length === 0) { laneQueue.appendChild(makeEmptyHint('空')); return; }
+  queue.forEach(msg => {
+    const card = document.createElement('div');
+    card.className = 'msg-card';
+    card.innerHTML = `<div class="msg-id">${msg.id}${isFifo ? `<span class="fifo-badge">#${msg.fifoSeq}</span>` : ''}</div>
+      <div class="msg-body">${msg.body}</div>
+      ${msg.receiveCount > 0 ? `<div class="recv-badge">⚠️ receiveCount: ${msg.receiveCount}</div>` : ''}`;
+    laneQueue.appendChild(card);
+  });
+}
+
+function renderInflightLane() {
+  laneInflight.innerHTML = '';
+  if (inflight.length === 0) { laneInflight.appendChild(makeEmptyHint('処理中なし')); return; }
+  inflight.forEach(msg => {
+    const wrap = document.createElement('div');
+    wrap.className = 'inflight-item';
+    const pct = Math.round((msg.vtRemain / vtSeconds) * 100);
+    wrap.innerHTML = `
+      <div class="msg-card inflight-card">
+        <div class="msg-id">${msg.id}</div>
+        <div class="msg-body">${msg.body}</div>
+        <div class="recv-badge">receiveCount: ${msg.receiveCount} / ${maxReceiveCount}</div>
+        <div class="vt-bar-wrap"><div class="vt-bar" id="bar-${msg.id}" style="width:${pct}%"></div></div>
+        <div class="action-btns">
+          <button class="btn ok-btn" data-id="${msg.id}" aria-label="${msg.id} 処理成功">✅ 処理成功</button>
+          <button class="btn fail-btn" style="color:var(--red)" data-id="${msg.id}" aria-label="${msg.id} 処理失敗">❌ 処理失敗</button>
+        </div>
+      </div>`;
+    laneInflight.appendChild(wrap);
+  });
+
+  laneInflight.querySelectorAll('.ok-btn').forEach(b => b.addEventListener('click', () => handleSuccess(b.dataset.id)));
+  laneInflight.querySelectorAll('.fail-btn').forEach(b => b.addEventListener('click', () => handleFail(b.dataset.id)));
+}
+
+function renderProducerLane() {
+  laneProducer.innerHTML = '';
+  const sent = msgCounter;
+  if (sent === 0) { laneProducer.appendChild(makeEmptyHint('送信済み')); return; }
+  const d = document.createElement('div');
+  d.className = 'msg-card';
+  d.innerHTML = `<div class="msg-body" style="color:var(--muted)">送信済み: ${sent} 件</div>`;
+  laneProducer.appendChild(d);
+}
+
+function renderConsumerLane() {
+  laneConsumer.innerHTML = '';
+  if (consumer.length === 0) { laneConsumer.appendChild(makeEmptyHint('処理完了なし')); return; }
+  consumer.slice(-5).reverse().forEach(msg => {
+    const card = document.createElement('div');
+    card.className = 'msg-card';
+    card.style.borderColor = 'var(--green)';
+    card.innerHTML = `<div class="msg-id">${msg.id}</div><div class="msg-body" style="color:var(--green)">✅ 処理完了</div>`;
+    laneConsumer.appendChild(card);
+  });
+}
+
+function renderDlqLane() {
+  laneDlq.innerHTML = '';
+  if (dlq.length === 0) { laneDlq.appendChild(makeEmptyHint('退避なし')); return; }
+  dlq.forEach(msg => {
+    const card = document.createElement('div');
+    card.className = 'msg-card dlq-card';
+    card.innerHTML = `<div class="msg-id">${msg.id}</div>
+      <div class="msg-body">${msg.body}</div>
+      <div class="recv-badge" style="color:var(--red)">receiveCount: ${msg.receiveCount} ≥ ${maxReceiveCount}</div>`;
+    laneDlq.appendChild(card);
+  });
+}
+
+function renderStats() {
+  statQueue.textContent    = queue.length;
+  statInflight.textContent = inflight.length;
+  statDlq.textContent      = dlq.length;
+  statProcessed.textContent = processedCount;
+}
+
+function renderAll() {
+  renderProducerLane();
+  renderQueueLane();
+  renderInflightLane();
+  renderConsumerLane();
+  renderDlqLane();
+  renderStats();
+}
+
+// ===========================
+// VT bar animation (tick every 500ms)
+// ===========================
+let tickInterval = null;
+function startTick() {
+  if (tickInterval) return;
+  tickInterval = setInterval(() => {
+    if (inflight.length === 0) { clearInterval(tickInterval); tickInterval = null; return; }
+    let changed = false;
+    const expired = [];
+    inflight.forEach(msg => {
+      msg.vtRemain -= 0.5;
+      const bar = document.getElementById(`bar-${msg.id}`);
+      if (bar) {
+        const pct = Math.max(0, Math.round((msg.vtRemain / vtSeconds) * 100));
+        bar.style.width = pct + '%';
+      }
+      if (msg.vtRemain <= 0) { expired.push(msg.id); }
+      changed = true;
+    });
+    expired.forEach(id => handleTimeout(id));
+    if (changed) renderStats();
+  }, 500);
+}
+
+// ===========================
+// Actions
+// ===========================
+const SAMPLE_BODIES = [
+  '注文確定 #order-', '画像リサイズ #img-', 'メール送信 #mail-',
+  'レポート生成 #rpt-', 'データ集計 #agg-', 'ファイル変換 #cvt-'
+];
+
+function handleSend() {
+  msgCounter++;
+  const seq = msgCounter;
+  const bodyBase = SAMPLE_BODIES[(seq - 1) % SAMPLE_BODIES.length];
+  const msg = {
+    id: `msg-${seq.toString().padStart(3,'0')}`,
+    body: bodyBase + seq,
+    receiveCount: 0,
+    fifoSeq: seq
+  };
+  if (isFifo) {
+    // FIFO: deduplicate body — skip if same body already in queue
+    const dup = queue.find(m => m.body === msg.body);
+    if (dup) {
+      addLog(`[FIFO] 重複排除: ${msg.id} は既にキューに存在 → 破棄`, 'l-warn');
+      renderAll();
+      return;
+    }
+    queue.push(msg);
+    addLog(`[SendMessage] ${msg.id} → Queue (FIFO seq #${seq})`, 'l-info');
+  } else {
+    queue.push(msg);
+    addLog(`[SendMessage] ${msg.id} → Queue`, 'l-info');
+  }
+
+  // Flash new card
+  renderAll();
+  const cards = laneQueue.querySelectorAll('.msg-card');
+  if (cards.length > 0) cards[cards.length - 1].classList.add('new-flash');
+}
+
+function handlePoll() {
+  if (queue.length === 0) {
+    addLog('[ReceiveMessage] キューは空です (EmptyBatchResult)', 'l-dim');
+    return;
+  }
+  let msg;
+  if (isFifo) {
+    // FIFO: take front (order guaranteed)
+    msg = queue.shift();
+  } else {
+    // Standard: random pick (simulate non-FIFO)
+    const idx = Math.floor(Math.random() * queue.length);
+    msg = queue.splice(idx, 1)[0];
+  }
+  msg.receiveCount++;
+  msg.vtRemain = vtSeconds;
+  inflight.push(msg);
+  addLog(`[ReceiveMessage] ${msg.id} → In-flight (visibilityTimeout=${vtSeconds}s, receiveCount=${msg.receiveCount})`, 'l-warn');
+  renderAll();
+  startTick();
+}
+
+function handleSuccess(id) {
+  const idx = inflight.findIndex(m => m.id === id);
+  if (idx === -1) return;
+  const [msg] = inflight.splice(idx, 1);
+  consumer.push(msg);
+  processedCount++;
+  addLog(`[DeleteMessage] ${msg.id} → 削除済み (処理成功)`, 'l-ok');
+  renderAll();
+}
+
+function handleFail(id) {
+  const idx = inflight.findIndex(m => m.id === id);
+  if (idx === -1) return;
+  inflight[idx].vtRemain = 0; // force immediate timeout
+  addLog(`[ProcessFail] ${id} 処理失敗 → 可視性タイムアウト強制満了`, 'l-err');
+}
+
+function handleTimeout(id) {
+  const idx = inflight.findIndex(m => m.id === id);
+  if (idx === -1) return;
+  const [msg] = inflight.splice(idx, 1);
+  if (msg.receiveCount >= maxReceiveCount) {
+    dlq.push(msg);
+    addLog(`[DeadLetter] ${msg.id} → DLQ (receiveCount ${msg.receiveCount} ≥ maxReceiveCount ${maxReceiveCount})`, 'l-err');
+  } else {
+    queue.push(msg);
+    addLog(`[VisibilityTimeout] ${msg.id} → Queue に戻る (receiveCount=${msg.receiveCount})`, 'l-warn');
+  }
+  renderAll();
+}
+
+function handleReset() {
+  if (tickInterval) { clearInterval(tickInterval); tickInterval = null; }
+  queue = []; inflight = []; dlq = []; consumer = [];
+  msgCounter = 0; processedCount = 0;
+  addLog('--- リセット ---', 'l-dim');
+  renderAll();
+}
+
+// ===========================
+// Slider + Toggle wiring
+// ===========================
+vtSlider.addEventListener('input', () => {
+  vtSeconds = parseInt(vtSlider.value);
+  vtLabel.textContent = vtSeconds;
+  addLog(`[Config] visibilityTimeout → ${vtSeconds}s`, 'l-dim');
+});
+
+mrcSlider.addEventListener('input', () => {
+  maxReceiveCount = parseInt(mrcSlider.value);
+  mrcLabel.textContent = maxReceiveCount;
+  addLog(`[Config] maxReceiveCount → ${maxReceiveCount}`, 'l-dim');
+  renderAll(); // re-render receive count indicators
+});
+
+fifoToggle.addEventListener('change', () => {
+  isFifo = fifoToggle.checked;
+  queueModeLabel.textContent = isFifo ? 'FIFO キュー' : 'Standard キュー';
+  addLog(`[Config] キューモード → ${isFifo ? 'FIFO (順序保証・重複排除)' : 'Standard (高スループット)'}`, 'l-dim');
+  // Flush inflight on mode change for clarity
+  if (tickInterval) { clearInterval(tickInterval); tickInterval = null; }
+  inflight = [];
+  renderAll();
+});
+
+btnSend.addEventListener('click', handleSend);
+btnPoll.addEventListener('click', handlePoll);
+btnReset.addEventListener('click', handleReset);
+btnClearLog.addEventListener('click', () => { eventLog.innerHTML = ''; });
+
+// ===========================
+// Init
+// ===========================
+addLog('デモ開始。「メッセージ送信」でキューに積み、「ポーリング」で取り出してみよう。', 'l-dim');
+renderAll();
+</script>
+</body>
+</html>

@@ -6,7 +6,7 @@ SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 
 # 目標ターゲットを並べる場所 (PHONY = ファイル生成しない)
-.PHONY: help test build plan apply sync-env destroy tf-validate tf-fmt clean
+.PHONY: help test build plan apply sync-env destroy tf-validate tf-fmt clean demo
 
 .DEFAULT_GOAL := help
 
@@ -112,6 +112,28 @@ sync-env: ## terraform output から frontend/.env.local を生成
 			"$$USER_POOL_ID" "$$CLIENT_ID" "$$API_URL" > $(FRONTEND)/.env.local
 	@echo "Wrote $(FRONTEND)/.env.local:"
 	@cat $(FRONTEND)/.env.local
+
+
+# ===========================================================================
+# AWS 学習デモサイト (Phase ごとに自己完結 HTML)
+# 各 Phase の概念を「触って体験」できるデモ。docs/learning/phaseN/demo/index.html
+# 1 ファイル完結 (CSS/JS インライン) なのでサーバ不要・Phase 間でバグが伝播しない。
+# ===========================================================================
+
+demo: ## Phase デモの開き方を表示 (make demo-phaseN, N=1..10)
+	@echo "AWS 学習デモ — Phase ごとに自己完結 HTML をブラウザで開きます"
+	@echo "  使い方: make demo-phaseN     (N = 1..10)"
+	@echo "  例:     make demo-phase1     # docs/learning/phase1/demo/index.html を開く"
+	@echo
+	@echo "現在あるデモ:"
+	@ls -1 docs/learning/phase*/demo/index.html 2>/dev/null | sed 's/^/  - /' || echo "  (まだありません)"
+
+# Phase ごとのデモを既定ブラウザで開く (例: make demo-phase5)
+demo-phase%:
+	@f="docs/learning/phase$*/demo/index.html"; \
+	 if [ ! -f "$$f" ]; then echo "ERROR: $$f が見つかりません" >&2; exit 1; fi; \
+	 echo "Opening $$f"; \
+	 open "$$f" 2>/dev/null || xdg-open "$$f" 2>/dev/null || echo "手動で開いてください: $$f"
 
 
 # ===========================================================================
