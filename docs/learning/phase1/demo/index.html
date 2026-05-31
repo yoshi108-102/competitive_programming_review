@@ -850,6 +850,33 @@ body {
         <div class="resp-code" id="resp-status">— —</div>
         <div class="resp-body" id="resp-body">リクエスト送信後に表示されます</div>
       </div>
+
+      <style>
+        .bf-wrap{margin-top:20px}
+        .bf-cap{font-size:13px;color:var(--muted,#6b6f76);margin:0 0 9px}
+        .browser-frame{border:1px solid #d9d9d6;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06);background:#fff}
+        .bf-chrome{display:flex;align-items:center;gap:10px;padding:9px 12px;background:#f1f1ee;border-bottom:1px solid #e2e2df}
+        .bf-dots{display:flex;gap:6px;flex:0 0 auto}
+        .bf-dots span{width:11px;height:11px;border-radius:50%;display:block}
+        .bf-dots span:nth-child(1){background:#ff5f57}
+        .bf-dots span:nth-child(2){background:#febc2e}
+        .bf-dots span:nth-child(3){background:#28c840}
+        .bf-addr{flex:1;display:flex;align-items:center;gap:7px;min-width:0;background:#fff;border:1px solid #e2e2df;border-radius:7px;padding:5px 10px;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:#3c4043}
+        .bf-addr.warn{color:#c5221f;border-color:#fbcaca;background:#fff7f7}
+        .bf-addr #bf-url{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+        .bf-lock{flex:0 0 auto}
+        .bf-iframe{width:100%;height:250px;border:0;background:#fff;display:block}
+      </style>
+      <div class="bf-wrap">
+        <p class="bf-cap">⑤ ブラウザでの見え方 — 取得できた文書か、ブロックされたか</p>
+        <div class="browser-frame">
+          <div class="bf-chrome">
+            <div class="bf-dots"><span></span><span></span><span></span></div>
+            <div class="bf-addr" id="bf-addr"><span class="bf-lock" id="bf-lock">🔒</span><span id="bf-url">https://api.example.com/submissions</span></div>
+          </div>
+          <iframe class="bf-iframe" id="bf-doc" title="ブラウザが取得した文書" sandbox=""></iframe>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -937,6 +964,10 @@ make sandbox-down-phase1    # 課金停止（destroy）</div>
   const respOuter  = document.getElementById('resp-outer');
   const respStatus = document.getElementById('resp-status');
   const respBody   = document.getElementById('resp-body');
+  const bfDoc  = document.getElementById('bf-doc');
+  const bfAddr = document.getElementById('bf-addr');
+  const bfUrl  = document.getElementById('bf-url');
+  const bfLock = document.getElementById('bf-lock');
 
   function nodeEl(id) { return document.getElementById('node-' + id); }
   function nsEl(id)   { return document.getElementById('ns-' + id); }
@@ -985,6 +1016,75 @@ make sandbox-down-phase1    # 課金停止（destroy）</div>
     respBody.textContent = body;
   }
 
+  // --- ブラウザフレーム(iframe srcdoc): 取得できた文書 or ブロック画面を可視化 ---
+  function docShell(inner) {
+    return '<!doctype html><html lang="ja"><head><meta charset="utf-8">'
+      + '<style>*{box-sizing:border-box}'
+      + 'body{margin:0;font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;color:#202124;background:#fff}'
+      + '.bar{padding:10px 14px;font:13px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace;color:#fff}'
+      + '.bar.ok{background:#16a34a}.bar.err{background:#c5221f}'
+      + '.body{padding:16px;font:13px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-word;color:#202124}'
+      + '.note{margin:0;padding:11px 14px;background:#f6f6f4;border-top:1px solid #e8e8e6;font:12px/1.6 system-ui,sans-serif;color:#5f6368}'
+      + '.center{min-height:250px;display:flex;align-items:center;justify-content:center;text-align:center;padding:26px}'
+      + '.ic{font-size:46px}.h{font-size:18px;font-weight:700;margin:14px 0 8px}'
+      + '.s{font-size:13px;color:#5f6368;line-height:1.75;max-width:430px;margin:0 auto}'
+      + '.con{margin:18px auto 0;max-width:430px;text-align:left;background:#fff5f5;border:1px solid #fbcaca;border-radius:8px;padding:11px;font:12px/1.6 ui-monospace,monospace;color:#c5221f;white-space:pre-wrap;word-break:break-all}'
+      + 'code{background:#eef0f2;border-radius:4px;padding:1px 5px;font-size:.92em}b{color:#202124}'
+      + '</style></head><body>' + inner + '</body></html>';
+  }
+
+  function buildDoc(kind) {
+    if (kind === 'cors') {
+      return docShell(
+        '<div class="center"><div>'
+        + '<div class="ic">🚫</div>'
+        + '<div class="h">このドキュメントを取得できませんでした</div>'
+        + '<div class="s">ブラウザがレスポンスの<b>読み取り自体を遮断</b>しました。クロスオリジン要求に対しサーバが <code>Access-Control-Allow-Origin</code> を返さなかったため、JavaScript は中身を一切受け取れません。</div>'
+        + '<div class="con">Access to fetch at \'https://api.example.com/submissions\'\nfrom origin \'https://evil.example\' has been blocked by\nCORS policy: No \'Access-Control-Allow-Origin\' header is\npresent on the requested resource.\n\nGET https://api.example.com/submissions net::ERR_FAILED</div>'
+        + '</div></div>'
+      );
+    }
+    if (kind === '401') {
+      return docShell(
+        '<div class="bar err">HTTP/1.1 401 Unauthorized</div>'
+        + '<div class="body">{\n  "message": "Unauthorized"\n}</div>'
+        + '<p class="note">⚠ これは<b>サーバからの応答</b>。CORS ブロックと違い、ブラウザは中身(401 ボディ)を受け取って読めています。エラーでも「文書は届いている」点が CORS との決定的な違い。</p>'
+      );
+    }
+    if (kind === '502') {
+      return docShell(
+        '<div class="bar err">HTTP/1.1 502 Bad Gateway</div>'
+        + '<div class="body">Internal server error\n\n原因: Lambda handler の body が dict のまま返された\n  NG: "body": {"message": "OK"}\n  OK: "body": json.dumps({"message": "OK"})</div>'
+        + '<p class="note">⚠ これも<b>サーバ(API Gateway)からの応答</b>。ブラウザは 502 ボディを受け取れている。CORS の「読み取り遮断」とは別物。</p>'
+      );
+    }
+    return docShell(
+      '<div class="bar ok">HTTP/1.1 201 Created</div>'
+      + '<div class="body">{\n  "message": "保存しました",\n  "pk": "USER#user-abc-123",\n  "sk": "SUBMISSION#abc123"\n}</div>'
+      + '<p class="note">✓ プリフライト通過・JWT OK・body は文字列。ブラウザが正常に文書を受け取れた。</p>'
+    );
+  }
+
+  function setBrowserView(kind) {
+    bfDoc.srcdoc = buildDoc(kind);
+    if (kind === 'cors') {
+      bfAddr.className = 'bf-addr warn';
+      bfLock.textContent = '⚠';
+      bfUrl.textContent = 'https://api.example.com/submissions — net::ERR_FAILED';
+    } else {
+      bfAddr.className = 'bf-addr';
+      bfLock.textContent = '🔒';
+      bfUrl.textContent = 'https://api.example.com/submissions';
+    }
+  }
+
+  function clearBrowserView() {
+    bfDoc.srcdoc = docShell('<div class="center"><div class="s">リクエストを送信すると、ブラウザが受け取った文書（または CORS ブロック画面）がここに表示されます。</div></div>');
+    bfAddr.className = 'bf-addr';
+    bfLock.textContent = '🔒';
+    bfUrl.textContent = 'https://api.example.com/submissions';
+  }
+
   function setPreflight(state, text) {
     preflightBox.className = 'preflight-status' + (state ? ' ' + state : '');
     preflightBox.textContent = text;
@@ -1003,6 +1103,7 @@ make sandbox-down-phase1    # 課金停止（destroy）</div>
     respOuter.className = 'resp-outer';
     respStatus.textContent = '— —';
     respBody.textContent = 'リクエスト送信後に表示されます';
+    clearBrowserView();
     runState.textContent = '';
     btnSend.disabled = false;
   }
@@ -1025,6 +1126,7 @@ make sandbox-down-phase1    # 課金停止（destroy）</div>
     respOuter.className = 'resp-outer';
     respStatus.textContent = '— —';
     respBody.textContent = '処理中...';
+    clearBrowserView();
 
     // Step 0: Browser
     setNode('browser','active','TX...');
@@ -1052,6 +1154,7 @@ make sandbox-down-phase1    # 課金停止（destroy）</div>
       setNode('browser','err','CORS BLK');
       setNode('apigw','err','CORS拒否');
       setResponse('0 (CORS Error)','本リクエストはブラウザがブロックしました\nAccess-Control-Allow-Origin ヘッダが Origin に一致しませんでした','err');
+      setBrowserView('cors');
       runState.textContent = '完了 [CORS ERROR]';
       running = false; btnSend.disabled = false; return;
     }
@@ -1073,6 +1176,7 @@ make sandbox-down-phase1    # 課金停止（destroy）</div>
       appendLog('l-err','[API GW Authorizer] Authorization ヘッダが存在しない → 401');
       appendLog('l-err','→ Lambda は呼び出されない');
       setResponse('401 Unauthorized','{"message": "Unauthorized"}','err');
+      setBrowserView('401');
       runState.textContent = '完了 [401]';
       running = false; btnSend.disabled = false; return;
     }
@@ -1120,6 +1224,7 @@ make sandbox-down-phase1    # 課金停止（destroy）</div>
       setNode('lambda','err','502 MAL');
       setNode('apigw','err','502');
       setResponse('502 Bad Gateway','Internal server error\n\n原因: Lambda handler の body が dict のまま返された\n  NG: "body": {"message": "OK"}\n  OK: "body": json.dumps({"message": "OK"})','err');
+      setBrowserView('502');
       runState.textContent = '完了 [502 MALFORMED]';
     } else {
       appendLog('l-ok','[Lambda] return {"statusCode": 201, "body": json.dumps({"message": "保存しました", ...})}');
@@ -1127,6 +1232,7 @@ make sandbox-down-phase1    # 課金停止（destroy）</div>
       setNode('lambda','ok','201 OK');
       setNode('apigw','ok','201 RESP');
       setResponse('201 Created', JSON.stringify({message:'保存しました',pk:'USER#user-abc-123',sk:'SUBMISSION#abc123'},null,2),'ok');
+      setBrowserView('201');
       appendLog('l-ok','[Browser] レスポンス受信 — 201 Created ✓');
       runState.textContent = '完了 [201 CREATED]';
     }
@@ -1137,6 +1243,8 @@ make sandbox-down-phase1    # 課金停止（destroy）</div>
 
   btnSend.addEventListener('click', simulate);
   btnReset.addEventListener('click', reset);
+
+  clearBrowserView();
 
 })();
 </script>
