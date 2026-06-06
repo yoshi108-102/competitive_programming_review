@@ -6,14 +6,14 @@ S3
 
 ## 教材
 
-- [02-bucket-object-and-flat-keyspace.md](02-bucket-object-and-flat-keyspace.md) — Phase 2 教材: バケット・オブジェクト・フラットなキー空間
-- [03-presigned-url.md](03-presigned-url.md) — Phase 2 教材: プリサインド URL（署名付き一時アクセス）
-- [04-storage-classes-and-lifecycle.md](04-storage-classes-and-lifecycle.md) — Phase 2 教材: ストレージクラスとライフサイクル
-- [05-security-block-public-access-and-encryption.md](05-security-block-public-access-and-encryption.md) — Phase 2 教材: セキュリティ（Block Public Access・暗号化・ポリシー）
-- [06-event-notification-to-lambda.md](06-event-notification-to-lambda.md) — Phase 2 教材: イベント通知（S3 → Lambda / SQS / SNS / EventBridge）
-- [07-versioning-and-consistency.md](07-versioning-and-consistency.md) — Phase 2 教材: バージョニングと整合性モデル
-- [handson.md](handson.md) — Phase 2 ハンズオン — S3 sandbox
-- [preview-s3.md](preview-s3.md) — Phase 2 プレビュー教材: S3 — オブジェクトストレージを触ってみる
+- [Phase 2 教材: バケット・オブジェクト・フラットなキー空間](02-bucket-object-and-flat-keyspace/index.md)
+- [Phase 2 教材: プリサインド URL（署名付き一時アクセス）](03-presigned-url/index.md)
+- [Phase 2 教材: ストレージクラスとライフサイクル](04-storage-classes-and-lifecycle/index.md)
+- [Phase 2 教材: セキュリティ（Block Public Access・暗号化・ポリシー）](05-security-block-public-access-and-encryption/index.md)
+- [Phase 2 教材: イベント通知（S3 → Lambda / SQS / SNS / EventBridge）](06-event-notification-to-lambda/index.md)
+- [Phase 2 教材: バージョニングと整合性モデル](07-versioning-and-consistency/index.md)
+- [Phase 2 ハンズオン — S3 sandbox](handson.md)
+- [Phase 2 プレビュー教材: S3 — オブジェクトストレージを触ってみる](preview-s3.md)
 
 ## ハンズオン — 実 AWS sandbox
 
