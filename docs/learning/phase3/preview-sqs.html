@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 3 教材</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#d97706;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}
+.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;line-height:1.5;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}
+h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}img{max-width:100%}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}
+.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style>
+</head>
+<body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 3 教材 · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Phase 3 プレビュー教材: SQS</h1>
+
+<blockquote>プレビュー教材: デモ体験のために先行生成しました。正式な lesson / 振り返りクイズ / 採点は Phase 3 到達時に実施します。</blockquote>
+
+<hr>
+
+<h2>このサービスは何か</h2>
+
+<p>Amazon Simple Queue Service（SQS）は、フルマネージドのメッセージキューイングサービス。送信側（Producer）と受信側（Consumer）を疎結合にし、メッセージをキューに一時的に蓄える。</p>
+
+<ul>
+  <li><strong>インフラ管理不要</strong>: ブローカーの起動・スケーリング・冗長化は AWS が担う</li>
+  <li><strong>2 種類のキュー</strong>:</li>
+</ul>
+
+<table>
+  <thead>
+    <tr><th>種別</th><th>順序</th><th>重複</th><th>スループット</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Standard Queue</td><td>ベストエフォート（順不同になり得る）</td><td>少なくとも 1 回（重複あり）</td><td>ほぼ無制限</td></tr>
+    <tr><td>FIFO Queue</td><td>厳密な FIFO</td><td>正確に 1 回（重複排除）</td><td>最大 3,000 msg/s（バッチ時）</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>いつ使うか・使わないか</h2>
+
+<p><strong>使うケース</strong></p>
+
+<ul>
+  <li>急なスパイクを吸収するバッファが必要なとき（例: AtCoder の提出が一気に来ても Consumer を詰まらせない）</li>
+  <li>Producer と Consumer の処理速度が異なり、互いに独立してスケールさせたいとき</li>
+  <li>処理失敗メッセージを後から検査・再処理したいとき（DLQ と組み合わせ）</li>
+</ul>
+
+<p><strong>使わないケース</strong></p>
+
+<ul>
+  <li>1 ms 以下のリアルタイム応答が必要（→ ElastiCache / in-process queue を検討）</li>
+  <li>ファンアウト（1 メッセージを複数 Consumer に届けたい）→ SNS → SQS のファンアウト構成か EventBridge を使う</li>
+  <li>購読モデル（Consumer がイベントをプッシュで受け取りたい）→ SNS または EventBridge</li>
+</ul>
+
+<hr>
+
+<h2>コアコンセプト</h2>
+
+<h3>1. メッセージライフサイクル</h3>
+
+<pre><code>Producer → SendMessage → [Queue] → ReceiveMessage → In-flight
+                                                        ↓
+                                            DeleteMessage（処理成功）
+                                                        ↓
+                                    可視性タイムアウト満了（処理失敗/クラッシュ）
+                                                        ↓
+                                             Queue に戻る（再配信）</code></pre>
+
+<h3>2. 可視性タイムアウト（Visibility Timeout）</h3>
+
+<p><code>ReceiveMessage</code> を呼ぶと、そのメッセージは指定秒数だけ他の Consumer から「見えなくなる」。</p>
+
+<ul>
+  <li>デフォルト 30 秒、最大 12 時間</li>
+  <li>Consumer が処理を完了したら必ず <code>DeleteMessage</code> を呼ぶ</li>
+  <li>処理が長引く場合は <code>ChangeMessageVisibility</code> でタイムアウトを延長する</li>
+  <li>タイムアウトが切れると Queue に戻り、<code>ApproximateReceiveCount</code> がインクリメントされる</li>
+</ul>
+
+<h3>3. 最低 1 回配信（at-least-once delivery）</h3>
+
+<p>Standard Queue は同一メッセージが複数回配信される可能性がある。Consumer の処理は <strong>冪等（idempotent）</strong> に設計する必要がある（例: 同じ提出 ID を 2 回処理しても結果が変わらないようにする）。</p>
+
+<p>FIFO Queue は <code>MessageDeduplicationId</code> を使い正確に 1 回を保証する。</p>
+
+<h3>4. デッドレターキュー（DLQ）</h3>
+
+<p><code>maxReceiveCount</code> を超えたメッセージを退避するキュー。</p>
+
+<ul>
+  <li>本 Queue と DLQ は <strong>同じ種別</strong>（Standard → Standard、FIFO → FIFO）でなければならない</li>
+  <li>DLQ に流れたメッセージはアラームで検知し、根本原因を調査してから再処理する</li>
+  <li>DLQ そのものは通常の SQS キューで、ポーリングして中身を確認できる</li>
+</ul>
+
+<h3>5. ポーリングモデル</h3>
+
+<p>SQS はプッシュではなくプル型。Consumer が定期的に <code>ReceiveMessage</code> を呼ぶ。</p>
+
+<ul>
+  <li><strong>ショートポーリング</strong>: 即時に応答（メッセージがなくても空応答）→ API コール数が増えコスト増</li>
+  <li><strong>ロングポーリング</strong>: 最大 20 秒待機してからメッセージ有無を返す → 推奨。<code>WaitTimeSeconds</code> で指定</li>
+</ul>
+
+<hr>
+
+<h2>主要な設定・API・パラメータ</h2>
+
+<h3>キュー属性（よく触る）</h3>
+
+<table>
+  <thead>
+    <tr><th>属性</th><th>デフォルト</th><th>説明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>VisibilityTimeout</code></td><td>30 秒</td><td>In-flight 中に隠す時間</td></tr>
+    <tr><td><code>MessageRetentionPeriod</code></td><td>4 日（最大 14 日）</td><td>Queue に保持する期間</td></tr>
+    <tr><td><code>ReceiveMessageWaitTimeSeconds</code></td><td>0（ショート）</td><td>ロングポーリングの待機秒数（1〜20）</td></tr>
+    <tr><td><code>RedrivePolicy.maxReceiveCount</code></td><td>—</td><td>DLQ 送りになるまでの受信回数</td></tr>
+    <tr><td><code>ContentBasedDeduplication</code></td><td>false</td><td>FIFO 専用: ボディのハッシュで重複排除</td></tr>
+  </tbody>
+</table>
+
+<h3>主要 API</h3>
+
+<pre><code>import boto3
+sqs = boto3.client("sqs", region_name="ap-northeast-1")
+
+# 送信
+sqs.send_message(
+    QueueUrl=QUEUE_URL,
+    MessageBody='{"submission_id": "abc123"}',
+    MessageGroupId="group1",          # FIFO のみ必須
+    MessageDeduplicationId="abc123",  # FIFO のみ（ContentBasedDeduplication=false 時）
+)
+
+# 受信（ロングポーリング）
+resp = sqs.receive_message(
+    QueueUrl=QUEUE_URL,
+    MaxNumberOfMessages=10,           # 最大 10
+    WaitTimeSeconds=20,               # ロングポーリング
+    VisibilityTimeout=60,             # 受信時に上書き可
+)
+
+# 削除
+sqs.delete_message(
+    QueueUrl=QUEUE_URL,
+    ReceiptHandle=msg["ReceiptHandle"],  # 受信時のハンドルが必要
+)</code></pre>
+
+<hr>
+
+<h2>よくある落とし穴・誤解</h2>
+
+<h3>1. DeleteMessage を忘れる</h3>
+<p>処理が終わっても <code>DeleteMessage</code> を呼ばないと、可視性タイムアウト後に再配信される。Consumer のエラーハンドリングで例外が発生した場合は削除しない（再試行させる）ことが正しい。</p>
+
+<h3>2. 可視性タイムアウトを短く設定しすぎる</h3>
+<p>Consumer の平均処理時間より短いと、処理中に他の Consumer が同じメッセージを取得し、二重処理が発生する。タイムアウトは処理時間の余裕を持った値にするか、処理中に定期的に <code>ChangeMessageVisibility</code> で延長する。</p>
+
+<h3>3. Standard / FIFO の混同</h3>
+<p>FIFO キューの URL は <code>.fifo</code> サフィックスを持ち、API 呼び出し時に <code>MessageGroupId</code> が必須。Standard と同じコードで動かすと <code>MissingParameter</code> エラーになる。</p>
+
+<h3>4. DLQ を設定しないと毒メッセージが Queue を詰まらせる</h3>
+<p>繰り返し失敗するメッセージが Queue に留まり続け、Consumer が正常なメッセージを処理できなくなる。本番では必ず DLQ を設定する。</p>
+
+<h3>5. ロングポーリングをデフォルト（0）のままにする</h3>
+<p><code>WaitTimeSeconds=0</code> だとメッセージがなくても即座にレスポンスが返り、ポーリングループが高速で回転して不要な API コストが発生する。<code>WaitTimeSeconds=20</code> に設定するのが推奨。</p>
+
+<hr>
+
+<h2>このプロジェクト（AtCoder 復習）での使いどころ</h2>
+
+<h3>想定シナリオ: 提出履歴の非同期同期</h3>
+
+<pre><code>API GW（Lambda: sync_trigger）
+    │ SendMessage
+    ▼
+SQS: submission-sync-queue
+    │ ReceiveMessage（ロングポーリング）
+    ▼
+Lambda: sync_submissions（atcoder_client → DynamoDB）
+    │ 失敗（レート制限等）
+    ▼
+DLQ: submission-sync-dlq</code></pre>
+
+<ul>
+  <li><strong>AtCoder のレート制限</strong>: AtCoder API が 429 を返した場合、Lambda はメッセージを削除せず終了 → 可視性タイムアウト後にリトライ</li>
+  <li><strong>スパイク吸収</strong>: ユーザーが一斉にページを開いても、Queue がリクエストをバッファし Lambda の同時実行数を抑制</li>
+  <li><strong>DLQ 監視</strong>: CloudWatch アラームで DLQ のメッセージ数 &gt; 0 を検知 → SNS メール通知</li>
+</ul>
+
+<h3>現行実装（Phase 1）との接続点</h3>
+
+<p>Phase 1 では <code>sync_submissions</code> Lambda を API GW から同期呼び出ししている。これを SQS 経由の非同期に切り替えることで:</p>
+<ul>
+  <li>フロントエンドはキューへの投入（即時 200）だけを行い、同期結果をポーリングまたは WebSocket で受け取る</li>
+  <li>Lambda のタイムアウト 29 秒制限に縛られなくなる</li>
+</ul>
+
+<hr>
+
+<h2>デモで体験したこと</h2>
+
+<p><code>docs/learning/phase3/demo/index.html</code> のデモでは、Producer / Queue / In-flight / Consumer / DLQ の 5 レーンを横並びで視覚化している。</p>
+
+<p>「メッセージ送信」ボタンを押すと Queue にカードが積まれ、「ポーリング」で 1 件が In-flight レーンに移動するとともに可視性タイムアウトのカウントバーが減り始める。「処理成功」を押せば <code>DeleteMessage</code> に相当してカードが消え、「処理失敗」のまま放置するとバーが 0 になった瞬間にカードが Queue へ戻り <code>receiveCount</code> が増加する。<code>receiveCount</code> が <code>maxReceiveCount</code> を超えると自動的に DLQ レーンへ移動し、本キューが詰まらない仕組みを目で確認できる。Standard / FIFO トグルを切り替えると、FIFO では投入順にカードが取り出される順序保証が働くことが分かる。</p>
+
+<hr>
+
+<h2>公式ドキュメント（出典）</h2>
+
+<ul>
+  <li>Amazon SQS デベロッパーガイド — ようこそ: <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/welcome.html">https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/welcome.html</a>（閲覧日 2026-05-31）</li>
+  <li>可視性タイムアウト: <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html">https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html</a>（閲覧日 2026-05-31）</li>
+  <li>デッドレターキュー: <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html">https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html</a>（閲覧日 2026-05-31）</li>
+  <li>FIFO キュー: <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/FIFO-queues.html">https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/FIFO-queues.html</a>（閲覧日 2026-05-31）</li>
+</ul>
+
+<hr>
+
+<h2>&#x1F9ED; 関連・発展サービス</h2>
+
+<h3>SNS + SQS ファンアウトパターン</h3>
+
+<p>「1 つの SNS トピックを複数の SQS キューが購読する」構成がファンアウト。同じイベントをメール通知用・DB 書き込み用・分析用など複数の下流へ並列で届けられる。</p>
+
+<pre><code>SNS Topic
+  ├── SQS Queue A → Lambda(メール送信)
+  ├── SQS Queue B → Lambda(DynamoDB 書き込み)
+  └── SQS Queue C → Kinesis Data Firehose → S3(分析)</code></pre>
+
+<p><strong>なぜ SNS から Lambda を直結しないのか</strong>: SNS → Lambda の直接接続は再試行ポリシーが 3 回のみで、Lambda がスロットルすると SNS がメッセージを捨てる。SNS → SQS → Lambda にすれば SQS がバッファになり、スロットル中もメッセージは溜まり安全に再試行できる。これを「SQS で Lambda を保護する」と呼ぶ。</p>
+
+<p><strong>Terraform での SNS → SQS サブスクリプション:</strong></p>
+
+<pre><code>resource "aws_sns_topic_subscription" "to_sqs" {
+  topic_arn            = aws_sns_topic.events.arn
+  protocol             = "sqs"
+  endpoint             = aws_sqs_queue.main.arn
+  raw_message_delivery = true   # SNS エンベロープを外す。false だと body が二重 JSON になる
+}
+
+# SQS キューポリシーにも SNS からの SendMessage を許可する必要がある
+resource "aws_sqs_queue_policy" "allow_sns" {
+  queue_url = aws_sqs_queue.main.id
+  policy = jsonencode({
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "sns.amazonaws.com" }
+      Action    = "sqs:SendMessage"
+      Resource  = aws_sqs_queue.main.arn
+      Condition = { ArnEquals = { "aws:SourceArn" = aws_sns_topic.events.arn } }
+    }]
+  })
+}</code></pre>
+
+<p>つまずきポイント: <code>raw_message_delivery = false</code>(デフォルト)だと SQS の body が SNS エンベロープで包まれた二重 JSON になる。Lambda 側で <code>json.loads(json.loads(record["body"])["Message"])</code> という二重パースが必要になり混乱しやすい。ファンアウト構成では <code>raw_message_delivery = true</code> にしておくのが素直。</p>
+
+<hr>
+
+<h3>EventBridge Pipes — ノーコードのキュー配線</h3>
+
+<p>2022 年 GA の「接続の糊」。SQS → Filter → Enrichment(Lambda/API GW) → Target(Step Functions / EventBridge Bus / Kinesis 等) をコードなしで繋ぐ。</p>
+
+<pre><code>SQS(Source)
+  → [Filter] JSONPath でメッセージを絞り込み
+  → [Enrichment] Lambda で内容補完(オプション)
+  → Target(Step Functions StartExecution, など)</code></pre>
+
+<p><strong>いつ使うか:</strong></p>
+<ul>
+  <li>SQS メッセージを直接 Step Functions に流したいとき(以前は中継 Lambda が必要だった)</li>
+  <li>特定フィールドを持つメッセージだけ下流に通したい(Filter)</li>
+  <li>Lambda を書かずにルーティングを完結させたい</li>
+</ul>
+
+<p><strong>つまずきポイント</strong>: Enrichment Lambda の返り値フォーマットが合わないとサイレントに落ちる。CloudWatch Logs for Pipes を有効化していないとデバッグ不能になる。また 2024 時点で FIFO キューはソースに使えない制限がある。</p>
+
+<hr>
+
+<h3>Lambda イベントソースマッピング — バッチとスケーリングの深掘り</h3>
+
+<pre><code>resource "aws_lambda_event_source_mapping" "sqs_to_consumer" {
+  event_source_arn                   = aws_sqs_queue.main.arn
+  function_name                      = aws_lambda_function.consumer.arn
+  batch_size                         = 10       # 標準キュー: 1〜10000 / FIFO: 1〜10
+  maximum_batching_window_in_seconds = 20       # 最大 300 秒。閑散期のコスト削減に有効
+  function_response_types            = ["ReportBatchItemFailures"]
+
+  scaling_config {
+    maximum_concurrency = 10   # Lambda 同時実行上限。RDS 等の接続数爆発を防ぐ
+  }
+}</code></pre>
+
+<p><strong>スケーリングの仕組み</strong>: Lambda は内部でポーラーを管理し、メッセージが積まれると最初 5 本から始まり 60 秒ごとに最大 300 本まで増える。<code>maximum_concurrency</code> を設定しないと一気にスケールアウトして下流 DB の接続数が爆発する。RDS 連携時は必ず設定する。</p>
+
+<p><strong>バックプレッシャ</strong>: Consumer が遅い場合 <code>ApproximateNumberOfMessagesVisible</code> が増加し続ける。これをアラームで検知し、Producer 側の送信レートを下げる制御がバックプレッシャ。SQS が自然なバッファになることでシステム全体を守る。</p>
+
+<hr>
+
+<h3>FIFO キューと MessageGroupId の設計</h3>
+
+<pre><code>resource "aws_sqs_queue" "fifo_main" {
+  name                        = "${var.prefix}-main.fifo"   # .fifo サフィックス必須
+  fifo_queue                  = true
+  content_based_deduplication = true   # MessageBody の SHA-256 で重複排除
+  kms_master_key_id           = aws_kms_key.sqs.id
+}</code></pre>
+
+<p><code>MessageGroupId</code> を <code>user_id</code> にすると「同一ユーザーの処理は順序通り」が保証できる。GroupId が偏ると(全件が同一 GroupId)スループットが 300 TPS に制限される。分散させると並列処理できるが、GroupId の設計はドメイン分析が必要。</p>
+
+<hr>
+
+<h3>Step Functions 委譲パターン</h3>
+
+<p>Consumer Lambda を「キューからメッセージを取り出して Step Functions を kick するだけ」のシンプルな役割にすると、Lambda の 15 分制限を超える長時間ワークフローを扱える。</p>
+
+<pre><code>import boto3, json, os
+sfn = boto3.client("stepfunctions")
+
+def handler(event, context):
+    for record in event["Records"]:
+        sfn.start_execution(
+            stateMachineArn=os.environ["STATE_MACHINE_ARN"],
+            input=record["body"]
+        )</code></pre>
+
+<hr>
+
+<h2>&#x1F6E1; セキュリティ課題と対策</h2>
+
+<h3>キューポリシーの2層構造と落とし穴</h3>
+
+<p>SQS にはリソースベースポリシー(キューポリシー)と IAM ロールの 2 層がある。クロスアカウントの場合は両方の Allow が必要。同一アカウントでも、キューポリシーが <code>Principal: "*"</code> だと IAM 制御をすり抜けて誰でもアクセスできる。</p>
+
+<p><strong>絶対にやってはいけない例:</strong></p>
+
+<pre><code>{
+  "Effect": "Allow",
+  "Principal": "*",
+  "Action": "sqs:*",
+  "Resource": "*"
+}</code></pre>
+
+<p>これは全世界から全操作を許可するゾンビポリシー。スパム送信やコスト爆発の原因になる。<code>Principal</code> は必ず特定の ARN またはサービスに絞る。</p>
+
+<p><strong>Condition を活用した制限(Confused Deputy 対策):</strong></p>
+
+<pre><code>{
+  "Effect": "Allow",
+  "Principal": { "Service": "lambda.amazonaws.com" },
+  "Action": "sqs:SendMessage",
+  "Resource": "arn:aws:sqs:ap-northeast-1:123456789012:phase3-main",
+  "Condition": {
+    "ArnLike": { "aws:SourceArn": "arn:aws:lambda:...:function:phase3-producer" },
+    "StringEquals": { "aws:SourceAccount": "123456789012" }
+  }
+}</code></pre>
+
+<p><code>aws:SourceAccount</code> を付けることで ARN スプーフィング(Confused Deputy 問題)を緩和できる。</p>
+
+<hr>
+
+<h3>SSE-SQS vs SSE-KMS(CMK) の選択</h3>
+
+<table>
+  <thead>
+    <tr><th></th><th>SSE-SQS</th><th>SSE-KMS(CMK)</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>管理</td><td>AWS が自動</td><td>ユーザーが管理</td></tr>
+    <tr><td>コスト</td><td>無料</td><td>KMS API コール料金($0.03/10000 回)</td></tr>
+    <tr><td>CloudTrail 記録</td><td>なし</td><td>kms:Decrypt 等が記録される</td></tr>
+    <tr><td>クロスアカウント</td><td>不可</td><td>可能(キーポリシー調整)</td></tr>
+    <tr><td>キーローテーション</td><td>AWS 管理</td><td>年次自動 or 手動</td></tr>
+  </tbody>
+</table>
+
+<p>sandbox では CMK を使い「KMS コストと CloudTrail ログ」を実体験する。本番でも個人情報・決済情報は CMK 必須、内部通知程度なら SSE-SQS で十分。</p>
+
+<p><strong>CMK コスト計算の勘所</strong>: 送受信 1000 件/日なら <code>GenerateDataKey</code> 1000 + <code>Decrypt</code> 1000 = 2000 コール/日 → 月 60000 コール → $0.18/月。SQS 本体コスト($0.40/百万)より KMS が高くなるケースは稀だが、大量送信時は試算する。</p>
+
+<p><strong>SSE-KMS を使う場合の IAM 忘れがち項目:</strong></p>
+<ul>
+  <li>Producer ロール: <code>kms:GenerateDataKey</code>(書き込み暗号化) + <code>kms:Decrypt</code></li>
+  <li>Consumer ロール: <code>kms:Decrypt</code>(読み取り復号)</li>
+  <li>どちらかを忘れると <code>KMS.KmsDisabledException</code> または <code>AccessDenied</code> が発生する</li>
+</ul>
+
+<hr>
+
+<h3>毒メッセージ(Poison Message)対策と DLQ 運用</h3>
+
+<p>Consumer が特定メッセージを永遠に処理できない場合、<code>maxReceiveCount</code> 回失敗後に DLQ へ退避される。DLQ のメッセージを分析して原因を修正してから redrive(再送)する運用が必要。</p>
+
+<p><strong>DLQ のメッセージを本体キューに redrive:</strong></p>
+
+<pre><code>aws sqs start-message-move-task \
+  --source-arn "arn:aws:sqs:ap-northeast-1:123456789012:phase3-dlq" \
+  --destination-arn "arn:aws:sqs:ap-northeast-1:123456789012:phase3-main" \
+  --max-number-of-messages-per-second 5   # 本体への負荷を制御</code></pre>
+
+<p><strong>注意</strong>: redrive したメッセージは <code>ReceiveCount</code> がリセットされない。DLQ 調査中に receive されていると <code>maxReceiveCount</code> に達してすぐ再 DLQ される場合がある。修正が確実なときだけ redrive する。</p>
+
+<p><strong>DLQ アラーム設定(実運用の最低ライン):</strong></p>
+
+<pre><code>resource "aws_cloudwatch_metric_alarm" "dlq_visible" {
+  alarm_name          = "${var.prefix}-dlq-messages"
+  namespace           = "AWS/SQS"
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  dimensions          = { QueueName = aws_sqs_queue.dlq.name }
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  statistic           = "Maximum"
+  alarm_description   = "DLQ にメッセージが入った = 処理失敗発生"
+}</code></pre>
+
+<p>DLQ が無音のままメッセージで埋まるのは最悪のパターン。1 件でも入ったらアラームを上げる。</p>
+
+<hr>
+
+<h3>冪等処理の実装</h3>
+
+<p>Standard Queue は「少なくとも 1 回配信」なので同じメッセージが複数回届く可能性がある。Consumer は冪等でなければならない。</p>
+
+<p><strong>DynamoDB 条件付き Put でアトミックな重複排除:</strong></p>
+
+<pre><code>from botocore.exceptions import ClientError
+import boto3, json, time
+
+dynamodb = boto3.resource("dynamodb")
+dedup = dynamodb.Table("phase3-dedup")
+
+def handler(event, context):
+    for record in event["Records"]:
+        msg_id = record["messageId"]
+        try:
+            dedup.put_item(
+                Item={"message_id": msg_id, "ttl": int(time.time()) + 86400},
+                ConditionExpression="attribute_not_exists(message_id)"
+            )
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
+                print(f"Duplicate {msg_id}, skipping")
+                continue
+            raise
+        # メイン処理
+        process(json.loads(record["body"]))</code></pre>
+
+<p><code>ConditionExpression</code> で「insert か skip か」をアトミックに判定できる。複数 Lambda が同時に同じメッセージを処理しようとするレースコンディションに対応できる。TTL を設定してテーブルを肥大化させないことも重要。</p>
+
+<hr>
+
+<h3>VPC エンドポイントによるパブリック通信の遮断</h3>
+
+<p>Lambda を VPC 内に置き、SQS VPC エンドポイント経由でアクセスするとトラフィックがパブリックインターネットに出ない。</p>
+
+<pre><code>resource "aws_vpc_endpoint" "sqs" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.aws_region}.sqs"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = aws_subnet.private[*].id
+  security_group_ids  = [aws_security_group.sqs_endpoint.id]
+  private_dns_enabled = true
+}</code></pre>
+
+<p>トレードオフ: Lambda の VPC 配置はコールドスタートが増える(ENI 割り当て時間)。セキュリティ要件が厳しい場合のみ採用し、SnapStart や Provisioned Concurrency と組み合わせて緩和する。</p>
+
+<hr>
+
+<h2>&#x1F3D7; インフラ応用パターン</h2>
+
+<h3>疎結合とバックプレッシャの実践</h3>
+
+<p><strong>密結合(悪い例):</strong></p>
+
+<pre><code>API Gateway → Lambda(同期) → 外部 API(遅い/不安定)</code></pre>
+
+<p>外部 API が遅いと Lambda がタイムアウト → API Gateway が 504 → ユーザーはエラー。</p>
+
+<p><strong>疎結合(SQS で解決):</strong></p>
+
+<pre><code>API Gateway → Lambda(Producer, 即時 202 Accepted)
+                    ↓ SendMessage
+              SQS キュー
+                    ↓ ReceiveMessage
+              Lambda(Consumer, 非同期) → 外部 API をゆっくり叩く</code></pre>
+
+<p>ユーザーへの即時応答と実処理を分離。EC サイトの注文受付、画像処理、メール送信など「すぐ返事して後で処理」できるものはすべて候補になる。フロントエンドはステータスをポーリングまたは WebSocket で受け取る設計にする。</p>
+
+<hr>
+
+<h3>DLQ + Redrive の運用自動化フロー</h3>
+
+<pre><code>DLQ にメッセージが入る
+→ CloudWatch Alarm (Visible &gt;= 1, period=300)
+→ SNS → Lambda(アラートハンドラ)
+→ Slack 通知 + Jira チケット自動作成
+→ オンコール担当が DLQ を調査(原因特定・修正)
+→ aws sqs start-message-move-task で redrive</code></pre>
+
+<p>この一連の流れを自動化することで「DLQ が静かに埋まる」事故を防ぐ。SNS → Lambda のアラートハンドラは <code>boto3.client("sqs").receive_message</code> で DLQ の最初の数件を取得してサンプルをメッセージに含めると調査が速い。</p>
+
+<hr>
+
+<h3>FIFO + MessageGroupId で注文状態遷移を順序保証</h3>
+
+<p>EC サイトの注文状態遷移:</p>
+
+<pre><code>注文作成 → 在庫引当 → 決済 → 配送手配</code></pre>
+
+<p><code>order_id</code> を <code>MessageGroupId</code> にした FIFO キューで処理すると「同一注文の処理は必ず順序通り」が保証できる。異なる注文は別 GroupId なので並列処理できる。</p>
+
+<p><strong>高スループットモード(3000 TPS 対応):</strong></p>
+
+<pre><code>resource "aws_sqs_queue" "orders_fifo" {
+  name                         = "${var.prefix}-orders.fifo"
+  fifo_queue                   = true
+  deduplication_scope          = "messageGroup"
+  fifo_throughput_limit        = "perMessageGroupId"
+  # この2つのセットで高スループットモード有効化
+  content_based_deduplication  = true
+  kms_master_key_id            = aws_kms_key.sqs.id
+}</code></pre>
+
+<p>通常 FIFO の上限は 300 TPS。大規模 EC では高スループットモードで 3000 TPS まで引き上げる。GroupId の分散設計(ユーザー ID や注文 ID など)が前提条件。</p>
+
+<hr>
+
+<h3>コスト最適化の勘所</h3>
+
+<table>
+  <thead>
+    <tr><th>最適化ポイント</th><th>具体的な設定</th><th>効果</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Long Polling</td><td><code>ReceiveMessageWaitTimeSeconds = 20</code></td><td>空 poll を削減、API コスト削減</td></tr>
+    <tr><td>バッチ送信</td><td><code>send_message_batch</code>(最大 10 件 / API コール)</td><td>コスト最大 1/10</td></tr>
+    <tr><td>バッチ受信</td><td><code>batch_size = 10</code> + バッチウィンドウ</td><td>Lambda 起動コスト削減</td></tr>
+    <tr><td>SSE-SQS</td><td>小規模なら CMK → SSE-SQS に変更</td><td>KMS コスト節約</td></tr>
+    <tr><td>メッセージサイズ削減</td><td>大ペイロードは S3 に置いて URL だけ SQS に流す</td><td>256KB 制限の回避</td></tr>
+  </tbody>
+</table>
+
+<p><strong>S3 Extended Client パターン(256KB を超えるペイロード):</strong></p>
+
+<pre><code>import boto3, json, uuid
+
+s3  = boto3.client("s3")
+sqs = boto3.client("sqs")
+BUCKET = "phase3-payloads"
+
+def send_large_message(queue_url: str, payload: dict):
+    key = f"payloads/{uuid.uuid4()}.json"
+    s3.put_object(Bucket=BUCKET, Key=key, Body=json.dumps(payload))
+    sqs.send_message(
+        QueueUrl=queue_url,
+        MessageBody=json.dumps({"s3_bucket": BUCKET, "s3_key": key})
+    )
+
+def receive_large_message(record: dict) -&gt; dict:
+    ref = json.loads(record["body"])
+    obj = s3.get_object(Bucket=ref["s3_bucket"], Key=ref["s3_key"])
+    return json.loads(obj["Body"].read())</code></pre>
+
+<p>注意点: S3 オブジェクトのライフサイクルポリシーを設定して、処理後に自動削除しないとストレージが肥大化する。</p>
+
+<hr>
+
+<h3>Lambda 同時実行制御でダウンストリームを守る</h3>
+
+<p>Consumer Lambda がスケールアウトしすぎると RDS・Redis・外部 API への同時接続が爆発する。</p>
+
+<pre><code># イベントソースマッピングで同時実行を制限
+resource "aws_lambda_event_source_mapping" "sqs_to_consumer" {
+  event_source_arn = aws_sqs_queue.main.arn
+  function_name    = aws_lambda_function.consumer.arn
+  batch_size       = 10
+
+  scaling_config {
+    maximum_concurrency = 10   # 同時実行 Lambda 数の上限
+  }
+
+  function_response_types = ["ReportBatchItemFailures"]
+}</code></pre>
+
+<p><code>maximum_concurrency</code> を設定すると、Lambda はそれ以上スケールしない代わりに SQS にメッセージが溜まる。この溜まりを <code>ApproximateNumberOfMessagesVisible</code> で監視し、Consumer 処理の遅延や異常を検知する。SQS がバッファとして機能するため、メッセージはロストしない。</p>
+
+<hr>
+
+<p><strong>公式ドキュメント(発展節)</strong></p>
+
+<ul>
+  <li>SNS ファンアウト: <a href="https://docs.aws.amazon.com/sns/latest/dg/sns-sqs-as-subscriber.html">https://docs.aws.amazon.com/sns/latest/dg/sns-sqs-as-subscriber.html</a></li>
+  <li>EventBridge Pipes: <a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-pipes.html">https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-pipes.html</a></li>
+  <li>Lambda × SQS イベントソースマッピング: <a href="https://docs.aws.amazon.com/lambda/latest/dg/with-sqs.html">https://docs.aws.amazon.com/lambda/latest/dg/with-sqs.html</a></li>
+  <li>SQS FIFO 高スループットモード: <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/high-throughput-fifo.html">https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/high-throughput-fifo.html</a></li>
+  <li>SQS セキュリティベストプラクティス: <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-security-best-practices.html">https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-security-best-practices.html</a></li>
+  <li>KMS + SQS: <a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-server-side-encryption.html">https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-server-side-encryption.html</a></li>
+</ul>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase3</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase3</span></li>
+<li><b>負荷生成</b> — メッセージ送信（一部は故意に失敗させ DLQ へ）<span class="cmd">make sandbox-load-phase3</span></li>
+<li><b>観測</b> — キュー深さ/滞留時間/送受信数/DLQ（--period 300）<span class="cmd">make sandbox-watch-phase3</span><div class="tstamp">⏱ キュー系は5分粒度 → load 後 5 分待つ</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase3</span></li>
+</ol>
+<p class="note warn">⚠ KMS を使う Phase は destroy 後も 7 日間の削除保留期間がある（ごく僅かな残コスト）。</p>
+</section>
+<div class="foot">← <a href="index.html">Phase 3 ルーター</a> ／ <a href="main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main>
+</body>
+</html>

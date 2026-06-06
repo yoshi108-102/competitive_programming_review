@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 7 教材</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#0891b2;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}
+.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;line-height:1.5;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}
+h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}img{max-width:100%}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}
+.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style>
+</head>
+<body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 7 教材 · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Phase 7 プレビュー教材: EventBridge — スケジュール &amp; イベントバス</h1>
+
+<blockquote>プレビュー教材: デモ体験のために先行生成しました。正式な lesson / 振り返りクイズ / 採点は Phase 7 到達時に実施します。</blockquote>
+
+<hr>
+
+<h2>このサービスは何か</h2>
+
+<p>Amazon EventBridge は、<strong>イベント駆動アーキテクチャ</strong>を実現するサーバーレスのイベントバスサービスです。大きく 2 つの機能を持ちます。</p>
+
+<table>
+<thead>
+<tr><th>機能</th><th>概要</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>EventBridge (イベントバス)</strong></td><td>AWS サービス・独自アプリ・SaaS が発行するイベントをルールでフィルタし、複数ターゲットへ配信する疎結合ハブ</td></tr>
+<tr><td><strong>EventBridge Scheduler</strong></td><td>cron/rate 式や 1 回限り(one-time)のスケジュールで Lambda・SQS 等を呼び出す専用スケジューラ</td></tr>
+</tbody>
+</table>
+
+<p>2 つは独立したサービスですが、どちらも「<strong>ポーリング不要</strong>」「<strong>Lambda や Step Functions を直接ターゲットに指定できる</strong>」という共通思想を持ちます。</p>
+
+<hr>
+
+<h2>いつ使うか・使わないか</h2>
+
+<h3>使う場面</h3>
+
+<ul>
+<li><strong>定期バッチ処理</strong>: 毎朝 9 時に AtCoder 提出データを同期する Lambda を起動したい</li>
+<li><strong>AWS サービス間連携</strong>: S3 にファイルがアップロードされたら Lambda を呼ぶ</li>
+<li><strong>マイクロサービス間の疎結合通知</strong>: 提出ステータス変化を他サービスへブロードキャストしたい</li>
+<li><strong>SaaS イベント連携</strong>: GitHub / Datadog 等の外部 SaaS からのイベントを受信して処理したい</li>
+</ul>
+
+<h3>使わない場面</h3>
+
+<ul>
+<li>リクエスト/レスポンスが必要な<strong>同期 API 呼び出し</strong> → API Gateway + Lambda</li>
+<li>メッセージの<strong>順序保証・FIFO</strong>が必要 → SQS FIFO</li>
+<li>大量ストリームの<strong>連続処理</strong> → Kinesis Data Streams</li>
+</ul>
+
+<hr>
+
+<h2>コアコンセプト</h2>
+
+<h3>イベントバス側</h3>
+
+<pre><code>発行者 (Producer)
+  └─ PutEvents API → イベントバス → ルール (EventPattern 評価)
+                                        ├─ 一致 → ターゲット A (Lambda)
+                                        ├─ 一致 → ターゲット B (SQS)
+                                        └─ 不一致 → ドロップ (デフォルト)</code></pre>
+
+<ul>
+<li><strong>イベントバス</strong>: デフォルトバス(AWS サービス用)と、自前の<strong>カスタムバス</strong>を作れる</li>
+<li><strong>ルール</strong>: イベントパターンまたはスケジュール式を持つ。1 バスに複数ルールを設定可</li>
+<li><strong>ターゲット</strong>: 1 ルールにつき最大 5 ターゲット(Lambda, SQS, Step Functions, SNS 等)</li>
+</ul>
+
+<h3>Scheduler 側</h3>
+
+<pre><code>スケジュール (cron/rate/one-time)
+  └─ 発火時刻 → フレキシブルタイムウィンドウ → ターゲット呼び出し</code></pre>
+
+<ul>
+<li><strong>EventBridge ルールのスケジュール</strong>とは別サービス。タイムゾーン指定・フレキシブルウィンドウ・1 回限り実行が可能</li>
+<li><strong>フレキシブルタイムウィンドウ</strong>: 指定分の幅でランダムに分散発火させ、同時実行スパイクを平滑化</li>
+</ul>
+
+<hr>
+
+<h2>主要な設定・API・パラメータ</h2>
+
+<h3>スケジュール式</h3>
+
+<pre><code># rate 式
+rate(5 minutes)     # 5分ごと
+rate(1 hour)        # 1時間ごと
+
+# cron 式 (EventBridge は 6 フィールド、タイムゾーンは UTC)
+cron(分 時 日 月 曜日 年)
+cron(0 9 * * ? *)   # 毎日 09:00 UTC
+cron(0 0 1 * ? *)   # 毎月1日 00:00 UTC</code></pre>
+
+<blockquote><strong>注意</strong>: EventBridge の cron は Unix cron と異なり <strong>6 フィールド</strong>（末尾に年フィールドあり）。曜日と日を同時に <code>*</code> にはできない — どちらか一方を <code>?</code> にする。</blockquote>
+
+<h3>イベントパターン</h3>
+
+<pre><code class="language-json">{
+  "source": ["atcoder"],
+  "detail-type": ["submission"],
+  "detail": {
+    "result": ["AC"]
+  }
+}</code></pre>
+
+<ul>
+<li>トップレベルフィールド: <code>source</code> / <code>detail-type</code> / <code>detail</code> / <code>account</code> / <code>region</code> 等</li>
+<li>配列の値は <strong>OR 条件</strong>。複数フィールドは <strong>AND 条件</strong></li>
+<li><code>detail</code> 内はネスト可能。<code>prefix</code>, <code>numeric</code>, <code>exists</code> 等の<strong>コンテンツフィルタリング</strong>が使える</li>
+</ul>
+
+<h3>PutEvents (SDK 例)</h3>
+
+<pre><code class="language-python">import boto3
+
+client = boto3.client("events")
+client.put_events(
+    Entries=[
+        {
+            "Source": "atcoder",
+            "DetailType": "submission",
+            "Detail": '{"problem_id": "abc001_a", "result": "AC"}',
+            "EventBusName": "my-custom-bus",
+        }
+    ]
+)</code></pre>
+
+<h3>Terraform リソース (主要)</h3>
+
+<pre><code class="language-hcl">resource "aws_cloudwatch_event_rule" "daily_sync" {
+  name                = "daily-sync"
+  schedule_expression = "cron(0 9 * * ? *)"
+}
+
+resource "aws_cloudwatch_event_target" "sync_lambda" {
+  rule = aws_cloudwatch_event_rule.daily_sync.name
+  arn  = aws_lambda_function.sync.arn
+}</code></pre>
+
+<blockquote>EventBridge の Terraform リソース名は <code>aws_cloudwatch_event_*</code> (旧 CloudWatch Events の名残)。Scheduler は <code>aws_scheduler_schedule</code>。</blockquote>
+
+<hr>
+
+<h2>よくある落とし穴・誤解</h2>
+
+<table>
+<thead>
+<tr><th>落とし穴</th><th>正しい理解</th></tr>
+</thead>
+<tbody>
+<tr><td>cron の曜日フィールドに <code>*</code> を使う</td><td>日フィールドが <code>*</code> のとき曜日は <code>?</code> にしなければならない (逆も然り)</td></tr>
+<tr><td>デフォルトバスに PutEvents を送ればルールが動く</td><td>カスタムバスを使う場合はルールの <code>event_bus_name</code> を明示しないとデフォルトバスにルーティングされない</td></tr>
+<tr><td>イベントパターン不一致はエラーになる</td><td>静かにドロップされるだけ。CloudWatch Metrics の <code>FailedInvocations</code> / <code>MatchedEvents</code> で確認する</td></tr>
+<tr><td>EventBridge = CloudWatch Events</td><td>旧称。現在の正式名は EventBridge だが Terraform リソース名は旧名のまま</td></tr>
+<tr><td>Scheduler と EventBridge ルールのスケジュールは同じ</td><td>Scheduler は別サービス。タイムゾーン・1 回限り・フレキシブルウィンドウ対応という優位点がある</td></tr>
+<tr><td>Lambda ターゲットへの権限は自動付与</td><td>EventBridge が Lambda を呼ぶには <code>aws_lambda_permission</code> (resource-based policy) の明示的な付与が必要</td></tr>
+</tbody>
+</table>
+
+<hr>
+
+<h2>このプロジェクト(AtCoder復習)での使いどころ</h2>
+
+<h3>1. 定期同期ジョブ (Scheduler)</h3>
+
+<p>毎朝 9 時 JST (= 0 時 UTC) に <code>sync_submissions</code> Lambda を起動して AtCoder の提出を取得する。</p>
+
+<pre><code>EventBridge Scheduler
+  cron(0 0 * * ? *)  [UTC]
+    └─ sync_submissions Lambda</code></pre>
+
+<p>Scheduler を選ぶ理由: タイムゾーンを Asia/Tokyo で直接指定できるため、UTC 変換ミスを防げる。</p>
+
+<h3>2. 提出完了イベントの疎結合配信 (イベントバス)</h3>
+
+<p>将来的にリアルタイム解析や Slack 通知を加えたい場合、Lambda が直接 Slack を叩くのではなく、カスタムバスへ <code>submission.completed</code> イベントを発行する設計にしておくと、ターゲットの追加・削除がルール変更だけで済む。</p>
+
+<pre><code>sync_submissions Lambda
+  PutEvents → custom-bus
+    └─ ルール (source=atcoder, detail-type=submission.completed)
+         ├─ notify_slack Lambda
+         └─ update_stats Lambda  ← 後から追加しやすい</code></pre>
+
+<hr>
+
+<h2>デモで体験したこと</h2>
+
+<p><code>docs/learning/phase7/demo/index.html</code> の 2 カードデモでは以下を確認できます。</p>
+
+<p><strong>(1) スケジューラカード</strong>: <code>rate(5 minutes)</code> や <code>cron(0 9 * * ? *)</code> を入力欄に打ち込むと、仮想時計がティックして式を評価し、一致タイミングで Lambda アイコンが点灯・<code>.log</code> に発火記録が追記されます。次回発火予定 5 件が常に表示されるため、cron の曜日/日フィールドの <code>?</code> の扱いや UTC 換算を目で追って確認できます。</p>
+
+<p><strong>(2) イベントバスカード</strong>: JSON でイベントパターン（<code>{"source":["atcoder"],"detail-type":["submission"]}</code>）を設定し、<code>source</code> / <code>detail-type</code> / <code>detail</code> を持つサンプルイベントを「発行」すると、パターン一致なら <code>.flow-node.ok</code> が光ってターゲットへルーティング、不一致なら <code>.badge.warn</code> が表示されてドロップされる様子が視覚的に分かります。フィールドの書き間違い一つで静かにドロップされる動作を体感することが、本番での <code>MatchedEvents</code> メトリクス監視の重要性を直感させます。</p>
+
+<hr>
+
+<h2>公式ドキュメント（出典）</h2>
+
+<ul>
+<li><a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-what-is.html">https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-what-is.html</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/scheduler/latest/UserGuide/what-is-scheduler.html">https://docs.aws.amazon.com/scheduler/latest/UserGuide/what-is-scheduler.html</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-create-rule-schedule.html">https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-create-rule-schedule.html</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-event-patterns.html">https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-event-patterns.html</a>（閲覧日 2026-05-31）</li>
+</ul>
+
+<hr>
+
+<h2>関連・発展サービス</h2>
+
+<h3>EventBridge Pipes — ポーリング型ソースとルールを繋ぐ隠れた名機</h3>
+
+<p>2022年末 GA の Pipes は「Source → (Filter) → (Enrichment) → Target」をマネージドに繋ぐサービス。最大の特徴は <strong>SQS・DynamoDB Streams・Kinesis・Kafka MSK などのポーリング型ソース</strong> を EventBridge のルール/ターゲット機構と組み合わせられる点にある。</p>
+
+<p><strong>なぜ必要か</strong>: 従来、SQS キューを Lambda で処理するには Event Source Mapping か、Lambda 内でポーリングループを自前実装するかしかなかった。Pipes を使うと、SQS からメッセージを取り出し → コンテンツベースフィルタリングで不要なメッセージを除去 → Step Functions や Lambda へ渡す、という流れをコードなしで繋げる。</p>
+
+<p><strong>いつ使うか</strong>: SQS 内のメッセージを「金額 &gt; 5000 のものだけ Lambda で処理したい」「DynamoDB Streams の INSERT イベントだけ下流に流したい」といった条件フィルタが必要な場面。</p>
+
+<p><strong>つまずきポイント</strong>: Pipe の <code>filter_criteria</code> で弾かれたメッセージは <strong>そのままソースから消える</strong>。SQS なら visibility timeout 後に再表示されるので再処理できるが、DynamoDB Streams は一方通行なので取り返しがつかない。まずフィルタなしで動作確認し、段階的に条件を絞る手順が必須。</p>
+
+<pre><code class="language-bash"># SQS に送る → Pipe でフィルタ → Lambda が起動することを確認
+aws sqs send-message \
+  --queue-url https://sqs.ap-northeast-1.amazonaws.com/123456789012/phase7-pipe-source \
+  --message-body '{"amount": 9999}'   # フィルタ通過
+
+aws sqs send-message \
+  --queue-url https://sqs.ap-northeast-1.amazonaws.com/123456789012/phase7-pipe-source \
+  --message-body '{"amount": 100}'    # フィルタで落ちる → Lambda 起動なし</code></pre>
+
+<hr>
+
+<h3>EventBridge Scheduler — cron の完全置換候補</h3>
+
+<p>従来の EventBridge <code>cron()</code> ルールはデフォルトバス限定・UTC 固定・1回限り発火不可。Scheduler はこれらをすべて解消した専用サービス。</p>
+
+<p><strong>主な優位点</strong>:</p>
+<ul>
+<li><strong>タイムゾーン指定</strong>: <code>schedule_expression_timezone = "Asia/Tokyo"</code> で UTC 変換ミスを根絶</li>
+<li><strong>1 回限り発火</strong>: <code>at(2024-12-31T23:59:00)</code> — 過去日付は即無効化されるので安全</li>
+<li><strong>Flexible Time Window</strong>: <code>mode = "FLEXIBLE", maximum_window_in_minutes = 15</code> で発火を±15分に分散させ、同時実行スパイクを平滑化</li>
+<li><strong>Schedule Group</strong>: グループ単位でライフサイクル管理。不要になったスケジュール群をまとめて削除できる</li>
+<li><strong>Fargate タスクを直接ターゲット指定可能</strong>: Lambda タイムアウト上限 15 分を超えるバッチジョブは ECS Fargate をターゲットにする</li>
+</ul>
+
+<p><strong>実務ユースケース</strong>: 月次レポート生成 Lambda、試用期限 n 日前通知、セール開始フック、バッチ ETL。「cron を Lambda で再実装するな、Scheduler に任せろ」が 2023年以降の定石。</p>
+
+<p><strong>必須セット</strong>: DLQ + retry_policy を必ず一緒に設定すること。発火失敗時の通知経路がないと障害に気づけない。</p>
+
+<pre><code class="language-hcl"># Confused Deputy 対策: Scheduler ロールに aws:SourceAccount 条件を付ける
+assume_role_policy = jsonencode({
+  Statement = [{
+    Principal = { Service = "scheduler.amazonaws.com" }
+    Action    = "sts:AssumeRole"
+    Condition = {
+      StringEquals = { "aws:SourceAccount" = data.aws_caller_identity.me.account_id }
+    }
+  }]
+})</code></pre>
+
+<hr>
+
+<h3>Schema Registry — イベント契約の可視化と型安全な SDK 生成</h3>
+
+<p>EventBridge のカスタムバスに流れるイベントのスキーマを自動検出・登録する機能。有効化すると AWS が OpenAPI 3 / JSONSchema Draft 4 形式で自動生成し、Python/Java/TypeScript/Go の型付き SDK バインディングをダウンロードできる。</p>
+
+<p><strong>なぜ重要か</strong>: イベント駆動アーキテクチャでチームが増えると「どのサービスがどんな形のイベントを流しているか」の把握が困難になる。Schema Registry はこの「イベント契約」をコードとして管理する場所になる。</p>
+
+<pre><code class="language-bash"># スキーマを確認
+aws schemas describe-schema \
+  --registry-name phase7-registry \
+  --schema-name "com.example.orders@order.created"
+
+# SDK バインディング(Python)をダウンロード
+aws schemas get-code-binding-source \
+  --registry-name phase7-registry \
+  --schema-name "com.example.orders@order.created" \
+  --language Python36 \
+  --output text &gt; order_created_schema.zip</code></pre>
+
+<p><strong>つまずき</strong>: Schema Discovery は <strong>別途有効化が必要</strong> (<code>aws events put-discovery-configuration</code>)。有効中は1イベントスキーマ更新ごとに課金が発生する。本番では Discovery を常時 ON にせず、開発バスで学習 → 本番バスにスキーマを手動登録する運用が多い。</p>
+
+<hr>
+
+<h3>Archive &amp; Replay — タイムマシン機能</h3>
+
+<p>アーカイブされたイベントを任意の過去時刻から再流し(リプレイ)できる。<strong>本番障害後に Lambda のバグを修正 → 失われたイベントを再処理</strong> というユースケースで真価を発揮する。</p>
+
+<pre><code class="language-bash"># リプレイ実行例
+aws events start-replay \
+  --replay-name "fix-bug-20260531" \
+  --source-arn arn:aws:events:ap-northeast-1:123456789012:archive/phase7-archive \
+  --event-start-time "2026-05-31T00:00:00Z" \
+  --event-end-time   "2026-05-31T12:00:00Z" \
+  --destination '{"Arn": "arn:aws:events:ap-northeast-1:123456789012:event-bus/phase7-bus"}'</code></pre>
+
+<p><strong>注意点</strong>:</p>
+<ul>
+<li>リプレイ中のイベントには <code>replay-name</code> フィールドが付与される。Lambda 内でこれを検出してべき等性チェックに使える</li>
+<li>リプレイ速度はコントロール不可(最速)なので、下流の DynamoDB/RDS がスロットリングしないか事前確認が必要</li>
+<li>アーカイブはカスタムバスのみ。デフォルトバスは Archive 非対応</li>
+</ul>
+
+<hr>
+
+<h3>SaaS パートナーイベント — Webhook サーバー不要の外部 SaaS 連携</h3>
+
+<p>Salesforce / GitHub / Zendesk / Datadog / Auth0 などが EventBridge パートナーとして SaaS イベントを直接プッシュする仕組み。SaaS 側でパートナーイベントソースを有効化すると、AWS コンソールに <code>aws.partner/salesforce.com/xxx</code> のようなイベントソースが出現し、カスタムバスに関連付けて通常のルールでフィルタできる。</p>
+
+<p><strong>つまずき</strong>: パートナーイベントソースの <strong>削除は SaaS 側からしか行えない</strong>。Terraform で <code>aws_cloudwatch_event_bus</code> を destroy しても SaaS 側の接続が残る場合があり、再 apply でコンフリクトが起きることがある。</p>
+
+<hr>
+
+<h3>API Destinations — Lambda を挟まず外部 HTTP を直接呼ぶ</h3>
+
+<p>Lambda を挟まず HTTP エンドポイントに POST できる機能。認証方式は BASIC / OAuth / API Key に対応し、接続情報は <code>aws_cloudwatch_event_connection</code> で管理される(接続情報は Secrets Manager に自動保存)。</p>
+
+<p><strong>実務</strong>: Slack Webhook / PagerDuty / Jira への通知を Lambda なしで繋ぐ。Input Transformer でペイロードを変換してから送信できるので、Lambda で変換ロジックを書く必要もない。スループット上限はデフォルト <strong>300 TPS / Destination</strong>。</p>
+
+<hr>
+
+<h2>セキュリティ課題と対策</h2>
+
+<h3>イベントバスのリソースポリシー — 最も見落とされる設定</h3>
+
+<p>デフォルトのカスタムバスはリソースポリシーなし = <strong>同一アカウント内の全 Principal が PutEvents 可能</strong>。意図せぬイベント送信を許してしまう。</p>
+
+<p><strong>対策</strong>: <code>aws_cloudwatch_event_bus_policy</code> で送信元を明示的に制限する。</p>
+
+<pre><code class="language-json">{
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": {
+      "AWS": "arn:aws:iam::123456789012:role/order-service-role"
+    },
+    "Action": "events:PutEvents",
+    "Resource": "arn:aws:events:ap-northeast-1:123456789012:event-bus/phase7-bus",
+    "Condition": {
+      "StringEquals": {
+        "aws:SourceVpc": "vpc-0123456789abcdef0"
+      }
+    }
+  }]
+}</code></pre>
+
+<p>ロール単位に絞り、さらに <code>aws:SourceVpc</code> 条件でオンプレ VPC からのみ許可するパターンが本番では多い。</p>
+
+<hr>
+
+<h3>クロスアカウントイベント配信 — 落とし穴と対策</h3>
+
+<p>Account A のバスから Account B のバスへイベントを送る手順:</p>
+<ol>
+<li>Account B のバスにリソースポリシーで Account A を <code>Allow</code></li>
+<li>Account A の送信ロールに <code>events:PutEvents</code> 権限を付与</li>
+</ol>
+
+<p><strong>落とし穴 1: Archive はクロスアカウントに追従しない</strong>。Account A で Archive を設定しても、Account B に届いたイベントはアーカイブされない。リプレイが必要な場合は各アカウントでアーカイブを設定する。</p>
+
+<p><strong>落とし穴 2: KMS クロスアカウント</strong>。KMS 暗号化をクロスアカウントで使う場合は送信元アカウントの KMS キーポリシーに宛先アカウントの Principal を追加する必要がある。これを忘れると <code>AccessDeniedException</code> で詰まる。</p>
+
+<pre><code class="language-json">{
+  "Sid": "AllowCrossAccountEB",
+  "Effect": "Allow",
+  "Principal": { "AWS": "arn:aws:iam::ACCOUNT-B:root" },
+  "Action": ["kms:GenerateDataKey", "kms:Decrypt"],
+  "Resource": "*"
+}</code></pre>
+
+<hr>
+
+<h3>Lambda ターゲットの最小権限 IAM — source_arn 条件の必要性</h3>
+
+<p>EventBridge が Lambda を呼ぶ際は IAM ロールではなく <strong>Lambda のリソースポリシー</strong> (<code>aws_lambda_permission</code>) を使う。<code>source_arn</code> 条件を付けないと、同じバス内の別のルールからも同じ Lambda を呼べてしまう。</p>
+
+<pre><code class="language-hcl">resource "aws_lambda_permission" "allow_eb_processor" {
+  statement_id  = "AllowEventBridgeInvokeProcessor"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.processor.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.processor.arn  # ← 必須
+}</code></pre>
+
+<p>Step Functions / SQS / SNS をターゲットにする場合は Lambda と異なり <strong>IAM ロール</strong> が必要になる。そのロールの Trust Policy に <code>events.amazonaws.com</code> を Principal として設定し、さらに <code>aws:SourceAccount</code> 条件で Confused Deputy を防ぐ。</p>
+
+<hr>
+
+<h3>KMS 暗号化の注意点</h3>
+
+<p>カスタムバスの KMS 暗号化は 2023年後半に GA。以下の点が引っかかりやすい。</p>
+
+<table>
+<thead>
+<tr><th>注意点</th><th>詳細</th></tr>
+</thead>
+<tbody>
+<tr><td>デフォルトバスは KMS 不可</td><td>AWS サービスイベント(<code>aws.events</code> ソース)はデフォルトバス経由なので KMS 暗号化できない。暗号化したい場合はカスタムバスへルーティングを挟む必要がある</td></tr>
+<tr><td>KMS キーポリシー必須</td><td><code>events.amazonaws.com</code> に <code>kms:GenerateDataKey</code> と <code>kms:Decrypt</code> を付与しないと PutEvents が <code>KMSInvalidKeyUsage</code> で失敗する</td></tr>
+<tr><td>Archive も同じ KMS で暗号化</td><td>アーカイブされたイベントも同じキーで暗号化される。キーを rotate/削除すると古いアーカイブのリプレイが失敗する</td></tr>
+<tr><td>削除保留 7 日</td><td><code>terraform destroy</code> 後もキーは 7 日間保留状態。同名で再作成するとコンフリクト</td></tr>
+</tbody>
+</table>
+
+<hr>
+
+<h3>Confused Deputy 問題 — Scheduler の IAM ロール設計</h3>
+
+<p>EventBridge Scheduler の IAM ロールに <code>aws:SourceAccount</code> 条件を付けることで、他アカウントが同じ Lambda ARN を使って Scheduler の IAM ロールを悪用する攻撃（Confused Deputy）を防ぐ。</p>
+
+<pre><code class="language-hcl"># iam.tf 内の Scheduler ロール Trust Policy
+Condition = {
+  StringEquals = {
+    "aws:SourceAccount" = data.aws_caller_identity.me.account_id
+  }
+}</code></pre>
+
+<p>これはサンドボックスの <code>main.tf</code> に実装済み。実務では <code>aws:SourceArn</code> まで絞るとより厳密になる。</p>
+
+<hr>
+
+<h3>DLQ メッセージの内容分析</h3>
+
+<p>DLQ に届いたメッセージには EventBridge が付与するメタデータが含まれる。<code>requestContext.condition</code> が <code>RedrivePolicy</code> であれば最終リトライ失敗、<code>ErrorCode</code> と <code>ErrorMessage</code> でエラー種別を特定できる。</p>
+
+<pre><code class="language-bash"># DLQ のメッセージを受信して確認
+aws sqs receive-message \
+  --queue-url $(terraform -chdir=terraform/sandboxes/phase7 output -raw dlq_url) \
+  --attribute-names All \
+  --message-attribute-names All \
+  --query 'Messages[0].Body' \
+  --output text | python3 -m json.tool</code></pre>
+
+<p>CloudWatch Logs Insights で Lambda のログとクロス照合すれば根本原因を特定できる。</p>
+
+<hr>
+
+<h2>インフラ応用パターン</h2>
+
+<h3>コレオグラフィ vs オーケストレーション — EventBridge と Step Functions の使い分け</h3>
+
+<p>EventBridge はコレオグラフィ(各サービスがイベントを聞いて自律的に動く)の基盤として最適。対してオーケストレーション(中央指揮者がフローを制御)は Step Functions の領域。</p>
+
+<p><strong>コレオグラフィが向く場面</strong>: <code>order.created</code> を在庫サービス・通知サービス・分析サービスが独立して購読する場合。イベント発行側を変更せずに購読者を追加できる。デメリットは全体フローが追いにくく、トラブルシュートが難しいこと。</p>
+
+<p><strong>オーケストレーションが向く場面</strong>: 決済フロー(与信 → 決済 → 在庫確保 → 配送依頼)のように順序保証・補償トランザクション(Saga パターン)が必要な場合。</p>
+
+<p><strong>実務でよくある 2 層構造</strong>:</p>
+<pre><code>EventBridge (非同期ファンアウト)
+  ├─► Step Functions A (注文オーケストレーション)
+  ├─► Step Functions B (在庫オーケストレーション)
+  └─► Lambda (通知・分析)</code></pre>
+
+<hr>
+
+<h3>ファンアウトパターン — SNS vs EventBridge</h3>
+
+<pre><code>order.created
+  ├─► Rule A → Lambda (在庫更新)
+  ├─► Rule B → Lambda (メール送信)
+  ├─► Rule C → SQS (非同期集計キュー)
+  └─► Rule D → Step Functions (配送フロー)</code></pre>
+
+<p><strong>SNS ファンアウトとの最大の違い</strong>: EventBridge はコンテンツベースフィルタリング(<code>detail.amount &gt; 10000</code> など)ができる。SNS はメッセージ属性フィルタのみ。複雑な条件分岐は EventBridge が圧倒的に有利。</p>
+
+<pre><code class="language-json">// EventBridge ルールのコンテンツフィルタリング例
+{
+  "source": ["com.example.orders"],
+  "detail": {
+    "amount": [{ "numeric": ["&gt;", 10000] }],
+    "region": [{ "prefix": "JP-" }]
+  }
+}</code></pre>
+
+<hr>
+
+<h3>cron 置換パターン — Jenkins/EC2 cron からの移行</h3>
+
+<p>EC2 上の Jenkins や cron ジョブを Scheduler + Lambda に移行する際の標準設計:</p>
+
+<pre><code>Scheduler (JST 指定)
+  └─► Lambda (ETL ジョブ、最大 15 分)
+       ├─► S3 (処理済みファイル)
+       └─► EventBridge custom bus
+            └─► Rule → SNS (完了通知)
+                       └─► 運用チーム</code></pre>
+
+<p><strong>15 分を超えるジョブ</strong>: ECS Fargate を Scheduler のターゲットに直接指定できる。コンテナタスクに任意の処理時間を割り当てられる。</p>
+
+<pre><code class="language-hcl">target {
+  arn      = "arn:aws:ecs:ap-northeast-1:123456789012:cluster/batch-cluster"
+  role_arn = aws_iam_role.scheduler.arn
+
+  ecs_parameters {
+    task_definition_arn = aws_ecs_task_definition.etl.arn
+    launch_type         = "FARGATE"
+    network_configuration {
+      subnets          = var.private_subnet_ids
+      security_groups  = [aws_security_group.batch.id]
+      assign_public_ip = false
+    }
+  }
+}</code></pre>
+
+<hr>
+
+<h3>DLQ パターンの完全形 — 運用まで含めた設計</h3>
+
+<pre><code>put-events
+  └─► EventBridge Rule
+       ├─► Lambda (成功)
+       └─► (失敗) retry × 2
+            └─► DLQ (SQS)
+                 └─► CloudWatch Alarm (ApproximateNumberOfMessages &gt; 0)
+                      └─► SNS トピック → PagerDuty / Slack
+                           └─► 運用者が原因調査 → 手動 or 自動リドライブ</code></pre>
+
+<p>DLQ メッセージを確認して Lambda バグを修正したら、<strong>Archive &amp; Replay</strong> で元のカスタムバスに再流しするか、DLQ の <code>StartMessageMoveTask</code> API でリドライブする。どちらの方法を使うかはイベントの形式とターゲットのべき等性設計による。</p>
+
+<hr>
+
+<h3>EventBridge + API Gateway — サーバーレス Webhook 受信</h3>
+
+<p>外部 SaaS の Webhook を受けるパターン:</p>
+
+<pre><code>外部 SaaS
+  └─► API Gateway (署名検証 / 認証)
+       └─► EventBridge PutEvents (API Gateway 直接統合)
+            └─► Lambda / Step Functions</code></pre>
+
+<p>API Gateway の直接統合 (Integration Type: AWS) で <code>events:PutEvents</code> を呼べる。Lambda を経由しないのでコールドスタートレイテンシがゼロになり、コストも削減できる。ただし API Gateway の Integration Request で EventBridge の入力形式にマッピングする必要がある(Mapping Template または VTL)。</p>
+
+<pre><code># API Gateway → EventBridge の Integration Request (VTL 例)
+#set($context.requestOverride.header.X-Amz-Target = "AmazonEventBridge.PutEvents")
+{
+  "Entries": [{
+    "EventBusName": "phase7-bus",
+    "Source": "external.webhook",
+    "DetailType": "WebhookReceived",
+    "Detail": $input.json('$')
+  }]
+}</code></pre>
+
+<hr>
+
+<h3>マルチリージョン冗長 — 現時点の制約と回避策</h3>
+
+<p>EventBridge はクロスリージョンの直接ルーティングに <strong>2025年時点では非対応</strong>。間に Lambda または API Destinations を挟む必要がある。</p>
+
+<pre><code>us-east-1 bus
+  └─► Rule → Lambda (リージョン転送用)
+       └─► boto3 client("events", region_name="ap-northeast-1")
+            └─► ap-northeast-1 bus</code></pre>
+
+<p>または API Destinations で宛先リージョンの EventBridge エンドポイントを HTTP で直接呼ぶ方法もある。AWS がネイティブのクロスリージョン転送を開発中との情報があり、GA されれば Lambda を挟む必要がなくなる。</p>
+
+<hr>
+
+<h3>このプロジェクト(AtCoder復習)での応用イメージ</h3>
+
+<pre><code>sync_submissions Lambda (Scheduler 毎日 JST 9:00 起動)
+  └─► PutEvents → custom-bus
+       ├─► Rule: submission.completed, result=AC
+       │    └─► Rule A → update_stats Lambda (解法カテゴリ集計)
+       │    └─► Rule B → notify Lambda → Slack (AC 通知)
+       └─► Rule: submission.completed, result!=AC
+            └─► Rule C → weak_point Lambda (苦手問題記録)
+
+Archive (30日保持)
+  └─► バグ修正後に過去 AC データを再処理 → 統計再計算</code></pre>
+
+<p>サービス追加は EventBridge ルールを1行追加するだけで済み、<code>sync_submissions</code> 本体を変更する必要がない。疎結合の恩恵を直感できる構造。</p>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase7</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase7</span></li>
+<li><b>負荷生成</b> — put-events で即時発火（rate(1 minute) も併用）<span class="cmd">make sandbox-load-phase7</span></li>
+<li><b>観測</b> — ルール発火数/失敗数/ターゲット Lambda<span class="cmd">make sandbox-watch-phase7</span><div class="tstamp">⏱ rate は初回発火まで最大 60 秒</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase7</span></li>
+</ol>
+<p class="note warn">⚠ rate(1 minute) ルールは放置で毎分課金 → 観測後すぐ destroy。<br>KMS を使う Phase は destroy 後も 7 日間の削除保留期間がある（ごく僅かな残コスト）。</p>
+</section>
+<div class="foot">← <a href="index.html">Phase 7 ルーター</a> ／ <a href="main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main>
+</body>
+</html>

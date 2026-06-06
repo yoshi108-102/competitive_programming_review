@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 教材</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}
+.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;line-height:1.5;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}
+h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}img{max-width:100%}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}
+.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style>
+</head>
+<body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 教材 · <a href="../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>DynamoDB = 分散ハッシュテーブルという視点</h1>
+
+<h2>概要</h2>
+
+<p>DynamoDB を「分散ハッシュテーブル（Distributed Hash Table, DHT）」として捉え直すメンタルモデルをまとめる。データ構造的な見方（ハッシュマップ + パーティション内ソート構造）を握ると、DynamoDB の制約（PK完全一致のみ、JOIN不可、集計苦手、GSIがコピー、など）がすべて「ハッシュテーブルの性質」から自然に導けるようになる。</p>
+
+<p>RDB との比較で押さえた「アクセスパターン駆動設計」「非正規化」「GSIの存在意義」といった知識を、より下位の<strong>アルゴリズム/データ構造レベルで一貫して説明</strong>できる視点。</p>
+
+<h2>解説</h2>
+
+<h3>1. DynamoDB のデータ構造的な正体</h3>
+
+<p>競プロ風に C++ で書くなら以下の構造:</p>
+
+<pre><code class="language-cpp">// 各サーバー上の構造
+map&lt;string /* PK (hash) */, map&lt;string /* SK */, Item&gt;&gt; partition;
+
+// ただしPKは直接hashされて「どのサーバーに置くか」も決まる
+// → unordered_map&lt;PK, map&lt;SK, Item&gt;&gt; が物理的に複数サーバーに分散</code></pre>
+
+<p>つまり:</p>
+
+<ul>
+  <li><strong>PK 空間</strong> = <code>unordered_map</code>（ハッシュで分散、完全一致のみ、O(1)）</li>
+  <li><strong>同じPK内のSK空間</strong> = <code>map</code>（ソート済み、範囲クエリOK、O(log n)）</li>
+</ul>
+
+<p>「永続化されて、分散されている巨大なハッシュテーブル」という一言で表せる。</p>
+
+<h3>2. 制約の正体が全て説明できる</h3>
+
+<table>
+  <thead>
+    <tr><th>DynamoDBの制約</th><th>ハッシュテーブル的な理由</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PKは <code>=</code> 完全一致のみ</td><td>ハッシュ関数で分散してるので、範囲検索はハッシュ値空間上で意味がない</td></tr>
+    <tr><td>PKの値は変更不可</td><td>値を変えるとハッシュ値が変わる → 置き場所が変わる → 実質削除＋再挿入</td></tr>
+    <tr><td>SKは範囲クエリOK</td><td>パーティション内は <code>map</code> / <code>B-tree</code> でソート済み</td></tr>
+    <tr><td>GSIは別のコピー</td><td>別のキーでハッシュし直す = 別の物理配置が必要</td></tr>
+    <tr><td>ホットパーティション問題</td><td>ハッシュの偏りそのもの。PKのカーディナリティ低い＝バケット偏り</td></tr>
+    <tr><td>JOIN不可</td><td>ハッシュテーブルは関係演算のための構造じゃない</td></tr>
+    <tr><td>集計苦手</td><td>ハッシュテーブルで <code>COUNT</code>, <code>AVG</code> は全走査するしかない</td></tr>
+  </tbody>
+</table>
+
+<p><strong>「ハッシュテーブルの性質」がほぼそのまま DynamoDB の仕様</strong>になっている。</p>
+
+<h3>3. 歴史的背景: Dynamo 論文 (2007)</h3>
+
+<p>DynamoDB の起源は Amazon 社内ペーパー:</p>
+
+<blockquote>
+  <p><strong>"Dynamo: Amazon's Highly Available Key-value Store"</strong> (SOSP 2007)</p>
+</blockquote>
+
+<p>これは<strong>分散ハッシュテーブルの実装論文</strong>で、以下のアルゴリズムを組み合わせている:</p>
+
+<table>
+  <thead>
+    <tr><th>要素</th><th>アルゴリズム</th><th>解決する問題</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>データ配置</td><td><strong>Consistent Hashing（一貫性ハッシュ法）</strong></td><td>サーバー追加/削除でもデータの再配置を最小化</td></tr>
+    <tr><td>障害耐性</td><td><strong>Vector Clock + Quorum</strong></td><td>ネットワーク分断下での整合性</td></tr>
+    <tr><td>負荷分散</td><td><strong>Virtual Node（仮想ノード）</strong></td><td>ハッシュ偏りを緩和</td></tr>
+    <tr><td>複製</td><td><strong>N-R-W (Replication)</strong></td><td>レプリカ数、読み書き quorum</td></tr>
+  </tbody>
+</table>
+
+<p>この論文の子孫:</p>
+
+<ul>
+  <li><strong>Apache Cassandra</strong>（Facebook発、Dynamo + BigTableの合成）</li>
+  <li><strong>Riak</strong></li>
+  <li><strong>Voldemort</strong>（LinkedIn）</li>
+  <li><strong>ScyllaDB</strong></li>
+</ul>
+
+<p>DynamoDB は「論文で提案された DHT アルゴリズムを Amazon がマネージドサービス化した」と言える。</p>
+
+<h3>4. Consistent Hashing の要点</h3>
+
+<p>素朴な <code>hash(key) % N</code> だとサーバー追加でほぼ全データが再配置される。</p>
+
+<p>Consistent Hashing のアイデア:</p>
+
+<pre><code>ハッシュ値空間を「円環」として扱う（0 〜 2^32 の円）:
+
+          0
+      ┌───┴───┐
+   サーバーA          サーバーB
+      │                │
+      └───┐       ┌────┘
+          サーバーC
+
+key をハッシュして円上に配置 → 時計回りに最初にぶつかったサーバーがその key の担当</code></pre>
+
+<p>サーバーを追加しても<strong>隣接区間のデータだけが再配置</strong>される。O(N) ではなく O(K/N) の移動で済む。これが DynamoDB が裏で動的にパーティションを増減できる仕組み。</p>
+
+<h3>5. Redis / Memcached との違い</h3>
+
+<p>同じ「キーバリュー型 NoSQL」でもアーキテクチャが異なる:</p>
+
+<table>
+  <thead>
+    <tr><th></th><th>Redis</th><th>Memcached</th><th>DynamoDB</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>データ構造</td><td>多様（リスト、ハッシュ、セット、etc）</td><td>単純なKV</td><td>KV + SK ソート + JSON</td></tr>
+    <tr><td>永続化</td><td>あり（RDB/AOF）</td><td>なし（メモリのみ）</td><td>あり（マネージド）</td></tr>
+    <tr><td>分散</td><td>Redis Cluster で後付け</td><td>クライアント側でシャーディング</td><td><strong>最初から分散前提</strong></td></tr>
+    <tr><td>用途</td><td>キャッシュ + データ構造</td><td>純粋キャッシュ</td><td>プライマリDB</td></tr>
+  </tbody>
+</table>
+
+<p>DynamoDB は「最初から分散前提で設計された、永続化されるハッシュテーブル」という立ち位置。</p>
+
+<h3>6. PK の部分一致検索は原理的に不可能</h3>
+
+<p>ハッシュ関数の性質から、PK の部分一致（<code>begins_with</code>, <code>LIKE</code>, 範囲）は<strong>原理的に</strong>できない。</p>
+
+<pre><code>hash("user-001")   = 0x8a3f2c91...   → パーティション A
+hash("user-002")   = 0xd7e14f23...   → パーティション C
+hash("user-003")   = 0x1b9c8a77...   → パーティション B
+hash("user-0001")  = 0x4d2e91bc...   → パーティション A
+hash("user-0002")  = 0xf08a7c15...   → パーティション B</code></pre>
+
+<p><strong>ハッシュ関数は「似た入力を似た出力に変換しない」のが重要な性質</strong>（1文字違うと全く違う値になるよう設計されている）。</p>
+
+<p>つまり「<code>user-1</code> で始まるキー」を探そうとすると:</p>
+
+<ul>
+  <li>その接頭辞を持つキーは<strong>全パーティションに散らばっている</strong></li>
+  <li>結果として「全サーバーに聞いて回る」しかない</li>
+  <li>分散システムの旨みが全くない、単なる全走査になる</li>
+</ul>
+
+<p><strong>「できない仕様」ではなく、「できたら DHT の意味が崩壊する」</strong>という話。</p>
+
+<h4>PKで部分一致したいときの対処</h4>
+
+<table>
+  <thead>
+    <tr><th>対処</th><th>概要</th><th>向いている場面</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>データモデル見直し</strong></td><td>前方一致したい部分を SK に切り出す</td><td>設計段階（推奨）</td></tr>
+    <tr><td><strong>GSI で別キーを張る</strong></td><td>完全一致できる粒度まで分解した属性で GSI を作る</td><td>後からの要件追加</td></tr>
+    <tr><td><strong>Scan + Filter</strong></td><td>全件読んでフィルタ</td><td>絶対にやるな（コスト爆発）</td></tr>
+    <tr><td><strong>OpenSearch 連携</strong></td><td>DynamoDB Streams → OpenSearch へ流す</td><td>全文検索・曖昧検索</td></tr>
+  </tbody>
+</table>
+
+<h3>7. SK はソート可能なスカラー型のみ</h3>
+
+<p>SK に使える型は以下の3つ:</p>
+
+<table>
+  <thead>
+    <tr><th>型</th><th>説明</th><th>ソート順</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>String (S)</strong></td><td>文字列</td><td>UTF-8 バイト列の辞書順</td></tr>
+    <tr><td><strong>Number (N)</strong></td><td>数値</td><td>数値順</td></tr>
+    <tr><td><strong>Binary (B)</strong></td><td>バイナリ</td><td>バイト列順</td></tr>
+  </tbody>
+</table>
+
+<p>SK に使えない型: List, Map, Set, Boolean, Null。</p>
+
+<p><strong>なぜか</strong>: パーティション内部は <strong>B-tree / skip list</strong> で管理されていて、B-tree は「任意の2要素で比較可能」「全順序」を要求する。List や Map には全順序が定義できない。</p>
+
+<h4>複合情報は文字列エンコードで詰め込む</h4>
+
+<p>「スカラー型のみ」と言っても、文字列にエンコードすれば多次元情報を持てる:</p>
+
+<pre><code>SK: "2024-01-15#AC#abc300_a"
+     日付       結果 問題ID
+
+辞書順ソートなので、以下の順に並ぶ:
+  "2024-01-15#AC#abc300_a"
+  "2024-01-15#WA#abc300_a"
+  "2024-01-16#AC#abc300_b"</code></pre>
+
+<p><strong>ポイント</strong>: DynamoDB は「複合SK」という型を持たない。<strong>文字列の辞書順比較</strong>を利用して、アプリ側が多次元情報を1次元にエンコードしている。</p>
+
+<p>ISO日付フォーマット（<code>YYYY-MM-DD</code>）やゼロパディング数値（<code>00001</code>）が多用されるのは、<strong>辞書順 = 意味的な順序</strong>になるように工夫しているため:</p>
+
+<pre><code>❌ "1", "10", "2" → 辞書順だと "1", "10", "2"（10 が 2 より前）
+✅ "001", "002", "010" → 辞書順で "001", "002", "010"（正しい順）</code></pre>
+
+<h3>8. PK と SK の非対称性</h3>
+
+<p>PK と SK は対等な「2つの主キー」ではない。物理シャーディングの都合で役割が違う。</p>
+
+<pre><code>できること:
+  Query(PK="user-123") → このユーザーの全SKを取得 ✅
+  GetItem(PK="user-123", SK="SUB#00042") → 1件ピンポイント ✅
+
+できないこと:
+  Query(SK="SUB#00042") → この submission を持つ全ユーザーを取得 ❌
+  Query(SK begins_with "2024-01") → 2024年1月の全データを全ユーザー横断 ❌</code></pre>
+
+<p><strong>分散の物理構造</strong>:</p>
+
+<pre><code>パーティション A: (user-123, SUB#00042)  ← ここに物理的に存在
+パーティション B: (user-456, SUB#00042)  ← ここにも存在（同じSK値）
+パーティション C: (user-789, SUB#00042)  ← ここにも</code></pre>
+
+<p>「SK = <code>SUB#00042</code> を全て取得」するには<strong>全パーティションを走査</strong>するしかない。それは Scan。</p>
+
+<h4>対称性のまとめ</h4>
+
+<table>
+  <thead>
+    <tr><th>観点</th><th>PK</th><th>SK</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>役割</td><td>物理パーティション決定</td><td>パーティション内ソート</td></tr>
+    <tr><td>データ構造</td><td>ハッシュテーブル</td><td>B-tree</td></tr>
+    <tr><td>計算量</td><td>O(1) 配置</td><td>O(log n) 探索</td></tr>
+    <tr><td>横断クエリ</td><td>❌（全サーバー走査）</td><td>❌（PK指定なしでは不可）</td></tr>
+    <tr><td>ピン止め後</td><td>❌ 完全一致のみ</td><td>✅ 範囲クエリOK</td></tr>
+  </tbody>
+</table>
+
+<h3>9. 多対多リレーションは Inverted GSI で</h3>
+
+<p>「SK 側から逆引きしたい」= 多対多検索は、<strong>PK と SK を入れ替えた GSI</strong>で解決する定石パターン（Inverted Index）。</p>
+
+<pre><code>元テーブル submissions:
+  PK = user_id, SK = problem_id
+  → Query(PK="user-123") で「user-123 が解いた全問題」 ✅
+  → しかし「abc300_a を解いた全ユーザー」は ❌
+
+GSI "InvertedIndex":
+  GSI PK = problem_id  ← 元のSKをPKに
+  GSI SK = user_id     ← 元のPKをSKに
+  → Query(GSI, PK="abc300_a") で「この問題を解いた全ユーザー」 ✅</code></pre>
+
+<p><strong>物理的には別のハッシュ関数で再分散</strong>されている:</p>
+
+<pre><code>元テーブル: hash(user_id) で分散
+  サーバーA: user-123 の全submissions
+  サーバーB: user-456 の全submissions
+
+GSI: hash(problem_id) で再分散（コピー）
+  サーバーX: abc300_a の全submissions
+  サーバーY: abc300_b の全submissions</code></pre>
+
+<p><strong>「双方向検索したい」＝「両方向でハッシュし直した物理配置が必要」＝ ストレージとスループットコストが倍</strong>。</p>
+
+<h3>10. この視点から見える設計原則</h3>
+
+<table>
+  <thead>
+    <tr><th>洞察</th><th>設計原則</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PK はハッシュで物理配置</td><td><strong>PK 設計 = 物理配置設計</strong></td></tr>
+    <tr><td>SK はソート可能な型のみ</td><td><strong>複合情報は文字列にエンコード</strong></td></tr>
+    <tr><td>PK/SK は対等でない</td><td><strong>双方向検索は GSI で倍のコストを払う</strong></td></tr>
+    <tr><td>分散してるから横断クエリ不可</td><td><strong>クエリしたい軸の数 = 必要な GSI の数</strong></td></tr>
+  </tbody>
+</table>
+
+<p><strong>DynamoDB の設計 = 「ハッシュテーブルを何枚張るか」の設計</strong>と言い換えられる。</p>
+
+<p>RDB が「1つのテーブルにインデックスを後付けで足す」のに対し、DynamoDB は「<strong>アクセスパターンごとに別の物理配置（ハッシュテーブル）を用意する</strong>」アーキテクチャ。</p>
+
+<h2>Q&amp;A</h2>
+
+<p><strong>Q: DynamoDB はどちらかというとハッシュテーブルだよね?</strong></p>
+
+<p>その通り。「分散ハッシュテーブル（DHT）」そのもの。競プロ的に言えば <code>unordered_map&lt;PK, map&lt;SK, Item&gt;&gt;</code> が複数サーバーに分散している構造。Amazon の Dynamo 論文（SOSP 2007）が起源で、Cassandra / Riak / ScyllaDB もこの系譜の子孫。</p>
+
+<p><strong>Q: PK の部分一致検索（<code>begins_with</code>, <code>LIKE</code> など）はできない?</strong></p>
+
+<p><strong>原理的に不可能</strong>。ハッシュ関数は「似た入力を似た出力に変換しない」性質を持つため、接頭辞が同じキーも全パーティションに散らばっている。できるようにすると全サーバー走査になり DHT の意味が消える。</p>
+
+<p>対処は「データモデル見直し（前方一致したい部分をSKに切り出す）」「GSIで別キーを張る」「全文検索が必要なら OpenSearch に流す」のいずれか。<code>Scan + Filter</code> は最終手段（コスト爆発するので非推奨）。</p>
+
+<p><strong>Q: SK はソート可能なデータしか配置不可能?</strong></p>
+
+<p>正しい。SK に使えるのは <strong>String / Number / Binary の3つのスカラー型のみ</strong>。パーティション内部が B-tree で管理されていて、B-tree は「任意の2要素で比較可能」「全順序」を要求するため、List や Map のような全順序が定義できない型は入らない。</p>
+
+<p>ただし複合情報を扱いたい場合は <strong>文字列にエンコードする</strong>（例: <code>"2024-01-15#AC#abc300_a"</code>）ことで多次元情報を1次元の辞書順に変換できる。これが DynamoDB の複合SKパターンの正体。</p>
+
+<p><strong>Q: PK と SK が多対多の対応不可能なのは分散しているから?</strong></p>
+
+<p>その通り。PK と SK は対等な2つの主キーではなく、<strong>PK = 物理パーティション決定 / SK = パーティション内ソート</strong> という非対称な役割を持つ。「SK だけで横断検索」ができないのは、SK が同じアイテムが全パーティションに散らばっているため（全サーバー走査になる）。</p>
+
+<p>多対多が必要なら <strong>PK と SK を入れ替えた GSI（Inverted Index）</strong> を張る。物理的に別のハッシュ関数でデータをコピーし直すため、ストレージとスループットが倍になるのが代償。</p>
+
+<h2>関連</h2>
+
+<ul>
+  <li>前提知識: <a href="01-dynamodb-keys.md">01-dynamodb-keys.md</a> — PK/SK/GSI の基本</li>
+  <li>詳細リファレンス: <a href="reference/dynamodb-keys-vs-rdb.md">reference/dynamodb-keys-vs-rdb.md</a> — セクション8（採用理由）、セクション9（デメリット）との接続</li>
+  <li><strong>深掘り</strong>: <a href="reference/dynamo-paper-dht.md">reference/dynamo-paper-dht.md</a> — Dynamo論文（SOSP 2007）、Consistent Hashing、Vector Clock、Quorum (NRW)、Gossip Protocol、Dynamo vs DynamoDB の違い</li>
+  <li>発展: DynamoDB Streams + OpenSearch の連携パターン（Phase 5〜6 で扱う可能性あり）</li>
+</ul>
+
+<hr>
+
+<p><em>Saved at 2026-04-18 via /learning-flow:topic</em></p>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase1</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase1</span></li>
+<li><b>負荷生成</b> — 無認証トラフィックを生成（認証あり負荷は TEST_PASSWORD=... を付ける）<span class="cmd">make sandbox-load-phase1</span></li>
+<li><b>観測</b> — API GW の Count/4XXError/Latency、Lambda、DynamoDB、Cognito メトリクス<span class="cmd">make sandbox-watch-phase1</span><div class="tstamp">⏱ 反映まで 2〜5 分</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase1</span></li>
+</ol>
+<p class="note warn">⚠ phase1 は本番スタックを観測するダッシュボードのみ作成（本番アプリは別途デプロイ済みが前提）。</p>
+</section>
+<div class="foot">← <a href="../index.html">Phase 1 ルーター</a> ／ <a href="../main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main>
+</body>
+</html>

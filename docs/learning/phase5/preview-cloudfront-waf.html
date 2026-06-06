@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 5 教材</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#6366f1;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}
+.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;line-height:1.5;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}
+h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}img{max-width:100%}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}
+.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style>
+</head>
+<body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 5 教材 · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Phase 5 プレビュー教材: CloudFront + WAF — エッジ配信とファイアウォール</h1>
+
+<blockquote>プレビュー教材: デモ体験のために先行生成しました。正式な lesson / 振り返りクイズ / 採点は Phase 5 到達時に実施します。</blockquote>
+
+<hr>
+
+<h2>このサービスは何か</h2>
+
+<h3>Amazon CloudFront</h3>
+
+<p>CloudFront は AWS が提供する <strong>CDN（Content Delivery Network）</strong> サービスです。<br>
+世界 400 以上のエッジロケーション（PoP）にコンテンツをキャッシュし、ユーザーに最も近いエッジから応答することでレイテンシを削減します。<br>
+HTTP/HTTPS リクエストを受け取り、バックエンド（オリジン）への通信回数・帯域を減らすプロキシ兼キャッシュ層として機能します。</p>
+
+<h3>AWS WAF (Web Application Firewall)</h3>
+
+<p>WAF は HTTP/HTTPS トラフィックを検査し、<strong>Web ACL（Access Control List）</strong> に定義したルールに従って ALLOW / BLOCK / COUNT のいずれかのアクションを下すマネージドファイアウォールです。<br>
+CloudFront、Application Load Balancer、API Gateway、AppSync などのリソースにアタッチして使います。</p>
+
+<hr>
+
+<h2>いつ使うか・使わないか</h2>
+
+<h3>使うケース</h3>
+
+<table>
+<thead>
+<tr><th>ユースケース</th><th>理由</th></tr>
+</thead>
+<tbody>
+<tr><td>静的アセット（JS/CSS/画像）の配信</td><td>エッジキャッシュで高速化、オリジン負荷削減</td></tr>
+<tr><td>API レスポンスの一部をキャッシュしたい</td><td><code>Cache-Control</code> ヘッダを調整してキャッシュ制御可能</td></tr>
+<tr><td>S3 バケットを直接公開したくない</td><td>OAC（Origin Access Control）で S3 → CloudFront 経由のみに制限</td></tr>
+<tr><td>HTTPS を強制したい / TLS 終端をエッジで行いたい</td><td>CloudFront で ACM 証明書を使い TLS 終端</td></tr>
+<tr><td>SQLi / XSS / ボット攻撃を防ぎたい</td><td>WAF マネージドルールグループで既知パターンを一括ブロック</td></tr>
+<tr><td>特定 IP や国からのアクセスを制限したい</td><td>WAF の IP セット / Geo ブロックルール</td></tr>
+<tr><td>API へのブルートフォースや DDoS を軽減したい</td><td>WAF レートベースルール</td></tr>
+</tbody>
+</table>
+
+<h3>使わないケース</h3>
+
+<ul>
+<li>レイテンシより一貫性（強整合性）が優先される API — キャッシュがあると古いデータを返す可能性</li>
+<li>オリジンが動的かつキャッシュキーを設計しにくい場合 — キャッシュヒット率が上がらず CloudFront のコストが無駄になりやすい</li>
+<li>単純な内部サービス間通信 — エッジ経由は不要、ALB や直接通信で十分</li>
+</ul>
+
+<hr>
+
+<h2>コアコンセプト</h2>
+
+<h3>CloudFront</h3>
+
+<h4>ディストリビューション</h4>
+
+<p>CloudFront の設定単位。1 つのディストリビューションに複数の <strong>オリジン</strong> と <strong>ビヘイビア（behavior）</strong> を持てます。</p>
+
+<ul>
+<li><strong>オリジン</strong>: リクエストを転送する先（S3 バケット、API Gateway、ALB、カスタム HTTP サーバーなど）</li>
+<li><strong>ビヘイビア</strong>: URL パスパターン（例: <code>/api/*</code>, <code>/*.js</code>）ごとにキャッシュポリシーやオリジンを切り替える設定</li>
+</ul>
+
+<h4>キャッシュの仕組み</h4>
+
+<pre><code>ブラウザ → CloudFront エッジ
+           ├── HIT  → エッジのキャッシュから即返却（オリジン通信なし）
+           └── MISS → オリジンへ転送 → レスポンスをキャッシュ → ブラウザへ返却</code></pre>
+
+<p>キャッシュの有効期間（TTL）は以下の優先順で決まります。</p>
+
+<ol>
+<li>CloudFront のキャッシュポリシーに設定した <code>Min TTL</code> / <code>Max TTL</code> / <code>Default TTL</code></li>
+<li>オリジンが返す <code>Cache-Control: max-age=N</code> ヘッダ</li>
+<li><code>Expires</code> ヘッダ</li>
+</ol>
+
+<h4>キャッシュキー</h4>
+
+<p>デフォルトは <strong>URL（パス + クエリ文字列の一部）</strong> のみ。<br>
+ヘッダ・Cookie・クエリ文字列をキャッシュキーに含めると細分化できますが、ヒット率が下がるトレードオフがあります。</p>
+
+<h4>Invalidation（無効化）</h4>
+
+<p>キャッシュを強制的に削除する操作。<code>/*</code> でディストリビューション全体、<code>/api/submissions/*</code> で特定パス以下を無効化できます。<br>
+月に 1,000 パス分は無料、以降は有料です。</p>
+
+<h3>WAF</h3>
+
+<h4>Web ACL とルール評価順序</h4>
+
+<pre><code>リクエスト
+  ↓
+[ルール 1（優先度 0）] → BLOCK → 403 を返す  ←┐
+  ↓ 一致しない                                    │ 優先度の数値が小さいほど先に評価
+[ルール 2（優先度 1）] → COUNT → ログに記録のみ  │
+  ↓ 一致しない                                    │
+[ルール N（優先度 N-1）] ...                      │
+  ↓ すべて一致しない                             │
+デフォルトアクション（ALLOW or BLOCK）           ─┘</code></pre>
+
+<h4>ルールタイプ</h4>
+
+<table>
+<thead>
+<tr><th>ルールタイプ</th><th>概要</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>マネージドルールグループ</strong></td><td>AWS または Marketplace ベンダーが管理する既知攻撃パターンのセット（AWSManagedRulesCommonRuleSet など）</td></tr>
+<tr><td><strong>IP セットルール</strong></td><td>指定 IP アドレス（CIDR）を ALLOW / BLOCK</td></tr>
+<tr><td><strong>Geo マッチルール</strong></td><td>国コードで ALLOW / BLOCK</td></tr>
+<tr><td><strong>レートベースルール</strong></td><td>5 分間（固定）ウィンドウ内のリクエスト数が閾値を超えた IP を自動ブロック</td></tr>
+<tr><td><strong>正規表現パターンセット</strong></td><td>URL / ヘッダ / ボディを正規表現で検査</td></tr>
+<tr><td><strong>バイト一致ルール</strong></td><td>特定文字列がフィールドに含まれるか検査（SQLi/XSS 検出に応用）</td></tr>
+</tbody>
+</table>
+
+<h4>スコープ</h4>
+
+<ul>
+<li><strong>CLOUDFRONT</strong>: us-east-1 に Web ACL を作成（グローバルエッジ向け）</li>
+<li><strong>REGIONAL</strong>: リソースと同じリージョンに作成（ALB / API Gateway 向け）</li>
+</ul>
+
+<hr>
+
+<h2>主要な設定・API・パラメータ</h2>
+
+<h3>CloudFront ディストリビューション（主要フィールド）</h3>
+
+<table>
+<thead>
+<tr><th>設定項目</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Origins[].DomainName</code></td><td>オリジンのドメイン（例: <code>myapi.execute-api.ap-northeast-1.amazonaws.com</code>）</td></tr>
+<tr><td><code>Origins[].OriginPath</code></td><td>オリジンのベースパス（例: <code>/prod</code>）</td></tr>
+<tr><td><code>DefaultCacheBehavior.CachePolicyId</code></td><td>キャッシュポリシーの ID。AWS 管理ポリシー <code>CachingOptimized</code> / <code>CachingDisabled</code> などが使える</td></tr>
+<tr><td><code>DefaultCacheBehavior.ViewerProtocolPolicy</code></td><td><code>redirect-to-https</code> / <code>https-only</code> / <code>allow-all</code></td></tr>
+<tr><td><code>DefaultCacheBehavior.AllowedMethods</code></td><td><code>GET,HEAD</code> / <code>GET,HEAD,OPTIONS</code> / 全メソッド</td></tr>
+<tr><td><code>PriceClass</code></td><td>使用するエッジロケーションの範囲（<code>PriceClass_100</code>=米欧のみ安価、<code>PriceClass_All</code>=全世界）</td></tr>
+<tr><td><code>WebACLId</code></td><td>アタッチする WAF Web ACL の ARN（スコープ CLOUDFRONT のみ）</td></tr>
+</tbody>
+</table>
+
+<h3>WAF Web ACL（主要フィールド）</h3>
+
+<table>
+<thead>
+<tr><th>設定項目</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>DefaultAction</code></td><td>ルールに一致しなかった場合のデフォルト動作（<code>Allow</code> or <code>Block</code>）</td></tr>
+<tr><td><code>Rules[].Priority</code></td><td>評価順（0 が最優先）</td></tr>
+<tr><td><code>Rules[].Action</code></td><td><code>Allow</code> / <code>Block</code> / <code>Count</code></td></tr>
+<tr><td><code>Rules[].Statement</code></td><td>ルールの条件（<code>RateBasedStatement</code>, <code>IPSetReferenceStatement</code>, <code>GeoMatchStatement</code>, <code>ManagedRuleGroupStatement</code>, <code>ByteMatchStatement</code> など）</td></tr>
+<tr><td><code>VisibilityConfig.SampledRequestsEnabled</code></td><td>サンプルリクエストのログ取得を有効化</td></tr>
+<tr><td><code>VisibilityConfig.CloudWatchMetricsEnabled</code></td><td>CloudWatch メトリクス出力</td></tr>
+</tbody>
+</table>
+
+<h3>レートベースルール ステートメント例</h3>
+
+<pre><code class="language-json">{
+  &quot;RateBasedStatement&quot;: {
+    &quot;Limit&quot;: 100,
+    &quot;AggregateKeyType&quot;: &quot;IP&quot;,
+    &quot;ScopeDownStatement&quot;: {
+      &quot;ByteMatchStatement&quot;: {
+        &quot;SearchString&quot;: &quot;/api/&quot;,
+        &quot;FieldToMatch&quot;: { &quot;UriPath&quot;: {} },
+        &quot;TextTransformations&quot;: [{ &quot;Priority&quot;: 0, &quot;Type&quot;: &quot;NONE&quot; }],
+        &quot;PositionalConstraint&quot;: &quot;STARTS_WITH&quot;
+      }
+    }
+  }
+}</code></pre>
+
+<p><code>Limit</code> は 5 分間ウィンドウでの最大リクエスト数（最小値: 100）。</p>
+
+<hr>
+
+<h2>よくある落とし穴・誤解</h2>
+
+<h3>CloudFront</h3>
+
+<p><strong>キャッシュが効かない</strong><br>
+オリジンが <code>Cache-Control: no-store</code> や <code>no-cache</code> を返していると CloudFront はキャッシュしません。<br>
+API Gateway はデフォルトで <code>Cache-Control: no-cache</code> を返す場合があるため、キャッシュしたい場合はビヘイビアの <code>CachingOptimized</code> ポリシーを使うか、レスポンスヘッダを明示的に制御します。</p>
+
+<p><strong>WAF は us-east-1 に作る必要がある（CloudFront アタッチ時）</strong><br>
+CloudFront 用 Web ACL のスコープは <code>CLOUDFRONT</code> で、必ず <code>us-east-1</code> リージョンに作成します。他リージョンに作ると CloudFront にアタッチできません。</p>
+
+<p><strong>Invalidation はリアルタイムではない</strong><br>
+無効化リクエスト送信後、全エッジへの伝播に数秒〜数十秒かかります。即時反映が保証されるわけではありません。</p>
+
+<p><strong>クエリ文字列をキャッシュキーに含め忘れる</strong><br>
+デフォルトのキャッシュポリシーはクエリ文字列を無視します。<code>?page=1</code> と <code>?page=2</code> が同じキャッシュを返すバグが起きやすいです。</p>
+
+<h3>WAF</h3>
+
+<p><strong>レートベースルールの最小閾値は 100</strong><br>
+<code>Limit</code> に 100 未満は設定できません。非常に小さな閾値でのブロックは別の方法（例: Lambda@Edge）が必要です。</p>
+
+<p><strong>COUNT は止めない</strong><br>
+<code>Count</code> アクションはマッチしてもリクエストを通します。本番ブロック前のテスト用途で使いますが、COUNT のままにし忘れると防御できていない状態になります。</p>
+
+<p><strong>マネージドルールグループの誤検知</strong><br>
+<code>AWSManagedRulesCommonRuleSet</code> などは稀に正常リクエストを誤ブロックします。最初は全ルールを <code>Count</code> モードで稼働させてログを確認してから <code>Block</code> に切り替えるのが安全です。</p>
+
+<p><strong>WAF のコスト構造を見落とす</strong><br>
+Web ACL 自体の固定費（$5/月）+ ルール数（$1/ルール/月）+ リクエスト数（$0.60/100 万リクエスト）。小規模でもルールを多数作ると固定費が積み上がります。</p>
+
+<hr>
+
+<h2>このプロジェクト（AtCoder 復習）での使いどころ</h2>
+
+<p>AtCoder 復習ツールは Phase 1 の MVP 時点で以下の構成です。</p>
+
+<pre><code>ブラウザ → API Gateway → Lambda → DynamoDB
+                ↑
+           S3（フロントエンド静的ファイル）</code></pre>
+
+<p>Phase 5 ではこの前段に CloudFront + WAF を追加します。</p>
+
+<table>
+<thead>
+<tr><th>コンポーネント</th><th>役割</th></tr>
+</thead>
+<tbody>
+<tr><td>CloudFront ディストリビューション</td><td>S3（静的フロントエンド）と API Gateway（動的 API）を 1 つのドメインで統合。パスパターン <code>/api/*</code> → API GW、それ以外 → S3</td></tr>
+<tr><td>S3 OAC</td><td>S3 バケットをパブリック公開せず CloudFront 経由のみに制限</td></tr>
+<tr><td>WAF Web ACL（CLOUDFRONT スコープ）</td><td><code>/api/sync_submissions</code> など重い処理へのレートリミット、不正 IP ブロック</td></tr>
+<tr><td>キャッシュポリシー</td><td><code>/api/submissions</code>（GET）は短い TTL でキャッシュし、DynamoDB 読み取り回数を削減</td></tr>
+</tbody>
+</table>
+
+<p>実装上のポイント：</p>
+
+<ul>
+<li><code>terraform/modules/cloudfront/</code> モジュールを新設し、既存の <code>api_gateway</code> / <code>lambda</code> モジュールとオリジンを接続</li>
+<li>WAF は <code>us-east-1</code> プロバイダを Terraform で別エイリアス定義して作成</li>
+<li>レートベースルールの閾値は sync_submissions の想定ユーザー数から逆算（例: 1 ユーザー 1 操作なら 100 req/5 min で十分）</li>
+</ul>
+
+<hr>
+
+<h2>デモで体験したこと</h2>
+
+<p>デモページ（<code>docs/learning/phase5/demo/index.html</code>）は 2 枚のカードで構成されています。</p>
+
+<p><strong>カード 1 — CDN キャッシュ体験</strong><br>
+エッジロケーションを選んでオブジェクトをリクエストすると、初回は「MISS」と表示され、オリジンへ往復した分の遅延（大きめの ms 値）が見えます。同じリクエストを再度送ると「HIT」となり、エッジキャッシュから返るため応答が高速になる様子が確認できます。TTL カウントダウンがゼロになると再び MISS に戻り、「無効化」ボタンで即座に MISS 状態に強制リセットできます。これにより <strong>TTL とキャッシュキーの関係</strong>、および <strong>Invalidation の効果</strong> を体感できます。</p>
+
+<p><strong>カード 2 — WAF ルール体験</strong><br>
+リクエストビルダーで path / クエリ / IP / 送信レートを組み合わせ、各ルール（レート制限・IP 許可拒否・SQLi/XSS パターン・Geo ブロック）をトグルしながら「送信」すると、ALLOW / BLOCK バッジと一致したルール名がログに表示されます。連打するとレートベースルールが発火して自動ブロックされ、<strong>WAF のルール評価順序と優先度</strong> の仕組みを手を動かしながら確認できます。</p>
+
+<hr>
+
+<h2>公式ドキュメント（出典）</h2>
+
+<ul>
+<li><a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Introduction.html">What is Amazon CloudFront? — Amazon CloudFront 開発者ガイド</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cache-hit-ratio-explained.html">Cache hit ratio の概念 — Amazon CloudFront 開発者ガイド</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/waf/latest/developerguide/what-is-aws-waf.html">What is AWS WAF? — AWS WAF 開発者ガイド</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/waf/latest/developerguide/waf-rule-statement-type-rate-based.html">Rate-based rule statement — AWS WAF 開発者ガイド</a>（閲覧日 2026-05-31）</li>
+</ul>
+
+<hr>
+
+<h2>関連・発展サービス</h2>
+
+<h3>OAC vs OAI — なぜ OAI はもう使わないべきか</h3>
+
+<p>OAI (Origin Access Identity) は CloudFront の旧来の S3 アクセス制御機構です。
+IAM Principal が <code>arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity XXXX</code> という独自形式になり、IAM の標準的な Condition 記法が使えません。</p>
+
+<p>OAC (Origin Access Control) は 2022 年 GA の後継で、以下の点で優れています。</p>
+
+<table>
+<thead>
+<tr><th>観点</th><th>OAI</th><th>OAC</th></tr>
+</thead>
+<tbody>
+<tr><td>署名方式</td><td>CloudFront 独自</td><td>SigV4（IAM 標準）</td></tr>
+<tr><td>SSE-KMS 対応</td><td>不可（SSE-S3 のみ）</td><td>可</td></tr>
+<tr><td>対応オリジン</td><td>S3 のみ</td><td>S3, MediaStore, Lambda Function URL 等</td></tr>
+<tr><td>AWS 推奨状況</td><td>非推奨（新規作成廃止予定）</td><td>推奨</td></tr>
+</tbody>
+</table>
+
+<p>Terraform での OAC 設定と S3 バケットポリシーのセットがこの sandbox のコアです。
+バケットポリシーで <code>Condition.StringEquals."AWS:SourceArn"</code> にディストリビューション ARN を指定することで、
+「他人の CloudFront ディストリビューションを使って同じ S3 バケットを読み取る」という Confused Deputy 攻撃を防ぎます。</p>
+
+<pre><code class="language-hcl">resource &quot;aws_cloudfront_origin_access_control&quot; &quot;oac&quot; {
+  name                              = &quot;phase5-oac&quot;
+  origin_access_control_origin_type = &quot;s3&quot;
+  signing_behavior                  = &quot;always&quot;
+  signing_protocol                  = &quot;sigv4&quot;
+}</code></pre>
+
+<hr>
+
+<h3>AWS Shield Standard vs Shield Advanced</h3>
+
+<p>CloudFront には DDoS 保護として Shield Standard が自動適用（無料）されています。</p>
+
+<table>
+<thead>
+<tr><th></th><th>Standard</th><th>Advanced</th></tr>
+</thead>
+<tbody>
+<tr><td>費用</td><td>無料（全 AWS リソースに自動適用）</td><td>$3,000/月 + DRP サポート</td></tr>
+<tr><td>保護レイヤ</td><td>L3/L4（SYN Flood, UDP Reflection 等）</td><td>L3/L4 + L7（HTTP Flood 自動緩和）</td></tr>
+<tr><td>DDoS コスト保護</td><td>なし</td><td>DDoS 起因のスケールアウトコストを AWS が負担</td></tr>
+<tr><td>SRT 対応</td><td>なし</td><td>24/7 Shield Response Team</td></tr>
+<tr><td>WAF 連携</td><td>なし</td><td>異常トラフィック検出時に WAF Rate-based ルールを自動生成</td></tr>
+</tbody>
+</table>
+
+<p>CloudFront + WAF + Shield Advanced を組み合わせると、
+WAF がルールベースのブロック、Shield Advanced が機械学習で異常を検出して WAF ルールを自動挿入するという多層防御になります。
+Sandbox では Standard で十分ですが、本番サービスで SLA が求められる場合は Advanced を検討します。</p>
+
+<hr>
+
+<h3>Lambda@Edge と CloudFront Functions の使い分け</h3>
+
+<p>CloudFront にはエッジコンピューティング機能が 2 種類あり、混同しやすいです。</p>
+
+<table>
+<thead>
+<tr><th>観点</th><th>CloudFront Functions</th><th>Lambda@Edge</th></tr>
+</thead>
+<tbody>
+<tr><td>実行フェーズ</td><td>Viewer Request / Response のみ</td><td>Viewer + Origin Request / Response</td></tr>
+<tr><td>ランタイム</td><td>JavaScript (ES5.1 / cloudfront-js-2.0)</td><td>Node.js, Python</td></tr>
+<tr><td>最大実行時間</td><td>1 ms</td><td>Viewer: 5 秒、Origin: 30 秒</td></tr>
+<tr><td>メモリ</td><td>2 MB</td><td>128 MB 〜 10 GB</td></tr>
+<tr><td>コスト</td><td>$0.1 / 100 万回</td><td>$0.6 / 100 万回 + 実行時間</td></tr>
+<tr><td>デプロイ先</td><td>全 450+ エッジロケーション</td><td>13 リージョン（エッジではなくリージョナル PoP）</td></tr>
+<tr><td>主なユースケース</td><td>URL リライト、ヘッダ付与、A/B テスト</td><td>JWT 検証、動的 OG 生成、オリジン選択ロジック</td></tr>
+</tbody>
+</table>
+
+<p><strong>CloudFront Functions でセキュリティヘッダを付与する最小実装</strong>（extra-credit）:</p>
+
+<pre><code class="language-javascript">// functions/security-headers.js
+async function handler(event) {
+  const response = event.response;
+  const headers  = response.headers;
+  headers['strict-transport-security']  = { value: 'max-age=63072000; includeSubDomains; preload' };
+  headers['x-content-type-options']     = { value: 'nosniff' };
+  headers['x-frame-options']            = { value: 'DENY' };
+  headers['content-security-policy']    = { value: &quot;default-src 'self'; script-src 'self'&quot; };
+  headers['referrer-policy']            = { value: 'strict-origin-when-cross-origin' };
+  return response;
+}</code></pre>
+
+<p>Terraform では <code>aws_cloudfront_function</code> + <code>function_association { event_type = "viewer-response" }</code> で紐付けます。
+<code>viewer-response</code> フェーズで付与するため、オリジンが返したヘッダを上書きできます。
+Mozilla Observatory（<code>https://observatory.mozilla.org/analyze/YOUR_CF_DOMAIN.cloudfront.net</code>）でスコアを確認できます。</p>
+
+<hr>
+
+<h3>Route 53 + ACM でカスタムドメインを付ける</h3>
+
+<p>CloudFront にカスタムドメインを付ける場合、ACM 証明書は <strong>us-east-1 に作成しないと CF から使えません</strong>（CF 専用の制約）。</p>
+
+<pre><code class="language-hcl">resource &quot;aws_acm_certificate&quot; &quot;main&quot; {
+  provider          = aws.us_east_1  # 明示的に us-east-1 プロバイダを使う
+  domain_name       = &quot;sandbox.example.com&quot;
+  validation_method = &quot;DNS&quot;
+}
+
+resource &quot;aws_route53_record&quot; &quot;cf&quot; {
+  zone_id = data.aws_route53_zone.main.zone_id
+  name    = &quot;sandbox.example.com&quot;
+  type    = &quot;A&quot;
+  alias {
+    name                   = aws_cloudfront_distribution.main.domain_name
+    zone_id                = aws_cloudfront_distribution.main.hosted_zone_id
+    evaluate_target_health = false
+  }
+}</code></pre>
+
+<p>つまずきポイント: <code>aws_acm_certificate_validation</code> + <code>aws_route53_record</code> を組み合わせると DNS 検証レコードを自動作成できます。証明書ステータスが <code>ISSUED</code> になるまで <code>terraform apply</code> がブロックされるため、初回は 5〜10 分待ちます。</p>
+
+<hr>
+
+<h3>API Gateway 前段に CloudFront を置く理由</h3>
+
+<p>「なぜ動的 API に CDN を前置するのか」と疑問に思うかもしれません。主な理由は 4 つあります。</p>
+
+<ol>
+<li><strong>WAF の適用</strong>: <code>scope = "CLOUDFRONT"</code> の Web ACL は、IP ごとのレート集計をエッジ（全世界）で行うため、REGIONAL（API GW 直付け）より攻撃を早期に遮断できます。</li>
+<li><strong>GET 系レスポンスのキャッシュ</strong>: <code>Cache-Control</code> を調整すれば <code>/api/submissions</code> 等をエッジキャッシュし、API GW スロットリングや Lambda / DynamoDB コストを削減できます。</li>
+<li><strong>TLS ターミネーションの地理的分散</strong>: ユーザーに最も近いエッジで TLS ハンドシェイクを終端することで TTFB が改善します。</li>
+<li><strong>バックエンド URL の隠蔽</strong>: <code>execute-api.ap-northeast-1.amazonaws.com</code> のような内部 URL を露出させず、カスタムドメイン配下に統一できます。</li>
+</ol>
+
+<p>設定のポイント: CF Origin を API GW の <code>execute-api</code> エンドポイントに設定し、Cache Policy は <code>CachingDisabled</code> がデフォルト安全設定です。
+<code>X-Forwarded-For</code> は CF が自動付与しますが、API GW 側で IP 制限したい場合は Lambda Authorizer で <code>event.headers['x-forwarded-for']</code> を参照します。</p>
+
+<hr>
+
+<h2>セキュリティ課題と対策</h2>
+
+<h3>WAF マネージドルールグループの選び方と False Positive 対策</h3>
+
+<p>AWS が提供するマネージドルールグループは現在 15 種以上ありますが、全部有効にすると正常なリクエストもブロックされます。
+安全な導入手順は以下のとおりです。</p>
+
+<p><strong>導入フロー</strong>:</p>
+
+<ol>
+<li><strong>まず全ルールを <code>count</code> モードで 2 週間様子見する</strong>: <code>override_action { count {} }</code> に設定</li>
+<li>CloudWatch Logs Insights で <code>filter action="COUNT"</code> のログを調査して誤検知（False Positive）を特定する</li>
+<li>誤検知ルールを <code>rule_action_override</code> で <code>count</code> のまま残し、残りを <code>block</code> に切り替える</li>
+</ol>
+
+<pre><code class="language-hcl">managed_rule_group_statement {
+  name        = &quot;AWSManagedRulesCommonRuleSet&quot;
+  vendor_name = &quot;AWS&quot;
+
+  rule_action_override {
+    name          = &quot;SizeRestrictions_BODY&quot;
+    action_to_use { count {} }
+    # ファイルアップロード API がある場合に body サイズ制限でブロックされるのを回避
+  }
+  rule_action_override {
+    name          = &quot;GenericRFI_BODY&quot;
+    action_to_use { count {} }
+    # 一部の正規パラメータが RFI 判定される場合
+  }
+}</code></pre>
+
+<p><strong>よく使うマネージドルールグループと費用</strong>:</p>
+
+<table>
+<thead>
+<tr><th>グループ名</th><th>目的</th><th>追加費用</th></tr>
+</thead>
+<tbody>
+<tr><td>AWSManagedRulesCommonRuleSet</td><td>OWASP Top 10 全般（SQLi, XSS, LFI 等）</td><td>無料</td></tr>
+<tr><td>AWSManagedRulesBotControlRuleSet</td><td>Bot 検知（Crawler, Scanner, 著名 Bot）</td><td>$10 / 100 万 WCU</td></tr>
+<tr><td>AWSManagedRulesKnownBadInputsRuleSet</td><td>Log4Shell, Spring4Shell 等の既知 exploit</td><td>無料</td></tr>
+<tr><td>AWSManagedRulesAmazonIpReputationList</td><td>AWS が把握している悪評 IP</td><td>無料</td></tr>
+<tr><td>AWSManagedRulesAnonymousIpList</td><td>Tor, VPN, Proxy</td><td>無料</td></tr>
+</tbody>
+</table>
+
+<p><strong>WCU (Web ACL Capacity Unit) の上限に注意</strong>: Web ACL のデフォルト上限は 1,500 WCU。
+CommonRuleSet は 700 WCU を消費するため、複数グループを同時有効化すると quota 超過エラーになることがあります。
+上限緩和は Service Quotas から申請できますが、Sandbox では CommonRuleSet + rate-based のみで十分です。</p>
+
+<hr>
+
+<h3>レートベースルールの粒度設計</h3>
+
+<p><code>aggregate_key_type</code> によって「誰に対してレートを計算するか」が変わります。</p>
+
+<table>
+<thead>
+<tr><th>キー</th><th>説明</th><th>注意点</th></tr>
+</thead>
+<tbody>
+<tr><td><code>IP</code></td><td>送信元 IP ごと</td><td>NAT 経由の企業ユーザーを誤ブロックしやすい</td></tr>
+<tr><td><code>FORWARDED_IP</code></td><td><code>X-Forwarded-For</code> の最初の IP</td><td>偽装可能。信頼できるプロキシからのみ使う</td></tr>
+<tr><td><code>HTTP_HEADER</code></td><td>カスタムヘッダ値ごと</td><td>API キーごとにレート制限したい場合</td></tr>
+<tr><td><code>CUSTOM_KEYS</code></td><td>複数フィールドの組み合わせ</td><td>「この API だけに厳しい制限」など</td></tr>
+</tbody>
+</table>
+
+<p><code>scope_down_statement</code> を使って特定パスにだけレートリミットを絞るのが実運用の常套手段です。</p>
+
+<pre><code class="language-hcl">rate_based_statement {
+  limit              = 100  # 5 分で 100 リクエスト
+  aggregate_key_type = &quot;IP&quot;
+  scope_down_statement {
+    byte_match_statement {
+      field_to_match { uri_path {} }
+      positional_constraint = &quot;STARTS_WITH&quot;
+      search_string         = &quot;/api/login&quot;
+      text_transformations { priority = 0; type = &quot;LOWERCASE&quot; }
+    }
+  }
+}</code></pre>
+
+<p><code>/api/login</code> への攻撃（クレデンシャルスタッフィング）は集中しやすく、かつ正規ユーザーの頻度は低いため、
+全 URL に適用するよりも <code>/api/login</code> だけ閾値 100 に絞る方が誤ブロックを減らせます。</p>
+
+<hr>
+
+<h3>署名付き URL / 署名付き Cookie</h3>
+
+<p>プレミアムコンテンツや期限付きダウンロードリンクなど、S3 オブジェクトへの時限アクセスを付与したい場合に使います。</p>
+
+<ul>
+<li><strong>署名付き URL</strong>: URL ごとに <code>Expires</code>（UNIX タイム）と <code>CloudFront-Signature</code> を付与。1 ファイルへの一時アクセスに適します。</li>
+<li><strong>署名付き Cookie</strong>: <code>CloudFront-Policy</code>, <code>CloudFront-Signature</code>, <code>CloudFront-Key-Pair-Id</code> の 3 クッキーを Set-Cookie。HLS 動画配信など複数ファイルへのアクセスに向きます。</li>
+</ul>
+
+<p>2022 年以降、ルートアカウントのキーペアは非推奨です。
+<code>aws_cloudfront_key_group</code> + <code>aws_cloudfront_public_key</code> で管理し、Lambda で署名を生成するのが現代的な設計です。</p>
+
+<pre><code class="language-python"># Lambda で署名付き URL を生成する例（botocore 使用）
+from botocore.signers import CloudFrontSigner
+import rsa, datetime
+
+def rsa_signer(message):
+    private_key = get_private_key_from_secrets_manager()  # Secrets Manager から取得
+    return rsa.sign(message, rsa.PrivateKey.load_pkcs1(private_key), 'SHA-1')
+
+signer = CloudFrontSigner(key_id, rsa_signer)
+url = signer.generate_presigned_url(
+    f&quot;https://{DIST_DOMAIN}/premium/video.mp4&quot;,
+    date_less_than=datetime.datetime.utcnow() + datetime.timedelta(hours=1)
+)</code></pre>
+
+<hr>
+
+<h3>TLS ポリシーの選定と PCI DSS 要件</h3>
+
+<p>CloudFront の <code>minimum_protocol_version</code> で選択できる主なポリシーです。</p>
+
+<table>
+<thead>
+<tr><th>ポリシー名</th><th>最小 TLS</th><th>対応クライアント</th><th>推奨用途</th></tr>
+</thead>
+<tbody>
+<tr><td>TLSv1.2_2021</td><td>TLS 1.2</td><td>IE 11+, Android 5+</td><td><strong>新規サービスの標準</strong></td></tr>
+<tr><td>TLSv1.2_2019</td><td>TLS 1.2</td><td>旧 Java 等</td><td>互換性が必要な場合</td></tr>
+<tr><td>TLSv1.2_2018</td><td>TLS 1.2</td><td>より広い旧クライアント</td><td>移行期</td></tr>
+<tr><td>TLSv1_2016</td><td>TLS 1.0</td><td>非常に古いクライアント</td><td>非推奨</td></tr>
+</tbody>
+</table>
+
+<p><code>TLSv1.2_2021</code> は Cipher Suite でも ECDHE のみ許可し、Forward Secrecy が弱い DHE を排除しています。
+PCI DSS 準拠要件がある場合は <code>TLSv1.2_2021</code> 一択です。
+この sandbox では <code>cloudfront_default_certificate = true</code> のためデフォルト証明書を使っており、
+カスタムドメインで ACM 証明書を使う場合に初めてこのポリシーが適用可能になります。</p>
+
+<hr>
+
+<h3>Geo ブロック: CF の <code>geo_restriction</code> vs WAF の <code>geo_match_statement</code></h3>
+
+<p>CloudFront の <code>geo_restriction</code> ブロックは「完全ブロック」で、カスタムエラーページも返せません（403 固定）。</p>
+
+<p>WAF の Geo Match Statement を使うと以下が可能です。</p>
+
+<ol>
+<li>特定国からのリクエストを <code>count</code> で監視しながらブロック（段階的な移行）</li>
+<li>ヘッダに国コードを付与して Lambda でビジネスロジックに使う</li>
+<li>「この国からは <code>/api/*</code> だけ許可し、他はブロック」という細かい制御</li>
+</ol>
+
+<pre><code class="language-hcl">statement {
+  geo_match_statement {
+    country_codes = [&quot;CN&quot;, &quot;RU&quot;, &quot;KP&quot;]  # ISO 3166-1 alpha-2
+  }
+}</code></pre>
+
+<p>CloudFront は <code>CloudFront-Viewer-Country</code> ヘッダをオリジンに転送する機能もあります
+（Origin Request Policy に <code>CloudFront-Viewer-Country</code> を追加）。
+Lambda 側でも地理情報を参照したい場合はこれを使います。</p>
+
+<hr>
+
+<h2>インフラ応用パターン</h2>
+
+<h3>キャッシュ戦略と HIT 率の最大化</h3>
+
+<p>CloudFront のキャッシュは <code>Cache-Control</code> ヘッダと CF の TTL 設定の小さい方が適用されます。
+HIT 率を上げるカギは <strong>キャッシュキーの設計</strong>です。</p>
+
+<p>デフォルトでは URL（Host + Path）がキャッシュキーですが、Query String や Cookie が違うと別キャッシュになります。
+これを制御するのが <strong>Cache Policy</strong> です。</p>
+
+<pre><code class="language-hcl">resource &quot;aws_cloudfront_cache_policy&quot; &quot;api_cache&quot; {
+  name        = &quot;api-cache-policy&quot;
+  min_ttl     = 0
+  default_ttl = 60
+  max_ttl     = 300
+
+  parameters_in_cache_key_and_forwarded_to_origin {
+    cookies_config    { cookie_behavior = &quot;none&quot; }      # Cookie はキャッシュキーに含めない
+    headers_config    { header_behavior = &quot;none&quot; }      # ヘッダも含めない
+    query_strings_config {
+      query_string_behavior = &quot;whitelist&quot;
+      query_strings { items = [&quot;sort&quot;, &quot;filter&quot;] }      # この QS のみキャッシュキーに含める
+    }
+    enable_accept_encoding_gzip   = true
+    enable_accept_encoding_brotli = true
+  }
+}</code></pre>
+
+<p><strong>HIT 率向上のチェックリスト</strong>:</p>
+
+<ul>
+<li>不要な Query String、Cookie を Cache Policy から除外する</li>
+<li><code>compress = true</code> で Brotli/gzip 圧縮を有効化する</li>
+<li>ファイル名にコンテンツハッシュを埋め込む（<code>main.abc123.js</code>）。TTL を長期設定しても Invalidation 不要になる</li>
+<li>S3 のレスポンスヘッダに <code>Cache-Control: public, max-age=31536000, immutable</code> を設定する</li>
+<li><code>CacheHitRate</code> メトリクスを継続監視する。60% 未満なら設計を見直す</li>
+</ul>
+
+<p><strong>Invalidation を最小化する設計</strong>:</p>
+
+<ol>
+<li><strong>ファイル名にコンテンツハッシュ</strong>: <code>main.abc123.js</code> → 更新のたびにファイル名が変わるため Invalidation 不要。<code>index.html</code> のみ短い TTL に設定。</li>
+<li><strong>バージョンプレフィックス</strong>: <code>/v1.2.3/app.js</code> → 新バージョンは新しいパスになる。</li>
+<li><strong>S3 バージョニングとの組み合わせ</strong>: バージョニング有効で rollback を容易にする。</li>
+</ol>
+
+<p>Invalidation は月 1,000 パスまで無料ですが、<code>/*</code> を実行すると全エッジキャッシュが消去されオリジンへの負荷スパイクが発生します。
+本番では <code>/updated-path/*</code> などに絞ることを推奨します。</p>
+
+<hr>
+
+<h3>オリジンフェイルオーバー（Origin Failover）</h3>
+
+<p>CloudFront の Origin Group を使うと、プライマリオリジンが 5xx を返した場合にセカンダリに自動フェイルオーバーできます。</p>
+
+<pre><code class="language-hcl">resource &quot;aws_cloudfront_distribution&quot; &quot;main&quot; {
+  origin {
+    domain_name = &quot;primary.example.com&quot;
+    origin_id   = &quot;primary&quot;
+  }
+  origin {
+    domain_name = &quot;secondary.example.com&quot;
+    origin_id   = &quot;secondary&quot;
+  }
+
+  origin_group {
+    origin_id = &quot;failover-group&quot;
+    failover_criteria {
+      status_codes { items = [500, 502, 503, 504] }
+    }
+    member { origin_id = &quot;primary&quot; }
+    member { origin_id = &quot;secondary&quot; }
+  }
+
+  default_cache_behavior {
+    target_origin_id = &quot;failover-group&quot;
+  }
+}</code></pre>
+
+<p><strong>実運用の注意点</strong>:</p>
+
+<ul>
+<li>フェイルオーバーは GET / HEAD の <strong>キャッシュミス時のみ</strong>発生します。POST 等の非べき等リクエストには効きません。</li>
+<li>フェイルオーバー先が同じリージョンにあると AZ 障害で両方落ちます。セカンダリは別リージョンか S3 静的エラーページを指定するのが常套手段です。</li>
+</ul>
+
+<hr>
+
+<h3>マルチオリジン構成: パスベースルーティング</h3>
+
+<p><code>ordered_cache_behavior</code> を使うと URL パスごとにオリジンを切り替えられます。
+SPA + API を 1 ドメインで統一するための典型的パターンです。</p>
+
+<pre><code class="language-hcl"># /api/* → API Gateway（キャッシュ無効）
+ordered_cache_behavior {
+  path_pattern           = &quot;/api/*&quot;
+  target_origin_id       = &quot;api-gateway-origin&quot;
+  viewer_protocol_policy = &quot;redirect-to-https&quot;
+  cache_policy_id        = data.aws_cloudfront_cache_policy.caching_disabled.id
+  allowed_methods        = [&quot;DELETE&quot;, &quot;GET&quot;, &quot;HEAD&quot;, &quot;OPTIONS&quot;, &quot;PATCH&quot;, &quot;POST&quot;, &quot;PUT&quot;]
+  cached_methods         = [&quot;GET&quot;, &quot;HEAD&quot;]
+}
+
+# /static/* → S3（長期キャッシュ）
+ordered_cache_behavior {
+  path_pattern     = &quot;/static/*&quot;
+  target_origin_id = &quot;s3-origin&quot;
+  cache_policy_id  = aws_cloudfront_cache_policy.long_cache.id
+  allowed_methods  = [&quot;GET&quot;, &quot;HEAD&quot;]
+  cached_methods   = [&quot;GET&quot;, &quot;HEAD&quot;]
+}
+
+# /* → S3 SPA（短期キャッシュ）
+default_cache_behavior {
+  target_origin_id = &quot;s3-origin&quot;
+}</code></pre>
+
+<p><strong>つまずきポイント</strong>:</p>
+
+<ol>
+<li>
+<p><strong>SPA の React Router で <code>/app/dashboard</code> にアクセスすると S3 が 403 を返す</strong><br>
+→ CF の <code>custom_error_response</code> で 403/404 を <code>index.html</code> に書き換える</p>
+
+<pre><code class="language-hcl">custom_error_response {
+  error_code            = 403
+  response_code         = 200
+  response_page_path    = &quot;/index.html&quot;
+  error_caching_min_ttl = 10
+}</code></pre>
+</li>
+<li>
+<p><strong>API GW のオリジンに <code>Host</code> ヘッダを転送するとドメイン不一致エラー</strong><br>
+→ Origin Request Policy で <code>Host</code> ヘッダを除外する</p>
+</li>
+</ol>
+
+<hr>
+
+<h3>Real-Time Logs と Kinesis Firehose によるアクセス解析基盤</h3>
+
+<p>標準ログ（S3 への 5〜10 分遅延バッチ）では不十分な場合、Real-Time Logs を使います。</p>
+
+<pre><code>CloudFront → Kinesis Data Stream → Kinesis Firehose → S3 → Athena
+                                                     → OpenSearch</code></pre>
+
+<pre><code class="language-hcl">resource &quot;aws_cloudfront_realtime_log_config&quot; &quot;main&quot; {
+  name          = &quot;phase5-realtime&quot;
+  sampling_rate = 10  # 10% サンプリング（本番は 1〜5% で十分なことが多い）
+
+  endpoint {
+    kinesis_stream_config {
+      role_arn   = aws_iam_role.cf_realtime_log.arn
+      stream_arn = aws_kinesis_stream.cf_logs.arn
+    }
+    stream_type = &quot;Kinesis&quot;
+  }
+
+  fields = [
+    &quot;timestamp&quot;, &quot;c-ip&quot;, &quot;sc-status&quot;, &quot;cs-uri-stem&quot;,
+    &quot;x-edge-location&quot;, &quot;cs(User-Agent)&quot;, &quot;x-host-header&quot;
+  ]
+}</code></pre>
+
+<p>Athena でエッジロケーション別エラー数を集計するクエリ例:</p>
+
+<pre><code class="language-sql">SELECT
+  date_trunc('hour', from_unixtime(timestamp)) AS hour,
+  x_edge_location,
+  COUNT(*) AS requests,
+  SUM(CASE WHEN sc_status &gt;= 500 THEN 1 ELSE 0 END) AS errors
+FROM cf_logs
+WHERE dt &gt;= '2025-05-01'
+GROUP BY 1, 2
+ORDER BY 1, 3 DESC;</code></pre>
+
+<p>フィールドを絞るほど Kinesis のコストが下がります。全フィールドを有効にすると想定外のコストになるため注意してください。</p>
+
+<hr>
+
+<h3>Terraform の state 管理と CF の apply / destroy 時間問題</h3>
+
+<p>CF のリソースは apply に 10〜15 分、destroy に 30〜45 分かかります。
+<code>sandbox-down</code> でタイムアウトする原因になることがあるため、以下の手順を推奨します。</p>
+
+<pre><code class="language-bash"># destroy の安全な実行手順
+cd terraform/sandboxes/phase5
+
+# 1. destroy 開始（30〜45 分かかる。バックグラウンド実行を推奨）
+terraform destroy -auto-approve &amp;
+
+# 2. 完了を確認
+aws cloudfront wait distribution-deployed --region us-east-1 \
+  --id $(terraform output -raw cloudfront_distribution_id 2&gt;/dev/null || echo &quot;ALREADY_DELETED&quot;)
+
+# 3. WAF ロググループが残っていないか確認
+aws logs describe-log-groups --region us-east-1 \
+  --log-group-name-prefix &quot;aws-waf-logs-phase5&quot; \
+  --query 'logGroups[].logGroupName'
+
+# 4. KMS キー（extra-credit 使用時）は削除に 7 日の待機期間あり
+aws kms list-keys --region us-east-1</code></pre>
+
+<p>CF を <code>enabled = false</code> に変更してから destroy すると若干速くなるという説もありますが、
+実測値は変わらないことが多いです。潔く待つのが正解です。</p>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase5</span></li>
+<li><b>デプロイ</b>（実課金開始）（CloudFront 作成 10〜15 分）<span class="cmd">make sandbox-up-phase5</span></li>
+<li><b>負荷生成</b> — 配信 URL に curl（無害/攻撃パターン）<span class="cmd">make sandbox-load-phase5</span></li>
+<li><b>観測</b> — リクエスト数/キャッシュ率/WAF ブロック（us-east-1）<span class="cmd">make sandbox-watch-phase5</span><div class="tstamp">⏱ 反映 数分</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase5</span></li>
+</ol>
+<p class="note warn">⚠ CloudFront は作成 10〜15 分・破棄 30〜45 分。down-all 前に個別 destroy 推奨。全リソース us-east-1。</p>
+</section>
+<div class="foot">← <a href="index.html">Phase 5 ルーター</a> ／ <a href="main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main>
+</body>
+</html>

@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 9 教材</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#0d9488;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}
+.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;line-height:1.5;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}
+h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}img{max-width:100%}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}
+.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style>
+</head>
+<body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 9 教材 · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Phase 9 プレビュー教材: X-Ray — 分散トレースを読む</h1>
+
+<blockquote>
+<p>プレビュー教材: デモ体験のために先行生成しました。正式な lesson / 振り返りクイズ / 採点は Phase 9 到達時に実施します。</p>
+</blockquote>
+
+<hr>
+
+<h2>このサービスは何か</h2>
+
+<p>AWS X-Ray は、分散アプリケーションのリクエストを<strong>エンドツーエンドでトレース</strong>するサービスです。単一リクエストが複数のサービス（API Gateway → Lambda → DynamoDB → 外部 HTTP）を通過するとき、それぞれの処理時間・成功／失敗・付帯情報を 1 本のトレースとして記録・可視化します。</p>
+
+<p>X-Ray が提供する主な機能は次の 3 つです。</p>
+
+<table>
+<thead>
+<tr><th>機能</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>トレース収集</strong></td><td>SDK / X-Ray デーモンを介してセグメントを送信・保存</td></tr>
+<tr><td><strong>サービスマップ</strong></td><td>サービス間の依存関係をグラフで俯瞰し、ボトルネック・エラー源を特定</td></tr>
+<tr><td><strong>タイムラインビュー</strong></td><td>1 リクエスト内の処理をウォーターフォール形式でレイテンシ内訳を確認</td></tr>
+</tbody>
+</table>
+
+<hr>
+
+<h2>いつ使うか・使わないか</h2>
+
+<h3>使うべき場面</h3>
+
+<ul>
+<li><strong>レイテンシ増大の原因特定</strong>: 複数サービスのどこで時間がかかっているかを即座に絞り込みたい</li>
+<li><strong>エラー発生箇所の特定</strong>: 5xx/4xx がどのサービス・処理で起きているかを追跡したい</li>
+<li><strong>非同期処理のフロー把握</strong>: SQS・Step Functions 経由の処理でもトレース ID を引き継いで追跡できる</li>
+<li><strong>外部 API 呼び出しの監視</strong>: AtCoder API など外部 HTTP へのレイテンシ・失敗率を把握したい</li>
+</ul>
+
+<h3>使わない（他の手段が適切な）場面</h3>
+
+<ul>
+<li><strong>ビジネスメトリクス集計</strong>: CloudWatch Metrics / Logs Insights の方が向いている</li>
+<li><strong>セキュリティ監査ログ</strong>: CloudTrail が担う領域</li>
+<li><strong>詳細なアプリケーションログ</strong>: CloudWatch Logs で十分（X-Ray トレースと補完関係）</li>
+</ul>
+
+<hr>
+
+<h2>コアコンセプト</h2>
+
+<h3>トレース・セグメント・サブセグメント</h3>
+
+<pre><code>Trace（1 リクエスト全体）
+├── Segment: API Gateway
+├── Segment: Lambda (handler)
+│   ├── Subsegment: DynamoDB.GetItem
+│   ├── Subsegment: DynamoDB.PutItem
+│   └── Subsegment: HTTP GET https://atcoder.jp/...
+└── Segment: (レスポンス返却)</code></pre>
+
+<ul>
+<li><strong>Trace</strong>: 1 つのリクエスト全体を一意の Trace ID で束ねる単位</li>
+<li><strong>Segment</strong>: サービス（Lambda 関数など）が X-Ray に送信するデータの基本単位。開始時刻・終了時刻・HTTP 情報・エラー有無を含む</li>
+<li><strong>Subsegment</strong>: Segment 内部のさらに細かい処理単位。AWS SDK 呼び出しや外部 HTTP リクエストが自動的にサブセグメント化される</li>
+</ul>
+
+<h3>サンプリング</h3>
+
+<p>X-Ray はデフォルトですべてのリクエストを記録しません。<strong>サンプリングルール</strong>によって記録対象を絞ります。</p>
+
+<ul>
+<li>デフォルト: 毎秒 1 リクエスト + その後の 5% をサンプリング</li>
+<li>カスタムルール: パス・メソッド・ホストで条件を指定し、rate（割合）と reservoir（毎秒固定数）を設定</li>
+<li><strong>目的</strong>: 本番トラフィックが大量でもコストを抑えながら代表的なトレースを取得する</li>
+</ul>
+
+<h3>Annotation と Metadata</h3>
+
+<table>
+<thead>
+<tr><th>項目</th><th>インデックス</th><th>検索</th><th>用途例</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Annotation</strong></td><td>される</td><td>フィルタ式で検索可能</td><td><code>user_id</code>, <code>contest_id</code>, <code>status_code</code></td></tr>
+<tr><td><strong>Metadata</strong></td><td>されない</td><td>検索不可（トレース詳細でのみ閲覧）</td><td>デバッグ用の大きなオブジェクト、リクエストボディ</td></tr>
+</tbody>
+</table>
+
+<p>Annotation はトレースをフィルタするためのキーとして使い、Metadata は詳細デバッグ情報の保存に使います。</p>
+
+<h3>サービスマップ</h3>
+
+<ul>
+<li>サービス（Lambda, DynamoDB, 外部 HTTP など）をノード、呼び出し関係をエッジで表したグラフ</li>
+<li>各エッジに<strong>平均レイテンシ</strong>と<strong>エラー率</strong>が表示される</li>
+<li>ノードをクリックすると該当サービスのトレース一覧にドリルダウンできる</li>
+</ul>
+
+<hr>
+
+<h2>主要な設定・API・パラメータ</h2>
+
+<h3>X-Ray SDK（Python の場合）</h3>
+
+<pre><code class="language-python">from aws_xray_sdk.core import xray_recorder, patch_all
+
+# AWS SDK (boto3) の呼び出しを自動的にサブセグメント化
+patch_all()
+
+# カスタムサブセグメント
+with xray_recorder.in_subsegment('fetch-atcoder-submissions') as subsegment:
+    subsegment.put_annotation('user_id', user_id)
+    subsegment.put_metadata('request_params', params)
+    # ... 処理 ...</code></pre>
+
+<h3>Lambda での有効化</h3>
+
+<pre><code class="language-hcl"># Terraform
+resource "aws_lambda_function" "example" {
+  # ...
+  tracing_config {
+    mode = "Active"   # Active | PassThrough
+  }
+}</code></pre>
+
+<table>
+<thead>
+<tr><th>mode</th><th>動作</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Active</code></td><td>サンプリングルールにかかわらずトレースを送信</td></tr>
+<tr><td><code>PassThrough</code></td><td>アップストリームからトレースヘッダーが来たときのみ送信</td></tr>
+</tbody>
+</table>
+
+<h3>サンプリングルール（主要パラメータ）</h3>
+
+<table>
+<thead>
+<tr><th>パラメータ</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>reservoir_size</code></td><td>毎秒必ず記録するリクエスト数（固定枠）</td></tr>
+<tr><td><code>fixed_rate</code></td><td>固定枠を超えた分のサンプリング割合（0.0〜1.0）</td></tr>
+<tr><td><code>host</code>, <code>url_path</code>, <code>http_method</code></td><td>ルール適用条件のフィルタ</td></tr>
+<tr><td><code>priority</code></td><td>ルールの優先順位（数値が低いほど高優先）</td></tr>
+</tbody>
+</table>
+
+<h3>フィルタ式（コンソール検索）</h3>
+
+<pre><code>annotation.user_id = "12345"
+service("my-lambda") { error = true }
+responsetime &gt; 2</code></pre>
+
+<hr>
+
+<h2>よくある落とし穴・誤解</h2>
+
+<p><strong>1. "Active" にしたのにトレースが出ない</strong><br>
+Lambda の実行ロールに <code>xray:PutTraceSegments</code> と <code>xray:PutTelemetryRecords</code> の権限が必要です。IAM ポリシーの <code>AWSXRayDaemonWriteAccess</code> マネージドポリシーを付与してください。</p>
+
+<p><strong>2. サンプリングで重要なリクエストが欠ける</strong><br>
+デフォルトのサンプリング率（5%）では、低トラフィック時にエラートレースが記録されないことがあります。開発環境では <code>fixed_rate = 1.0</code> にするか、エラーパスにカスタムルールを設定してください。</p>
+
+<p><strong>3. Annotation と Metadata を混同する</strong><br>
+コンソールのフィルタ検索で絞り込みたい値（user_id, contest など）は必ず Annotation に入れます。Metadata に入れると検索できません。</p>
+
+<p><strong>4. Cold Start が別セグメントに見える</strong><br>
+Lambda の初期化フェーズ（Cold Start）は <code>Initialization</code> サブセグメントとして表示されます。関数本体の実行時間とは別カウントなので、レイテンシ分析時は両方を確認してください。</p>
+
+<p><strong>5. X-Ray デーモンが不要なケース</strong><br>
+Lambda と API Gateway は X-Ray デーモンを自前で持つため、アプリ側での起動は不要です。EC2/ECS で動かす場合はデーモンプロセスの起動が必要です。</p>
+
+<hr>
+
+<h2>このプロジェクト（AtCoder 復習）での使いどころ</h2>
+
+<p>AtCoder 復習ツールは <code>API Gateway → Lambda → DynamoDB</code> と外部 HTTP（AtCoder API）が絡む典型的な分散構成です。X-Ray を導入すると以下が可能になります。</p>
+
+<ul>
+<li><strong>提出履歴取得の遅延分析</strong>: <code>sync_submissions</code> Lambda が AtCoder API を呼ぶ外部 HTTP 時間と DynamoDB への書き込み時間を分離して把握できる</li>
+<li><strong>ユーザーごとの処理時間追跡</strong>: <code>user_id</code> を Annotation に付けることで、特定ユーザーのリクエストだけをフィルタしてトレースを確認できる</li>
+<li><strong>DynamoDB スロットリングの即時検知</strong>: スロットリングが発生したセグメントは Fault としてマークされ、サービスマップ上でノードが赤くなることで一目で把握できる</li>
+<li><strong>段階的なボトルネック解消</strong>: フェーズ 1 で作った Lambda の処理のどこに時間がかかっているかを、コードを変えずにまず可視化できる</li>
+</ul>
+
+<hr>
+
+<h2>デモで体験したこと</h2>
+
+<p><code>docs/learning/phase9/demo/index.html</code> のデモでは、「リクエスト実行」ボタンを押すことで <code>API Gateway → Lambda → DynamoDB → 外部 HTTP</code> の一連のトレースが生成されます。タイムライン上のウォーターフォール（各セグメント/サブセグメントを横棒で表示）から、どのサービスでどれだけの時間がかかったかを視覚的に確認できます。各バーをクリックすると duration・レスポンスコード・Annotation・Metadata の詳細が展開され、Annotation のインデックス性と Metadata の非検索性の違いが実感できます。また「障害を注入」機能で DynamoDB スロットリングを起こすと、該当セグメントが赤くハイライトされ、サービスマップのノードも赤化することで、エラー源の特定がいかに直感的かを体験できます。</p>
+
+<hr>
+
+<h2>公式ドキュメント（出典）</h2>
+
+<ul>
+<li><a href="https://docs.aws.amazon.com/xray/latest/devguide/aws-xray.html">https://docs.aws.amazon.com/xray/latest/devguide/aws-xray.html</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/xray/latest/devguide/xray-concepts.html">https://docs.aws.amazon.com/xray/latest/devguide/xray-concepts.html</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/xray/latest/devguide/xray-console-servicemap.html">https://docs.aws.amazon.com/xray/latest/devguide/xray-console-servicemap.html</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/xray/latest/devguide/xray-concepts.html#xray-concepts-annotations">https://docs.aws.amazon.com/xray/latest/devguide/xray-concepts.html#xray-concepts-annotations</a>（閲覧日 2026-05-31）</li>
+</ul>
+
+<hr>
+
+<h2>関連・発展サービス</h2>
+
+<h3>CloudWatch ServiceLens — X-Ray をチームで「使いやすくする」レイヤー</h3>
+
+<p>X-Ray コンソールはエンジニア向けの生データ表示で、ルーティングや絞り込みに慣れが必要だ。CloudWatch ServiceLens はその上に「AWS の運用 UI」を被せた統合ビュー。<code>CloudWatch &gt; ServiceLens &gt; Service Map</code> を開くと、X-Ray トレースから自動生成されたノードグラフに、リクエスト数・平均レイテンシ・エラー率のメトリクスがオーバーレイされる。</p>
+
+<p>実務での利点は「コンテキストジャンプ」にある。DynamoDB ノードをクリックすると、そのサービスに紐付くトレース・Logs Insights クエリ・CloudWatch メトリクスへのリンクがすべて一画面に集まる。「DynamoDB のレイテンシが急騰したトレースを絞り込んで原因 Lambda を特定する」という操作が、画面遷移なく 3 クリックで完結する。チームで障害対応するときに「X-Ray 画面を共有する」より「ServiceLens の URL を貼る」方が伝わりやすい。</p>
+
+<h3>Application Signals（2024年 GA）— SLO 管理の新機能</h3>
+
+<p>Application Signals は X-Ray + CloudWatch の上に SLO（Service Level Objective）を重ねる。<code>CloudWatch &gt; Application Signals &gt; Services</code> から対象サービスを選び、「p99 レイテンシ &lt; 500ms」「エラー率 &lt; 0.1%」という目標を設定すると、SLO Burn Rate アラームが自動で生成される。ADOT（AWS Distro for OpenTelemetry）で計装すると、コード変更なしでこのダッシュボードに乗ってくる。</p>
+
+<p>つまずきポイント: Lambda に対して Application Signals を有効にするには ADOT Lambda Layer の特定バージョン以降が必要で、Python 3.12 と Layer バージョンの組み合わせに注意が要る。互換マトリクスは <a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-Application-Signals-Enable-Lambda.html">公式ページ</a> で随時更新されている。</p>
+
+<h3>ADOT（AWS Distro for OpenTelemetry）— ベンダーロックインを避けつつ X-Ray に送る</h3>
+
+<p>aws-xray-sdk で書いたコードは X-Ray 専用になる。将来 Datadog や Grafana Tempo に移行するとき、SDK 依存の計装コードを書き直すコストが発生する。ADOT は OpenTelemetry の AWS フォークで、Lambda Layer として付けるだけで SDK 依存なしにトレースを送れる。エクスポーター先を <code>collector.yaml</code> で切り替えられるため、移行時にアプリコードは無変更で済む。</p>
+
+<pre><code class="language-hcl"># ADOT Layer (ap-northeast-1, Python 3.12, 2025年時点の例)
+resource "aws_lambda_function" "producer_adot" {
+  # ...
+  layers = [
+    "arn:aws:lambda:ap-northeast-1:901920570463:layer:aws-otel-python-amd64-ver-1-24-0:1"
+  ]
+  environment {
+    variables = {
+      AWS_LAMBDA_EXEC_WRAPPER            = "/opt/otel-instrument"
+      OPENTELEMETRY_COLLECTOR_CONFIG_URI = "/var/task/collector.yaml"
+    }
+  }
+}</code></pre>
+
+<p><code>collector.yaml</code> でエクスポーター先を <code>awsxray</code> と <code>otlp</code>（Grafana Cloud など）の両方に向けることもできる。「今は X-Ray、将来は別ツール」という段階的移行が現実的になる。</p>
+
+<h3>X-Ray Insights — 異常検知の自動化</h3>
+
+<p>X-Ray Insights は正常時のトレースパターンを機械学習で学習し、エラー率やレイテンシが統計的に逸脱したタイミングで自動的に「Insight イベント」を生成する。CloudWatch EventBridge と連携して Slack 通知を飛ばすことも可能だ。</p>
+
+<p>Terraform での有効化:</p>
+
+<pre><code class="language-hcl">resource "aws_xray_group" "phase9" {
+  group_name        = "phase9-group"
+  filter_expression = "annotation.function = \"producer\" OR annotation.function = \"consumer\""
+
+  insights_configuration {
+    insights_enabled      = true
+    notifications_enabled = true  # EventBridge にイベントを投げる
+  }
+}</code></pre>
+
+<p>注意: Insights が精度の高いベースラインを学習するには数日〜1週間のトレース蓄積が必要。起動直後の sandbox ではほぼ機能しないが、本番運用開始後に有効化するタイミングを知っておくと役立つ。</p>
+
+<h3>サンプリングルール設計論 — 「全量とれば安心」は幻想</h3>
+
+<p>本番環境では高トラフィックサービスで全量トレースを取ると X-Ray のコストと Storage が爆発する。設計の基本方針は「重要パスは reservoir で固定枠を確保、ノイズパスは間引く」。</p>
+
+<table>
+<thead>
+<tr><th>パターン</th><th>reservoir_size</th><th>fixed_rate</th><th>用途</th></tr>
+</thead>
+<tbody>
+<tr><td>全量（デバッグ中）</td><td>999999</td><td>1.0</td><td>負荷が低い・障害調査中のみ</td></tr>
+<tr><td>重要エンドポイント</td><td>10</td><td>0.10</td><td>/checkout・/payment など</td></tr>
+<tr><td>ヘルスチェック間引き</td><td>0</td><td>0.01</td><td>/health の過剰トレースを防ぐ</td></tr>
+<tr><td>バッチ処理</td><td>1</td><td>0.05</td><td>SQS/Batch のバックグラウンド処理</td></tr>
+</tbody>
+</table>
+
+<p>落とし穴: サンプリングルールは X-Ray サービスが中央集権的に配布する。SDK がルールを取得するために <code>xray:GetSamplingRules</code> と <code>xray:GetSamplingTargets</code> の<strong>両方</strong>が IAM で必要。片方だけ許可している場合、サンプリングルールが取得できずにデフォルトルール（毎秒 1 件 + 5%）にフォールバックし、「カスタムルールが効いていない」と長時間気づかないケースが多い。</p>
+
+<h3>Lambda Powertools Tracer — 実務での事実上の標準</h3>
+
+<p>aws-xray-sdk を直接使うよりも、Lambda Powertools の <code>Tracer</code> クラスを経由する方が現場では一般的だ。デコレータベースで計装でき、Logger・Metrics と組み合わせると「トレース ID をログに自動埋め込み」「エラー時に自動フラグ」が無設定で手に入る。</p>
+
+<pre><code class="language-python">from aws_lambda_powertools import Tracer, Logger
+
+tracer = Tracer(service="phase9-producer")
+logger = Logger(service="phase9-producer")
+
+@tracer.capture_lambda_handler
+@logger.inject_lambda_context(log_event=True)
+def handler(event: dict, context) -> dict:
+    return _process(event)
+
+@tracer.capture_method   # このメソッドが自動でサブセグメントになる
+def _process(event: dict) -> dict:
+    # ... 処理 ...</code></pre>
+
+<p>Terraform での Layer 指定:</p>
+
+<pre><code class="language-hcl">resource "aws_lambda_function" "producer_powertools" {
+  # ...
+  layers = [
+    # Powertools for Python v3 マネージド Layer (ap-northeast-1)
+    "arn:aws:lambda:ap-northeast-1:017000801446:layer:AWSLambdaPowertoolsPythonV3-python312-arm64:7"
+  ]
+  environment {
+    variables = {
+      POWERTOOLS_SERVICE_NAME = "phase9-producer"
+      LOG_LEVEL               = "INFO"
+    }
+  }
+}</code></pre>
+
+<p>参考: <a href="https://docs.powertools.aws.dev/lambda/python/latest/#lambda-layer">https://docs.powertools.aws.dev/lambda/python/latest/#lambda-layer</a>（Layer ARN はリージョン・バージョンで変わるため常にここを確認）</p>
+
+<hr>
+
+<h2>セキュリティ課題と対策</h2>
+
+<h3>課題1: トレースデータに機微情報が乗りうる</h3>
+
+<p><code>patch_all()</code> や ADOT の自動計装は便利だが、意図せず個人情報がトレースに記録されることがある。具体的には:</p>
+
+<ul>
+<li>DynamoDB の <code>put_item</code> パラメータ（個人情報の属性値が含まれる場合）</li>
+<li>HTTP クライアントのリクエスト URL（クエリパラメータにトークンが入っている場合）</li>
+<li>SQS メッセージボディ（aws-xray-sdk はデフォルトで記録しないが SDK バージョンで挙動が異なる）</li>
+</ul>
+
+<p>対策は「メタデータに何を入れるかを明示的に制御する」こと:</p>
+
+<pre><code class="language-python">from aws_xray_sdk.core import xray_recorder
+
+segment = xray_recorder.current_segment()
+# 良い例: 検索に必要な識別子だけ Annotation に
+segment.put_annotation("user_id", event.get("user_id"))
+segment.put_annotation("item_id", item_id)
+# 悪い例: event 全体を Metadata に入れると機微情報が乗る可能性がある
+# segment.put_metadata("event", event)  ← PII レビューなしでは危険</code></pre>
+
+<h3>課題2: X-Ray トレースへのアクセス制御が甘くなりがち</h3>
+
+<p>X-Ray データの読み取り権限は <code>xray:GetTraceSummaries</code>・<code>xray:BatchGetTraces</code>・<code>xray:GetServiceGraph</code> で制御する。「開発者全員に ReadOnly を付与」する前に、「そのトレースにどんな情報が乗っているか」を棚卸しすること。最低限の対策として、本番アカウントと開発アカウントを分離し、本番トレースを開発者が参照できないポリシー（SCP）を AWS Organizations で適用する。</p>
+
+<pre><code class="language-json">// SCP: 本番アカウントへの X-Ray 読み取りを制限する例
+{
+  "Effect": "Deny",
+  "Action": [
+    "xray:GetTraceSummaries",
+    "xray:BatchGetTraces",
+    "xray:GetServiceGraph"
+  ],
+  "Resource": "*",
+  "Condition": {
+    "ArnNotLike": {
+      "aws:PrincipalArn": "arn:aws:iam::*:role/ProdReadOnlyRole"
+    }
+  }
+}</code></pre>
+
+<h3>課題3: KMS 暗号化の「既存トレースは再暗号化されない」落とし穴</h3>
+
+<p>本 Phase の構成では X-Ray の暗号化設定に KMS CMK を指定している。よくあるミスは「KMS キーを変更したら既存トレースが自動で再暗号化される」という誤解。X-Ray の暗号化設定は<strong>新しく書き込まれるトレースにのみ適用</strong>される。既存トレースの再暗号化は不可能。CMK を無効化・削除すると旧キーで暗号化された既存トレースが読めなくなる。キーローテーション後もしばらくは旧キーを有効にしたまま運用する必要がある。</p>
+
+<h3>課題4: X-Ray への書き込みを特定 Lambda のみ許可したい問題</h3>
+
+<p>IAM の <code>aws:SourceArn</code> 条件を <code>xray:PutTraceSegments</code> に付けようとすると「X-Ray はリソースレベルのアクセス制御をサポートしていない」という壁にぶつかる。X-Ray の既知制約で、Resource に <code>*</code> 以外を指定できない。ワークアラウンドとして VPC エンドポイントポリシーで送信元 VPC を制限する方法がある:</p>
+
+<pre><code class="language-hcl">resource "aws_vpc_endpoint_policy" "xray" {
+  vpc_endpoint_id = aws_vpc_endpoint.xray.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = "*"
+      Action    = ["xray:PutTraceSegments", "xray:PutTelemetryRecords"]
+      Resource  = "*"
+      Condition = {
+        StringEquals = {
+          "aws:SourceVpc" = aws_vpc.phase9.id
+        }
+      }
+    }]
+  })
+}</code></pre>
+
+<p>「Lambda を VPC 内に配置 + X-Ray VPC エンドポイント」の組み合わせで、特定 VPC からの書き込みのみを許可する。ただし Lambda を VPC に入れると Cold Start が増える（ENI アタッチ時間）トレードオフがある。Hyperplane ENI（デフォルト有効）でほぼ解消されているが、アカウントの設定を確認すること。</p>
+
+<h3>課題5: サンプリング率低下による「漏洩リスク低減」</h3>
+
+<p>逆説的だが、サンプリング率を下げることで「外部漏洩するトレースの絶対量」も減る。PCI-DSS 対応が必要な決済フローは <code>/payment</code> パスのサンプリング率を <code>fixed_rate = 0.01</code> にする設計が選択肢になる。ただし問題発生時にトレースがなければデバッグが困難なため、CloudWatch アラーム発火をトリガーに「一時的にサンプリングルールを書き換える」RunBook（手順書）を用意しておくこと。</p>
+
+<hr>
+
+<h2>インフラ応用パターン</h2>
+
+<h3>パターン1: SQS 経由のトレース ID 伝播設計</h3>
+
+<p>本 Phase の <code>producer → SQS → consumer</code> チェーンで、最も引っかかりやすいのが「SQS を挟んだらトレースが断絶する」問題だ。HTTP では <code>X-Amzn-Trace-Id</code> ヘッダが自動伝播されるが、SQS はメッセージキューのため<strong>手動でメッセージ属性にトレース ID を乗せる</strong>必要がある。</p>
+
+<pre><code class="language-python"># producer 側: SQS 送信時にトレース ID を属性として埋め込む
+sqs.send_message(
+    QueueUrl=QUEUE_URL,
+    MessageBody=json.dumps({"item_id": item_id}),
+    MessageAttributes={
+        "X-Amzn-Trace-Id": {
+            "DataType": "String",
+            "StringValue": xray_recorder.current_segment().trace_id
+        }
+    }
+)
+
+# consumer 側: 属性から読み取って Annotation に記録
+trace_id = record.get("messageAttributes", {}).get(
+    "X-Amzn-Trace-Id", {}).get("stringValue", "unknown")
+xray_recorder.current_segment().put_annotation("upstream_trace_id", trace_id)</code></pre>
+
+<p>2024 年以降、aws-xray-sdk は SQS の自動伝播を一部サポートし始めたが、SDK バージョンと SQS のトリガー設定によって挙動が変わる。確実に繋げたいなら上記の手動伝播を明示的に書く方が安全だ。ADOT を使う場合は W3C TraceContext ヘッダ（<code>traceparent</code>）での自動伝播が可能で、より標準的なアプローチになる。</p>
+
+<h3>パターン2: コールドスタート分析と Provisioned Concurrency のビフォーアフター</h3>
+
+<p>Lambda コールドスタートは X-Ray のタイムラインで <code>Initialization</code> サブセグメントとして可視化される。CloudWatch Logs に出力される <code>Init Duration</code> と合わせると全体像がつかめる。</p>
+
+<pre><code># コールドスタートあり（X-Ray タイムライン）
+[Initialization: 850ms][Handler: 120ms] ← 合計 970ms
+Duration メトリクス: 120ms（Initは含まれない！）
+Init Duration (Logs): 850ms
+
+# コールドスタートなし（Provisioned Concurrency 有効後）
+[Handler: 95ms]
+Initialization サブセグメントが消える</code></pre>
+
+<p>Duration メトリクスが同じでも、X-Ray で <code>Initialization</code> の有無を確認することで「Provisioned Concurrency が機能しているか」を視覚的に検証できる。コスト正当化の根拠として「ビフォーアフター」をスクリーンショットで保存すると有用だ。</p>
+
+<pre><code class="language-hcl"># Provisioned Concurrency（extra-credit。sandbox では高コストなので任意）
+resource "aws_lambda_alias" "producer_live" {
+  name             = "live"
+  function_name    = aws_lambda_function.producer.function_name
+  function_version = aws_lambda_function.producer.version
+}
+
+resource "aws_lambda_provisioned_concurrency_config" "producer" {
+  function_name                     = aws_lambda_function.producer.function_name
+  qualifier                         = aws_lambda_alias.producer_live.name
+  provisioned_concurrent_executions = 2
+}</code></pre>
+
+<h3>パターン3: カスタムサブセグメントでボトルネックを ms 単位で特定</h3>
+
+<p><code>watch.sh</code> でも確認できるが、Lambda 全体の Duration メトリクスは「関数が何 ms かかったか」しか教えてくれない。処理のどこが遅いかは X-Ray のカスタムサブセグメントで初めてわかる。</p>
+
+<pre><code class="language-python">with xray_recorder.in_subsegment("schema-validation") as subsegment:
+    subsegment.put_annotation("input_size_bytes", len(body_raw))
+    validated = validate_schema(body)   # バリデーションに何 ms?
+
+with xray_recorder.in_subsegment("external-api-call") as subsegment:
+    subsegment.put_annotation("endpoint", "atcoder.jp")
+    result = fetch_atcoder_submissions(user_id)  # 外部 API に何 ms?
+
+with xray_recorder.in_subsegment("dynamodb-batch-write") as subsegment:
+    subsegment.put_annotation("item_count", len(result))
+    write_to_dynamodb(result)  # DB 書き込みに何 ms?</code></pre>
+
+<p>タイムライン上でこれらが横棒として並ぶため、「DynamoDB が遅い」と思っていたら実は「外部 API 呼び出し」が全体の 80% を占めていた、という発見が実務でよくある。</p>
+
+<h3>パターン4: Step Functions との連携 — 手動伝播の苦労がなくなる</h3>
+
+<p>Lambda + SQS の非同期チェーンで手動伝播が必要な X-Ray に対し、Step Functions はネイティブ統合を持つ。<code>aws_sfn_state_machine</code> の <code>tracing_configuration { enabled = true }</code> を付けるだけで、ステートマシンの各ステート（Task・Choice・Wait・Parallel）がサブセグメントとして自動的に現れる。</p>
+
+<pre><code class="language-hcl">resource "aws_sfn_state_machine" "phase9_workflow" {
+  name     = "phase9-workflow"
+  role_arn = aws_iam_role.sfn.arn
+
+  tracing_configuration {
+    enabled = true  # これだけで全ステートが X-Ray に乗る
+  }
+
+  definition = jsonencode({ ... })
+}</code></pre>
+
+<p>「どのステートで 3 分詰まっているか」が Service Map でノードとして見えるため、SQS 経由の複雑な伝播設計なしに分散処理をトレースできる。Lambda + SQS より Step Functions + Lambda の方が X-Ray との相性は格段に良い。</p>
+
+<h3>パターン5: X-Ray Group + エラー専用 Service Map</h3>
+
+<p>エラートレースだけを絞り込んだ Service Map を作ると、障害対応時間を大幅に短縮できる。</p>
+
+<pre><code class="language-hcl">resource "aws_xray_group" "errors_only" {
+  group_name        = "phase9-errors"
+  filter_expression = "fault = true OR error = true"
+
+  insights_configuration {
+    insights_enabled      = true
+    notifications_enabled = true
+  }
+}</code></pre>
+
+<p>コンソールの <code>X-Ray &gt; Groups</code> でこのグループを選択すると、エラーが発生したトレースだけの Service Map が表示される。「全トレースの Service Map」では正常リクエストに埋もれていたエラーノードが浮き上がる。障害対応の初動で「どのサービスが赤くなっているか」を素早く確認する用途に特に有効だ。</p>
+
+<h3>パターン6: クロスアカウント集約（CloudWatch Cross-Account Observability）</h3>
+
+<p>本番・ステージング・開発の複数アカウントでトレースが分散すると、インシデント時に各コンソールを行き来する必要が生じる。CloudWatch Cross-Account Observability を使うと、監視専用アカウントから複数アカウントのトレースを一括参照できる。</p>
+
+<pre><code class="language-hcl"># ソースアカウント側（各環境アカウント）
+resource "aws_oam_link" "phase9" {
+  label_template = "$AccountName"
+  resource_types = [
+    "AWS::XRay::Trace",
+    "AWS::CloudWatch::Metric",
+    "AWS::Logs::LogGroup"
+  ]
+  sink_identifier = var.monitoring_account_sink_arn
+}</code></pre>
+
+<p>監視アカウントの Service Map が複数アカウントをまたいでノードを描画するようになる。追加コストはなく、設定はコンソールの <code>CloudWatch &gt; Settings &gt; Cross-account observability</code> から数分で完了する。マルチアカウント構成を取る場合は最初期に設定しておくと、後から「あのエラーはどのアカウントの Lambda だった？」という混乱を防げる。</p>
+
+<h3>パターン7: X-Ray vs Datadog / Grafana — 使い分けの判断基準</h3>
+
+<table>
+<thead>
+<tr><th>観点</th><th>X-Ray</th><th>Datadog APM</th><th>Grafana Tempo + ADOT</th></tr>
+</thead>
+<tbody>
+<tr><td>セットアップコスト</td><td>低（Active 有効化のみ）</td><td>中（Agent インストール）</td><td>中（ADOT Layer + collector.yaml）</td></tr>
+<tr><td>コスト</td><td>100万トレース/月 無料、以降 $5/100万</td><td>有償（ホスト課金）</td><td>Tempo 自体は無料（ストレージ別）</td></tr>
+<tr><td>保存期間</td><td>30日固定</td><td>プラン依存（15日〜）</td><td>自由（自己管理）</td></tr>
+<tr><td>AWS 統合</td><td>最高（Service Map が AWS アーキテクチャ図と一致）</td><td>良好</td><td>良好（ADOT 経由）</td></tr>
+<tr><td>マルチクラウド</td><td>不可</td><td>可</td><td>可</td></tr>
+<tr><td>ベンダーロックイン</td><td>X-Ray SDK に依存</td><td>Datadog Agent に依存</td><td>OpenTelemetry 標準</td></tr>
+</tbody>
+</table>
+
+<p>判断基準: AWS only のシステムなら X-Ray が最も低コスト・低摩擦。将来マルチクラウドが視野に入る・オンプレ混在・長期トレース分析が必要、の場合は ADOT + Grafana Tempo を検討する。Datadog は可観測性のオールインワン（ログ・メトリクス・トレース・APM・インシデント管理）が必要なチームに向く。</p>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase9</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase9</span></li>
+<li><b>負荷生成</b> — トレース有効 Lambda を呼ぶ<span class="cmd">make sandbox-load-phase9</span></li>
+<li><b>観測</b> — X-Ray/ServiceLens コンソールのサービスマップ＋Lambda 通常メトリクス<span class="cmd">make sandbox-watch-phase9</span><div class="tstamp">⏱ トレース反映 数分</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase9</span></li>
+</ol>
+<p class="note warn">⚠ 観測は X-Ray コンソール側が主（watch.sh が deep link を出力）。</p>
+</section>
+<div class="foot">← <a href="index.html">Phase 9 ルーター</a> ／ <a href="main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main>
+</body>
+</html>

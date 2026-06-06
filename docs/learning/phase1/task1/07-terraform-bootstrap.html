@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 教材</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}
+.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;line-height:1.5;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}
+h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}img{max-width:100%}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}
+.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style>
+</head>
+<body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 教材 · <a href="../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Terraform Bootstrap の鶏と卵問題</h1>
+
+<h2>概要</h2>
+
+<p><code>terraform init</code> を実行したとき「S3バケットが存在しない」エラーで失敗した事例と解決策。Terraform の state を S3 に保存する運用には <strong>Bootstrap パターン</strong>が必要になる。最初に一度だけ、ローカル state で S3 バケット本体を作る段取り。</p>
+
+<h2>解説</h2>
+
+<h3>発生した問題</h3>
+
+<p><code>terraform init</code> を実行すると以下のエラー:</p>
+
+<pre><code>Error: Failed to get existing workspaces: S3 bucket "atcoder-review-tfstate" does not exist.
+NoSuchBucket</code></pre>
+
+<h3>根本原因: 鶏と卵問題</h3>
+
+<p><code>terraform/main.tf</code>:</p>
+
+<pre><code>backend "s3" {
+  bucket         = "atcoder-review-tfstate"   # ← 状態ファイル保存先
+  dynamodb_table = "atcoder-review-tflock"    # ← ロック管理
+}</code></pre>
+
+<ul>
+  <li>Terraform は <strong>起動時にまずバックエンドへ繋ぎに行く</strong> → バケットが無いとエラー</li>
+  <li>一方、<strong>S3バケット自体も Terraform で作りたい</strong>（IaCの思想）</li>
+  <li>結果: バケットを作るために Terraform が必要、Terraform を使うためにバケットが必要 → <strong>鶏と卵</strong></li>
+</ul>
+
+<h3>解決: Bootstrap パターン</h3>
+
+<p>別ディレクトリ <code>terraform/bootstrap/</code> に、<strong><code>backend "s3"</code> を書かない</strong>Terraform 設定を用意する。</p>
+
+<pre><code>terraform/
+├── main.tf              ← backend "s3" あり（本体）
+├── modules.tf
+├── modules/...
+└── bootstrap/
+    └── main.tf          ← backend なし = ローカル state</code></pre>
+
+<p>Bootstrap は S3 バケットと DynamoDB ロックテーブルのみを定義:</p>
+
+<pre><code>resource "aws_s3_bucket" "tfstate" {
+  bucket = "atcoder-review-tfstate"
+  lifecycle { prevent_destroy = true }  # 誤削除防止
+}
+# バージョニング、暗号化、パブリックアクセスブロックも定義
+
+resource "aws_dynamodb_table" "tflock" {
+  name         = "atcoder-review-tflock"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "LockID"   # ← ロック用の固定キー名
+  attribute {
+    name = "LockID"
+    type = "S"
+  }
+}</code></pre>
+
+<p><strong>Bootstrap は <code>backend "s3"</code> を書かない → stateは <code>bootstrap/terraform.tfstate</code> にローカル保存</strong> → バケットがなくても動く。</p>
+
+<h3>実行手順</h3>
+
+<pre><code># 1. Bootstrap: S3バケット + ロックテーブルを作る（一度だけ）
+cd terraform/bootstrap
+terraform init        # ローカルstate初期化
+terraform apply       # AWS に S3 + DynamoDB を作成
+
+# 2. ルート: これで backend "s3" が使える
+cd ..
+terraform init        # S3 backend を初期化、OK
+terraform apply       # 実際のアプリリソースを作成</code></pre>
+
+<h3>なぜ <code>prevent_destroy = true</code> か</h3>
+
+<p>S3バケットを誤って <code>terraform destroy</code> で消すと、<strong>全ての terraform.tfstate が消滅</strong>。つまりプロジェクト全体のIaC履歴が飛ぶ。Bootstrap のバケットには <code>lifecycle.prevent_destroy = true</code> を付けて、destroyコマンドが走ってもこのリソースだけは保護する。</p>
+
+<p>削除が必要なときは Terraform 外で手動削除するか、一時的に <code>prevent_destroy</code> を <code>false</code> にする必要がある。</p>
+
+<h3>なぜ <code>terraform state</code> を S3 に置く？</h3>
+
+<p>ローカル state のままでもTerraform自体は動く。しかし:</p>
+
+<ul>
+  <li><strong>共同作業ができない</strong>: 他の開発者と state を共有できない</li>
+  <li><strong>CI/CD が動かない</strong>: GitHub Actions 等が state を読めない</li>
+  <li><strong>ローカルマシンが死ぬと state 喪失</strong> → AWS上のリソースが「管理外」になる</li>
+</ul>
+
+<p>S3 バックエンド + DynamoDB ロックにすると:</p>
+
+<ul>
+  <li>チームで同じ state を参照できる</li>
+  <li>CI/CD から state にアクセス可能</li>
+  <li>DynamoDB ロックで <strong>同時 apply を防止</strong>（レースコンディション回避）</li>
+  <li>S3 バージョニングで state の履歴が残る（ロールバック可）</li>
+</ul>
+
+<h3>付随して出た警告: <code>dynamodb_table</code> 非推奨</h3>
+
+<pre><code>Warning: dynamodb_table parameter is deprecated. Use use_lockfile instead.</code></pre>
+
+<p>Terraform 1.10 以降、ロック機構が<strong>ネイティブ化</strong>され、DynamoDBテーブルが不要に:</p>
+
+<pre><code># 旧（今の設定）
+backend "s3" {
+  bucket         = "atcoder-review-tfstate"
+  dynamodb_table = "atcoder-review-tflock"
+  encrypt        = true
+}
+
+# 新（Terraform 1.10+）
+backend "s3" {
+  bucket       = "atcoder-review-tfstate"
+  use_lockfile = true   # ← S3上にロックファイルを置く仕組み
+  encrypt      = true
+}</code></pre>
+
+<p>警告だけで動作は続くので、今すぐ直す必要はない。移行するなら:</p>
+
+<ol>
+  <li><code>use_lockfile = true</code> に変更</li>
+  <li><code>terraform init -migrate-state</code> で state 移行</li>
+  <li>Bootstrap から <code>aws_dynamodb_table.tflock</code> を削除して destroy</li>
+</ol>
+
+<h3>学びのポイント</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>概念</th>
+      <th>要点</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Bootstrap パターン</td>
+      <td>バックエンドを Terraform で作るが、Bootstrap 自身はローカル state</td>
+    </tr>
+    <tr>
+      <td>鶏と卵問題</td>
+      <td>IaCで「IaC自身の基盤」を作るときの典型的ジレンマ</td>
+    </tr>
+    <tr>
+      <td><code>prevent_destroy</code></td>
+      <td>削除で連鎖的被害が出るリソースに付ける保険</td>
+    </tr>
+    <tr>
+      <td>ローカル state のリスク</td>
+      <td>1人開発でも喪失リスクあり、早めに S3 バックエンド化</td>
+    </tr>
+    <tr>
+      <td>deprecation 警告</td>
+      <td>動作には影響しないが、将来バージョンで動かなくなる予兆</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Q&amp;A</h2>
+
+<p><strong>Q: <code>terraform init</code> でエラーが出た。何が起きた？</strong></p>
+
+<p><code>backend "s3"</code> で指定した S3 バケット（<code>atcoder-review-tfstate</code>）が AWS 上に存在しないため、Terraform が state を読み書きできずに失敗した。解決するには先に Bootstrap を apply してバケットを作る必要がある。</p>
+
+<p><strong>Q: Bootstrap 自身の state はどこに保存される？ S3 がまだないのに？</strong></p>
+
+<p>Bootstrap の <code>main.tf</code> には <code>backend "s3"</code> を書いていない。そのため Terraform の既定動作で<strong>ローカルのディレクトリ（<code>bootstrap/terraform.tfstate</code>）に state が保存</strong>される。鶏と卵を回避する仕組み。</p>
+
+<p><strong>Q: 警告の <code>use_lockfile</code> には今すぐ移行すべき？</strong></p>
+
+<p>必須ではない。動作は続く。ただし将来の Terraform バージョンで廃止される可能性があるので、プロジェクトが落ち着いたタイミングで移行するのが良い。移行するとDynamoDBテーブルも不要になるため管理対象が減るメリット有。</p>
+
+<h2>関連</h2>
+
+<ul>
+  <li><a href="02-terraform-code-walkthrough.md">02-terraform-code-walkthrough.md</a> - <code>main.tf</code> の <code>backend "s3"</code> ブロック解説</li>
+  <li><a href="reference/terraform-basics.md">reference/terraform-basics.md</a> - Terraform backend の基礎</li>
+</ul>
+
+<hr>
+
+<p><em>Saved at 2026-04-18 via /learning-flow:topic</em></p>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase1</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase1</span></li>
+<li><b>負荷生成</b> — 無認証トラフィックを生成（認証あり負荷は TEST_PASSWORD=... を付ける）<span class="cmd">make sandbox-load-phase1</span></li>
+<li><b>観測</b> — API GW の Count/4XXError/Latency、Lambda、DynamoDB、Cognito メトリクス<span class="cmd">make sandbox-watch-phase1</span><div class="tstamp">⏱ 反映まで 2〜5 分</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase1</span></li>
+</ol>
+<p class="note warn">⚠ phase1 は本番スタックを観測するダッシュボードのみ作成（本番アプリは別途デプロイ済みが前提）。</p>
+</section>
+<div class="foot">← <a href="../index.html">Phase 1 ルーター</a> ／ <a href="../main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main>
+</body>
+</html>

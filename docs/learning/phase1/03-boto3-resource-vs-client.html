@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 教材</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}
+.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;line-height:1.5;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}
+h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}img{max-width:100%}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}
+.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style>
+</head>
+<body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 教材 · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>01. Boto3 Resource API vs Client API</h1>
+
+<blockquote>
+<p>出典: <a href="https://docs.aws.amazon.com/boto3/latest/guide/resources.html">Resources - Boto3 documentation</a>（閲覧日 2026-05-09）</p>
+<p>このノートは公式ドキュメントの「Resources」を起点に、Claude が自動生成した教材です。</p>
+</blockquote>
+
+<h2>概要</h2>
+
+<p>Boto3 には AWS にアクセスする 2 つの API がある:</p>
+
+<ul>
+  <li><strong>Client API</strong>: AWS API そのままの低レベルインターフェース。<code>boto3.client("dynamodb").query(...)</code> のように、AWS API のシグネチャを忠実にラップ</li>
+  <li><strong>Resource API</strong>: より Python 的なオブジェクト指向のインターフェース。<code>boto3.resource("dynamodb").Table("foo").query(...)</code> のようにオブジェクト経由で操作</li>
+</ul>
+
+<p>公式 docs から読み取れる <strong>重要な事実</strong>:</p>
+
+<blockquote>
+<p>The AWS Python SDK team does not intend to add new features to the resources interface in boto3. Existing interfaces will continue to operate during boto3's lifecycle. Customers can find access to newer service features through the client interface.</p>
+</blockquote>
+
+<p><strong>Resource API は新機能追加が止まっている (= メンテナンスモード)</strong>。新しい AWS サービスの機能は Client 経由でしか使えない。
+ただし DynamoDB の Resource API は既に十分に成熟しており、シンプルな CRUD なら Resource の方が読みやすい。</p>
+
+<p>このプロジェクトでは:</p>
+<ul>
+  <li><strong>Resource API を採用</strong> (Task 3 で既に採用済み)</li>
+  <li>ページネーションなど Resource では扱いにくい部分が出てきたら、その箇所だけ Client API を使う</li>
+</ul>
+
+<h2>公式 docs に沿った解説</h2>
+
+<h3>A. Resources vs Clients</h3>
+
+<p>公式 docs より:</p>
+
+<blockquote>
+<p>Resources represent an object-oriented interface to AWS, providing a higher-level abstraction than the raw, low-level calls made by service clients.</p>
+</blockquote>
+
+<p>つまり:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th></th>
+      <th>Client API</th>
+      <th>Resource API</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>抽象度</td>
+      <td>低レベル（AWS API そのまま）</td>
+      <td>高レベル（オブジェクト指向）</td>
+    </tr>
+    <tr>
+      <td>例</td>
+      <td><code>client.put_item(TableName="foo", Item={...})</code></td>
+      <td><code>resource.Table("foo").put_item(Item={...})</code></td>
+    </tr>
+    <tr>
+      <td>戻り値の型</td>
+      <td>dict（DynamoDB 型 <code>{"S": "..."}</code> 形式）</td>
+      <td>dict（Python ネイティブ型に自動変換）</td>
+    </tr>
+    <tr>
+      <td>新サービス対応</td>
+      <td>あり</td>
+      <td><strong>メンテナンスモード</strong>（新機能なし）</td>
+    </tr>
+    <tr>
+      <td>カバー範囲</td>
+      <td>全 AWS サービス</td>
+      <td>限定的（DynamoDB / S3 / SQS / EC2 など）</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>具体的な違い（DynamoDB の例）:</p>
+
+<pre><code class="language-python"># Client API: DynamoDB 型を明示的に書く必要がある
+client = boto3.client("dynamodb")
+client.put_item(
+    TableName="users",
+    Item={"user_id": {"S": "user-A"}, "score": {"N": "1500"}},
+)
+# → 戻り値 Item も {"user_id": {"S": "user-A"}, ...} の形
+
+# Resource API: Python の dict そのまま
+table = boto3.resource("dynamodb").Table("users")
+table.put_item(Item={"user_id": "user-A", "score": Decimal("1500")})
+# → 戻り値 Item も {"user_id": "user-A", "score": Decimal("1500")}</code></pre>
+
+<h3>B. Resource を作る</h3>
+
+<p><code>boto3.resource("service-name")</code> で取得する。サービスリソース自体は識別子不要だが、その下のリソース（Table 等）には識別子が必要。</p>
+
+<pre><code class="language-python">import boto3
+
+dynamodb = boto3.resource("dynamodb")        # サービスリソース（識別子なし）
+table = dynamodb.Table("users")              # 個別リソース（テーブル名 = 識別子）</code></pre>
+
+<h3>C. Resource の主要概念</h3>
+
+<p>公式 docs が紹介する Resource の中核概念:</p>
+
+<h4>Identifiers（識別子）</h4>
+
+<p>リソースインスタンスを一意に特定する値。インスタンス生成時に必須。</p>
+
+<pre><code class="language-python"># S3 Object には bucket_name と key の 2 つが識別子
+obj = s3.Object(bucket_name="my-bucket", key="test.txt")
+
+# 識別子が欠けると例外
+obj = s3.Object(bucket_name="my-bucket")  # ← key が無い → 例外</code></pre>
+
+<p>公式 docs より:</p>
+<blockquote>
+<p>Resource instance equality is based solely on identifiers.</p>
+</blockquote>
+
+<p>つまり「region や account が違っても、識別子が同じなら同一リソース扱い」。</p>
+
+<h4>Attributes（属性）</h4>
+
+<p>リソースのプロパティ。<strong>初回アクセス時に AWS API を呼んで遅延ロードされる</strong>ことがある（パフォーマンスに影響）。</p>
+
+<pre><code class="language-python">obj = s3.Object(bucket_name="my-bucket", key="test.txt")
+print(obj.last_modified)   # ← この行で HEAD リクエストが飛ぶかも</code></pre>
+
+<p>レイテンシが気になる場合は <code>obj.load()</code> で明示的にロードタイミングを制御できる。</p>
+
+<h4>Actions（アクション）</h4>
+
+<p>リソースに対する操作メソッド。識別子は自動的に渡される。</p>
+
+<pre><code class="language-python">table.put_item(Item={...})        # TableName は table の識別子から自動
+table.query(KeyConditionExpression="...")</code></pre>
+
+<p>公式 docs の重要な制約:</p>
+
+<blockquote>
+<p>Parameters <strong>must</strong> be passed as keyword arguments. They will not work as positional arguments.</p>
+</blockquote>
+
+<p>→ <code>table.put_item({...})</code> のような位置引数渡しは不可。必ず <code>Item=...</code> のキーワードで。</p>
+
+<h4>Sub-resources / References</h4>
+
+<p>リソース間の関係を表現する仕組み:</p>
+
+<ul>
+  <li><strong>Sub-resource</strong>: 親と識別子を共有する子（例: <code>bucket.Object(key="...")</code>）</li>
+  <li><strong>Reference</strong>: 識別子を共有しない関連リソース（例: <code>instance.subnet</code>）</li>
+</ul>
+
+<p>DynamoDB ではあまり使わないが、S3 では <code>bucket.Object(...)</code> が頻出。</p>
+
+<h4>Waiters</h4>
+
+<p>リソースが特定状態になるまでポーリングする仕組み:</p>
+
+<pre><code class="language-python">bucket.wait_until_exists()
+instance.wait_until_running()</code></pre>
+
+<p>DynamoDB では Table 作成後の <code>ACTIVE</code> 状態待ちで使うことがある（このプロジェクトでは Terraform が責任を持つので Lambda 内では不要）。</p>
+
+<h3>D. スレッドセーフティ — 重要な制約</h3>
+
+<p>公式 docs より:</p>
+
+<blockquote>
+<p>Resource instances are <strong>not</strong> thread safe and should not be shared across threads or processes.</p>
+</blockquote>
+
+<p><strong>Resource インスタンスはスレッド間で共有してはいけない</strong>。マルチスレッドで使う場合は各スレッドで個別に作成する。</p>
+
+<pre><code class="language-python"># ダメな例: モジュールトップで作って複数スレッドから使う
+table = boto3.resource("dynamodb").Table("users")  # 共有は NG
+
+# OK: スレッドごとに作る
+def worker():
+    session = boto3.session.Session()
+    table = session.resource("dynamodb").Table("users")
+    # ...</code></pre>
+
+<blockquote>
+<p>補足（公式 docs には記載なし）: AWS Lambda は <strong>1 リクエスト = 1 実行環境</strong>で動くため、Lambda 内ではこの制約は通常問題にならない（並列リクエストは別 Lambda インスタンスで処理される）。ただし Lambda の内部で <code>concurrent.futures</code> 等を使う場合は注意。</p>
+</blockquote>
+
+<h3>E. メンテナンスモードの含意</h3>
+
+<p>冒頭の警告を再掲:</p>
+
+<blockquote>
+<p>The AWS Python SDK team does not intend to add new features to the resources interface in boto3.</p>
+</blockquote>
+
+<p>これが意味するのは:</p>
+
+<ul>
+  <li><strong>既存サービス（DynamoDB / S3 / SQS / EC2）の Resource API は維持される</strong></li>
+  <li><strong>新サービスは Client のみ提供される</strong>（例: Bedrock, EventBridge など新しめのサービスは Resource 無し）</li>
+  <li>DynamoDB の <strong>新機能</strong> が出ても Resource には反映されない可能性がある</li>
+</ul>
+
+<p>このプロジェクト的には:</p>
+<ul>
+  <li>DynamoDB の基本 CRUD は Resource で書く（読みやすさ優先）</li>
+  <li>Resource にない機能（例: paginator）が必要になったら Client を併用する</li>
+  <li>将来的に Resource 全体が deprecated になる可能性は念頭に置いておく</li>
+</ul>
+
+<h2>重要ポイント</h2>
+
+<ul>
+  <li><strong>Resource API は メンテナンスモード</strong>。新機能は来ないが、DynamoDB の既存機能は十分使える</li>
+  <li>Resource は <strong>オブジェクト指向で書きやすい</strong>。<code>{"S": "..."}</code> のような DynamoDB 型表現を意識せずに済む</li>
+  <li><strong>Identifiers</strong>（テーブル名など）はインスタンス生成時に必須</li>
+  <li><strong>Attributes</strong> は遅延ロードでレイテンシが発生し得る（DynamoDB Table ではあまり遭遇しない）</li>
+  <li><strong>Actions</strong> はキーワード引数のみ受け付ける</li>
+  <li><strong>スレッド非安全</strong>: Resource インスタンスをスレッド間共有しない</li>
+  <li>一部機能（<strong>paginator</strong>）は Resource にない → Client を併用する判断は次の教材へ</li>
+</ul>
+
+<h2>コード例</h2>
+
+<h3>Client API と Resource API の同じ操作</h3>
+
+<pre><code class="language-python">import boto3
+from decimal import Decimal
+
+# === Client API ===
+client = boto3.client("dynamodb")
+client.put_item(
+    TableName="users",
+    Item={
+        "user_id": {"S": "user-A"},
+        "score": {"N": "1500.5"},
+    },
+)
+resp = client.get_item(
+    TableName="users",
+    Key={"user_id": {"S": "user-A"}},
+)
+# resp["Item"] == {"user_id": {"S": "user-A"}, "score": {"N": "1500.5"}}
+
+
+# === Resource API（このプロジェクトで使う方）===
+table = boto3.resource("dynamodb").Table("users")
+table.put_item(
+    Item={
+        "user_id": "user-A",
+        "score": Decimal("1500.5"),
+    },
+)
+resp = table.get_item(Key={"user_id": "user-A"})
+# resp["Item"] == {"user_id": "user-A", "score": Decimal("1500.5")}</code></pre>
+
+<p>Resource 版は <strong>Python の dict をそのまま渡せる</strong>点と、<strong>Decimal で受け取れる</strong>（教材 Task 3 / 02 参照）点で読みやすい。</p>
+
+<h2>関連</h2>
+
+<ul>
+  <li>議論・Q&amp;A: （<code>lesson</code> 中に発生したら <code>reference/</code> 配下にリンクが追加されます）</li>
+  <li>次の教材: <a href="02-dynamodb-pagination-and-paginators.md">02-dynamodb-pagination-and-paginators.md</a> — DynamoDB の 1 MB 制限、LastEvaluatedKey、Boto3 Paginators</li>
+  <li>関連 Task: <a href="practice/json-dumps-default-str.md">Phase 1 / Task 3 / 02 (Decimal 問題)</a></li>
+</ul>
+
+<hr>
+
+<p><em>Auto-generated at 2026-05-09 via /learning-flow:material（公式 docs 駆動）</em></p>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase1</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase1</span></li>
+<li><b>負荷生成</b> — 無認証トラフィックを生成（認証あり負荷は TEST_PASSWORD=... を付ける）<span class="cmd">make sandbox-load-phase1</span></li>
+<li><b>観測</b> — API GW の Count/4XXError/Latency、Lambda、DynamoDB、Cognito メトリクス<span class="cmd">make sandbox-watch-phase1</span><div class="tstamp">⏱ 反映まで 2〜5 分</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase1</span></li>
+</ol>
+<p class="note warn">⚠ phase1 は本番スタックを観測するダッシュボードのみ作成（本番アプリは別途デプロイ済みが前提）。</p>
+</section>
+<div class="foot">← <a href="index.html">Phase 1 ルーター</a> ／ <a href="main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main>
+</body>
+</html>

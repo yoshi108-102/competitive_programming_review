@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 教材</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}
+.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;line-height:1.5;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}
+h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}img{max-width:100%}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}
+.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style>
+</head>
+<body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 教材 · <a href="../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>DynamoDB キー設計</h1>
+
+<h2>解説</h2>
+
+<h3>なぜDynamoDBか</h3>
+
+<ul>
+  <li><strong>サーバーレス構成との相性</strong>: Lambda + DynamoDBはどちらもマネージドで、接続プールの管理が不要。RDSだとLambdaからの同時接続数の管理が必要になる</li>
+  <li><strong>コスト</strong>: オンデマンドモードなら使った分だけ課金。個人利用で月$1-3で済む</li>
+  <li><strong>スケーラビリティ</strong>: テーブル設計さえ正しければ、データ量が増えても自動スケール</li>
+</ul>
+
+<h3>キー設計が全て</h3>
+
+<p>RDBと違いDynamoDBにはJOINがないため、「どんなクエリを投げるか」から逆算してテーブルを設計する。</p>
+
+<table>
+  <thead>
+    <tr><th>テーブル</th><th>PK</th><th>SK</th><th>主なクエリ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>users</td><td><code>user_id</code></td><td>-</td><td>ユーザー情報の取得・更新</td></tr>
+    <tr><td>submissions</td><td><code>user_id</code></td><td><code>SUB#{submission_id}</code></td><td>あるユーザーの提出一覧を取得</td></tr>
+    <tr><td>problems</td><td><code>PROBLEM#{problem_id}</code></td><td>-</td><td>問題情報の取得</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>質疑応答</h2>
+
+<h3>Q1: PKとSKとは何？</h3>
+
+<p><strong>PK（Partition Key）</strong>: データの物理的な配置場所を決めるキー。PKの値がハッシュ関数に通され、どのパーティション（物理ストレージ）にデータを格納するかが決まる。</p>
+
+<p><strong>SK（Sort Key）</strong>: パーティション内でデータを並べ替えるキー。範囲検索が可能。</p>
+
+<p>DynamoDBのプライマリキーは2種類:</p>
+<ul>
+  <li><strong>シンプルキー</strong>: PKのみ（例: usersテーブル）</li>
+  <li><strong>複合キー</strong>: PK + SK（例: submissionsテーブル）</li>
+</ul>
+
+<pre><code>users テーブル（シンプルキー）:
+PK: user_id = "abc123"  →  { atcoder_username: "chokudai", ... }
+
+submissions テーブル（複合キー）:
+PK: user_id = "abc123", SK: "SUB#12345"  →  { problem_id: "abc300_a", ... }
+PK: user_id = "abc123", SK: "SUB#12346"  →  { problem_id: "abc300_b", ... }</code></pre>
+
+<p>データ取得の基本操作:</p>
+<ul>
+  <li><strong>GetItem</strong>: PK(+SK)を指定して1件取得</li>
+  <li><strong>Query</strong>: PKを指定してそのグループ全件取得</li>
+</ul>
+
+<h3>Q2: PKとSKを別にする理由は？</h3>
+
+<p><strong>「グループで取得」と「個別で取得」の両方を効率的にやるため。</strong></p>
+
+<p>PKだけの設計（<code>submission_id</code> をPKにした場合）:</p>
+<ul>
+  <li>個別取得: <code>GetItem(PK="SUB#12345")</code> → できる</li>
+  <li>ユーザーの提出一覧: 全件スキャン（Scan）が必要 → <strong>遅い、高コスト</strong></li>
+</ul>
+
+<p>PK + SK の設計（<code>user_id</code> をPK、<code>submission_id</code> をSKにした場合）:</p>
+<ul>
+  <li>ユーザーの提出一覧: <code>Query(PK="abc123")</code> → <strong>高速</strong></li>
+  <li>個別取得: <code>GetItem(PK="abc123", SK="SUB#12345")</code> → <strong>高速</strong></li>
+</ul>
+
+<p>物理的に同じPKのアイテムは同じパーティションに格納され、SKでソート済み。だからQueryが高速。</p>
+
+<h3>Q3: アクセスパターンによってはPKとSKとさらにキーを増やすこともありうるか？</h3>
+
+<p><strong>はい。GSI（Global Secondary Index）を追加する。</strong></p>
+
+<p>GSIは「別のPK+SKの組み合わせで検索できるようにする」もの。元テーブルとは独立したインデックスが内部的に作られる。</p>
+
+<p>例: problemsテーブルのPKは <code>problem_id</code> だが、「全探索タグの問題を難易度順に取得」したい場合:</p>
+
+<pre><code>GSI "TagDifficultyIndex":
+  GSI PK: tag → "全探索" で検索
+  GSI SK: difficulty → 難易度順にソート</code></pre>
+
+<p>RDBとの対比:</p>
+<table>
+  <thead>
+    <tr><th>RDB</th><th>DynamoDB</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>WHERE user_id = ?</code></td><td>PK で設計</td></tr>
+    <tr><td><code>WHERE user_id = ? AND id = ?</code></td><td>PK + SK で設計</td></tr>
+    <tr><td><code>WHERE tag = ? ORDER BY difficulty</code></td><td>GSI を追加</td></tr>
+    <tr><td>任意のWHERE句</td><td>その都度GSIが必要（または Scan）</td></tr>
+  </tbody>
+</table>
+
+<p>GSIの制約:</p>
+<ul>
+  <li>1テーブルあたり最大20個</li>
+  <li>データのコピーが作られるため、ストレージとスループットのコストが増加</li>
+  <li>結果整合性（数ミリ秒の遅延あり）</li>
+</ul>
+
+<h3>Q4: GSIがあればPK/SKはいらないのでは？</h3>
+
+<p><strong>GSIだけでは駄目。</strong> GSIは元テーブルのコピーであり、本体ではない。</p>
+
+<ul>
+  <li>書き込みは元テーブルのPK/SKに対してのみ行う。GSIに直接書き込むことはできない</li>
+  <li>GSIは結果整合性のみ（書き込み直後に古いデータが返る可能性がある）</li>
+  <li>GSIを1つ追加するごとに書き込みコストが倍増する（元テーブル + GSI分）</li>
+</ul>
+
+<p>PK/SKは「データの住所」として必ず必要。GSIは「別の検索窓口」。</p>
+
+<h3>Q5: PK + SKだけで一意性が保てない場合はどうする？</h3>
+
+<p><strong>SKの設計で工夫する。</strong> 例えば同じ問題に複数回提出する場合:</p>
+
+<ul>
+  <li><code>PK=user_id, SK=problem_id</code> → 上書きされるのでNG</li>
+  <li><code>PK=user_id, SK=SUB#{submission_id}</code> → submission_idがユニークなのでOK</li>
+</ul>
+
+<p>さらに深い階層（提出の中のテストケースごと等）が必要な場合は:</p>
+<ol>
+  <li><strong>SK階層化</strong>: <code>SUB#12345#TC#01</code> のように文字列で階層を表現</li>
+  <li><strong>ネスト構造</strong>: 1アイテム内にリストとして持つ</li>
+  <li><strong>テーブル分割</strong>: 完全に独立したデータなら別テーブル</li>
+</ol>
+
+<p>→ 詳細は <a href="reference/dynamodb-keys-vs-rdb.md">リファレンス: 7. PK + SK で一意性が足りない場合の対処法</a> 参照</p>
+
+<h3>Q6: そもそもDynamoDBはなぜこんな構造にしているのか？</h3>
+
+<p><strong>「どんなデータ量でも同じ速度を保証するため」。</strong></p>
+
+<p>RDBは柔軟にクエリできるが、データが増えると遅くなる（垂直スケールの限界）。DynamoDBはPKのハッシュ値でデータを最初から複数サーバーに分散配置する。<code>Query(PK="abc123")</code> は該当サーバーだけ見ればいいので、テーブルが100行でも100億行でも数ミリ秒で返る。</p>
+
+<p>「PKでしか検索できない」のは制限ではなく、「どのサーバーに聞けばいいか一発でわかる」ための設計。Amazon.comのショッピングカートという何億人規模のシステムのために生まれたDB。</p>
+
+<p>→ 詳細は <a href="reference/dynamodb-keys-vs-rdb.md">リファレンス: 8. DynamoDBがこの構造を採用している理由</a> 参照</p>
+
+<h3>Q7: GSIはたくさん作ったらコストが爆発するのか？</h3>
+
+<p><strong>はい。GSIは実質的に別テーブルを自動作成しているのと同じ。</strong></p>
+
+<p>物理的には元テーブルとGSIは別のストレージに存在する。「自分でテーブルを複数作って手動同期する」のと「1テーブル + GSI」の違いは、DynamoDBが同期を自動でやってくれるという点だけ。</p>
+
+<p>コストの増え方:</p>
+<ul>
+  <li>書き込み: GSI 0個=1 WCU、GSI 5個=6 WCU（6倍）、GSI 20個(上限)=21 WCU（21倍）</li>
+  <li>ストレージ: 射影設定（ALL/KEYS_ONLY/INCLUDE）で制御可能だが、ALLなら丸ごとコピー</li>
+</ul>
+
+<p>個人利用では誤差レベルだが、大規模サービスではGSIの数がそのままコストに直結する。だから「GSIは最小限に」がベストプラクティス。</p>
+
+<p>検討の優先順位:</p>
+<ol>
+  <li>PK/SKの設計で解決できないか（追加コストなし）</li>
+  <li>SK階層化やネスト構造で対応できないか（追加コストなし）</li>
+  <li>GSIを追加する（Projection最小限で）（コスト増）</li>
+  <li>別テーブルに分ける（管理コスト増）</li>
+</ol>
+
+<h3>Q8: GSIの詳細 — 内部の仕組み、設定項目、制約</h3>
+
+<p>GSIは元テーブルにアイテムを書くと、DynamoDBが裏でGSI用のストレージにデータをコピーしてGSIのPK/SKで再配置する。</p>
+
+<p>GSIで指定する3つの設定:</p>
+<ol>
+  <li><strong>キー（PK + SK）</strong>: 元テーブルのどの属性でもOK</li>
+  <li><strong>射影（Projection）</strong>: コピーする属性の範囲（ALL/KEYS_ONLY/INCLUDE）。コストに直結</li>
+  <li><strong>キャパシティ</strong>: 元テーブルとは独立したスループット</li>
+</ol>
+
+<p>GSIの制約:</p>
+<ul>
+  <li>数の上限: 1テーブルあたり20個</li>
+  <li>一貫性: 結果整合性のみ（強い整合性は不可）</li>
+  <li>書き込み: GSIに直接書き込めない（元テーブル経由で自動同期）</li>
+  <li>ユニーク制約: なし（GSIのPK+SKは重複してもOK）</li>
+  <li>スロットリング: GSIのスループットが足りないと元テーブルの書き込みまで遅くなる</li>
+</ul>
+
+<h3>Q9: DBの基本 — 主キーとは何か</h3>
+
+<p>データベースは表（テーブル）にデータを保存するもの。データが増えると「特定の1行を確実に見つける手段」が必要になり、それが主キー（Primary Key）。</p>
+
+<p>RDBでもDynamoDBでも主キーは必須だが、違いは:</p>
+<ul>
+  <li><strong>RDB</strong>: 主キーは「住所」で、それ以外のカラムでも自由に検索できる</li>
+  <li><strong>DynamoDB</strong>: PK（とSK）が唯一の高速な検索手段。それ以外にはGSIが必要</li>
+</ul>
+
+<p>PK/SKはDynamoDB独自の用語だが、やっていることは「主キーの指定」。DynamoDBでは主キーの重要性がRDBより遥かに高いため、専用の名前で強調されている。</p>
+
+<h2>関連</h2>
+
+<ul>
+  <li><a href="04-dynamodb-item-design.md">04-dynamodb-item-design.md</a> - スキーマレスとアイテム設計（attribute宣言、Python例、Single Table Design）</li>
+  <li><a href="05-user-id-identity.md">05-user-id-identity.md</a> - user_id = Cognito sub の区別</li>
+  <li><a href="06-dynamodb-module-implementation.md">06-dynamodb-module-implementation.md</a> - Task 1 実装の設計判断ログ</li>
+  <li><a href="reference/dynamodb-keys-vs-rdb.md">reference/dynamodb-keys-vs-rdb.md</a> - DynamoDB vs RDB 詳細比較（Web検索ソース付き）</li>
+</ul>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase1</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase1</span></li>
+<li><b>負荷生成</b> — 無認証トラフィックを生成（認証あり負荷は TEST_PASSWORD=... を付ける）<span class="cmd">make sandbox-load-phase1</span></li>
+<li><b>観測</b> — API GW の Count/4XXError/Latency、Lambda、DynamoDB、Cognito メトリクス<span class="cmd">make sandbox-watch-phase1</span><div class="tstamp">⏱ 反映まで 2〜5 分</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase1</span></li>
+</ol>
+<p class="note warn">⚠ phase1 は本番スタックを観測するダッシュボードのみ作成（本番アプリは別途デプロイ済みが前提）。</p>
+</section>
+<div class="foot">← <a href="../index.html">Phase 1 ルーター</a> ／ <a href="../main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main>
+</body>
+</html>

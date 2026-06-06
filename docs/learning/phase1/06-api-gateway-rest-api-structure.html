@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 教材</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}
+.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;line-height:1.5;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}
+h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}img{max-width:100%}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}
+.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style>
+</head>
+<body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 教材 · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>01. API Gateway REST API のリソース構造</h1>
+
+<blockquote>
+<p>出典:</p>
+<ul>
+<li><a href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/api_gateway_rest_api">API Gateway REST API - Terraform</a></li>
+<li><a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-control-access-to-api.html">API Gateway resource / method / integration - AWS Docs</a></li>
+<li><a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html">Set up Lambda Proxy Integration - AWS Docs</a></li>
+</ul>
+<p>閲覧日 2026-05-09</p>
+</blockquote>
+
+<h2>概要</h2>
+
+<p>API Gateway REST API の Terraform は <strong>5 種類のリソース</strong>を組み合わせる:</p>
+
+<pre><code>RestApi
+  └── Resource (パス)
+        └── Method (HTTP メソッド)
+              └── Integration (Lambda 等への接続)
+              └── MethodResponse / IntegrationResponse (レスポンス仕様)
+              ↓
+            Deployment ─→ Stage (公開)</code></pre>
+
+<p>1 エンドポイント (例: <code>POST /users/me</code>) を作るために最低 4〜6 リソース書くことになる。冗長だが、各リソースの責務が明確に分かれているのが特徴。</p>
+
+<h2>公式 docs に沿った解説</h2>
+
+<h3>A. Resource (パス階層)</h3>
+
+<p>URL 階層を作る。<code>parent_id</code> で親を指定して入れ子にする。</p>
+
+<pre><code class="language-hcl">resource "aws_api_gateway_resource" "users" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  parent_id   = aws_api_gateway_rest_api.main.root_resource_id  # /
+  path_part   = "users"
+}
+
+resource "aws_api_gateway_resource" "users_me" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  parent_id   = aws_api_gateway_resource.users.id
+  path_part   = "me"
+}
+# → 結果: /users/me</code></pre>
+
+<p><strong>path parameter</strong> は <code>{}</code> で囲む:</p>
+
+<pre><code class="language-hcl">resource "aws_api_gateway_resource" "submission_detail" {
+  parent_id = aws_api_gateway_resource.submissions.id
+  path_part = "{submission_id}"
+}
+# → /submissions/{submission_id}</code></pre>
+
+<p>これが Lambda 側の <code>event["pathParameters"]["submission_id"]</code> に入る。</p>
+
+<h3>B. Method — HTTP 仕様</h3>
+
+<p>「このリソースで POST/GET 等を受け付けて、認可はこれで」を宣言:</p>
+
+<pre><code class="language-hcl">resource "aws_api_gateway_method" "save_user_post" {
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  resource_id   = aws_api_gateway_resource.users_me.id
+  http_method   = "POST"
+  authorization = "COGNITO_USER_POOLS"
+  authorizer_id = aws_api_gateway_authorizer.cognito.id
+}</code></pre>
+
+<p><code>authorization</code> のオプション:</p>
+<ul>
+<li><code>"NONE"</code> — 認可なし（公開エンドポイント。/health 用途）</li>
+<li><code>"COGNITO_USER_POOLS"</code> + <code>authorizer_id</code> — JWT 検証</li>
+<li><code>"AWS_IAM"</code> — IAM 認証</li>
+<li><code>"CUSTOM"</code> — カスタム Lambda Authorizer</li>
+</ul>
+
+<h3>C. Integration — どこに渡すか</h3>
+
+<p>Method と Lambda の橋渡し:</p>
+
+<pre><code class="language-hcl">resource "aws_api_gateway_integration" "save_user_post" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.users_me.id
+  http_method = aws_api_gateway_method.save_user_post.http_method
+
+  integration_http_method = "POST"     # Lambda 呼び出しは常に POST
+  type                    = "AWS_PROXY"
+  uri                     = var.lambda_invoke_arns["save_user"]
+}</code></pre>
+
+<p><code>type = "AWS_PROXY"</code> が <strong>Lambda Proxy Integration</strong>。これを指定すると:</p>
+
+<ul>
+<li>API Gateway は event を整形して Lambda に渡す（<code>statusCode/headers/body</code> の戻り値構造に変換）</li>
+<li>Lambda 側は Task 3 教材で扱った形式の戻り値を返せばよい</li>
+<li>これがこのプロジェクトの全 Lambda の前提</li>
+</ul>
+
+<h3>D. CORS Preflight (OPTIONS)</h3>
+
+<p>ブラウザは <code>Authorization</code> ヘッダ付きの POST/PUT/DELETE などで preflight (<code>OPTIONS</code>) を送る（教材 Task 3 / 01 §B 再掲）。
+これに API Gateway 側で 200 を返さないと<strong>本リクエストが届かない</strong>。</p>
+
+<p>OPTIONS 専用の <strong>MOCK 統合</strong>で対応するのが定石:</p>
+
+<pre><code class="language-hcl">resource "aws_api_gateway_method" "users_me_options" {
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  resource_id   = aws_api_gateway_resource.users_me.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"  # preflight は認可不要
+}
+
+resource "aws_api_gateway_integration" "users_me_options" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.users_me.id
+  http_method = aws_api_gateway_method.users_me_options.http_method
+  type        = "MOCK"
+
+  request_templates = {
+    "application/json" = jsonencode({ statusCode = 200 })
+  }
+}
+
+# 200 レスポンスに CORS ヘッダを乗せる (Method/Integration 両方の Response が必要)
+resource "aws_api_gateway_method_response" "users_me_options_200" { ... }
+resource "aws_api_gateway_integration_response" "users_me_options_200" { ... }</code></pre>
+
+<blockquote>
+<p>補足（公式 docs には記載なし）: Lambda 側でも <code>success()</code> / <code>error()</code> が CORS ヘッダを返している（Task 3 / 03）。<strong>OPTIONS は API Gateway 側 (MOCK)</strong>、<strong>本リクエストの応答ヘッダは Lambda 側</strong>、と二系統で CORS ヘッダを揃える運用になる。MOCK 側で漏れると preflight 失敗 → 本リクエスト来ない。Lambda 側で漏れるとブラウザが応答を読めない。</p>
+</blockquote>
+
+<h3>E. Deployment + Stage</h3>
+
+<p>API Gateway は <strong>Resource/Method を編集しただけでは公開されない</strong>。Deployment と Stage を作る必要がある:</p>
+
+<pre><code class="language-hcl">resource "aws_api_gateway_deployment" "main" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+
+  # 編集を検知して再デプロイをトリガー
+  triggers = {
+    redeployment = sha1(jsonencode([
+      aws_api_gateway_resource.users_me.id,
+      aws_api_gateway_method.save_user_post.id,
+      aws_api_gateway_integration.save_user_post.id,
+      # ... 関連リソースを全部含める
+    ]))
+  }
+
+  lifecycle { create_before_destroy = true }
+}
+
+resource "aws_api_gateway_stage" "main" {
+  deployment_id = aws_api_gateway_deployment.main.id
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  stage_name    = var.environment
+}</code></pre>
+
+<p><code>triggers</code> の使い方が地味に重要。<strong>ここに含めなかったリソースは編集しても再デプロイされない</strong> → 「Terraform apply は成功したが古い API が動き続ける」謎現象が起きる。</p>
+
+<h3>F. Lambda Permission との対応</h3>
+
+<p>API Gateway がここで Lambda を呼び出すためには、Lambda 側に <strong>resource-based policy</strong> が必要（Task 9 / <code>aws_lambda_permission</code>）。これがないと invoke 失敗で 5xx になる。</p>
+
+<p>依存関係:</p>
+<pre><code>api_gateway モジュール  →  lambda モジュールの invoke_arn を参照
+lambda モジュール       →  api_gateway モジュールの execution_arn を参照</code></pre>
+
+<p><strong>循環参照になりそうだが</strong>、実際は <code>aws_api_gateway_rest_api</code> と <code>aws_lambda_function</code> は独立して作れる。execution_arn は REST API の作成時点で確定するので、lambda モジュールは api_gateway モジュールが「REST API だけ作った段階」で permission を作れる。Terraform の依存解決がうまく解いてくれる。</p>
+
+<h2>重要ポイント</h2>
+
+<ul>
+<li>API Gateway の 1 エンドポイント = <strong>Resource + Method + Integration + (Method/Integration)Response</strong> の最低 4 リソース</li>
+<li>Path parameter は <code>path_part = "{name}"</code> で。Lambda 側の <code>event["pathParameters"]</code> に入る</li>
+<li><code>type = "AWS_PROXY"</code> が Lambda Proxy Integration。event を Lambda に丸投げ</li>
+<li><strong>CORS preflight は OPTIONS + MOCK 統合</strong>で 200 を返す。本リクエストの応答ヘッダは Lambda 側で</li>
+<li>Deployment の <code>triggers</code> に <strong>編集対象リソースを全部入れる</strong>。漏れると古いまま動く</li>
+<li>Lambda 側に <code>aws_lambda_permission</code> が必要 (Task 9)</li>
+</ul>
+
+<h2>関連</h2>
+
+<ul>
+<li>議論・Q&amp;A: （<code>lesson</code> 中に発生したら <code>reference/</code> 配下にリンクが追加されます）</li>
+<li>関連 Task: Task 9 (Lambda モジュール), Task 3 / 01 (CORS の再確認)</li>
+</ul>
+
+<hr>
+
+<p><em>Auto-generated at 2026-05-09 via /learning-flow:material（公式 docs 駆動）</em></p>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase1</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase1</span></li>
+<li><b>負荷生成</b> — 無認証トラフィックを生成（認証あり負荷は TEST_PASSWORD=... を付ける）<span class="cmd">make sandbox-load-phase1</span></li>
+<li><b>観測</b> — API GW の Count/4XXError/Latency、Lambda、DynamoDB、Cognito メトリクス<span class="cmd">make sandbox-watch-phase1</span><div class="tstamp">⏱ 反映まで 2〜5 分</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase1</span></li>
+</ol>
+<p class="note warn">⚠ phase1 は本番スタックを観測するダッシュボードのみ作成（本番アプリは別途デプロイ済みが前提）。</p>
+</section>
+<div class="foot">← <a href="index.html">Phase 1 ルーター</a> ／ <a href="main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main>
+</body>
+</html>

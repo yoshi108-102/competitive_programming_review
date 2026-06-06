@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 教材</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}
+.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;line-height:1.5;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}
+h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}img{max-width:100%}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}
+.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style>
+</head>
+<body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 教材 · <a href="../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Terraform の状態ロック機構</h1>
+
+<h2>概要</h2>
+
+<p><code>terraform apply</code> を同時に複数人/複数プロセスが実行すると <strong>state drift（tfstate の不整合）</strong>が発生しうる。Terraform はこれを防ぐために <strong>state lock</strong> という排他制御を持つ。S3 backend では歴史的に DynamoDB テーブルでロックを管理してきた（プロジェクト名の <code>tflock</code> の正体はこれ）。Terraform 1.10 以降は S3 単独でロックできる <code>use_lockfile</code> が追加され、DynamoDB 不要の新方式に移行できる。</p>
+
+<h2>解説</h2>
+
+<h3>なぜロックが必要か — state drift の悪夢</h3>
+
+<p><code>terraform.tfstate</code> は「どのリソースを Terraform が管理しているか」の唯一の記録。同時 apply が走ると:</p>
+
+<pre><code>Aさん apply 開始 → tfstate読む ─┐
+                                 │ ここで同時実行
+Bさん apply 開始 → tfstate読む ─┤
+                                 │
+Aさん リソース変更 → tfstate書く│
+Bさん リソース変更 → tfstate書く┘  ← 上書きでAさんの変更が tfstate から消える</code></pre>
+
+<p>結果:</p>
+<ul>
+  <li><strong>tfstate と AWS 実在リソースが不一致</strong></li>
+  <li>次の <code>plan</code> で「管理対象外のリソースが見える」「存在しないリソースを消そうとする」挙動</li>
+  <li>手動での tfstate 修復作業（<code>terraform import</code> 等）が必要</li>
+</ul>
+
+<p>これが<strong>state drift</strong>。防ぐには「同時に1人しか apply しない」ことを保証する必要がある。</p>
+
+<h3>ロック機構の仕組み</h3>
+
+<p>Terraform は <code>apply</code> の最初に<strong>排他ロックを取得</strong>する:</p>
+
+<pre><code>apply 開始
+  ↓
+① ロックテーブル/ファイルにレコードを書く（条件付き: 既に存在するなら失敗）
+  ↓ 成功 = ロック取得
+② tfstate を読む
+  ↓
+③ AWSリソースを変更
+  ↓
+④ tfstate を書く
+  ↓
+⑤ ロックレコードを削除 = ロック解放</code></pre>
+
+<p>②〜④ の間に他の apply が走ろうとすると、①で PutItem が失敗 → <code>Error: Error acquiring the state lock</code> で落ちる。</p>
+
+<h3>DynamoDB でロックを実現する仕組み</h3>
+
+<p>DynamoDB の <strong>Conditional Write</strong> がキー:</p>
+
+<pre><code class="language-python"># 疑似コード
+try:
+    dynamodb.put_item(
+        TableName="atcoder-review-tflock",
+        Item={"LockID": {"S": "atcoder-review-tfstate/terraform.tfstate"}, ...},
+        ConditionExpression="attribute_not_exists(LockID)"   # ← 既にあると失敗
+    )
+    # ロック取得成功
+except ConditionalCheckFailedException:
+    # 既に他の誰かがロック中
+    raise LockError</code></pre>
+
+<h3>実際のロックレコード</h3>
+
+<p><code>apply</code> 実行中に DynamoDB を覗くと以下のレコードが見える:</p>
+
+<pre><code class="language-bash">aws dynamodb scan \
+  --table-name atcoder-review-tflock \
+  --region ap-northeast-1</code></pre>
+
+<pre><code class="language-json">{
+  "Items": [{
+    "LockID": { "S": "atcoder-review-tfstate/terraform.tfstate" },
+    "Info": { "S": "{\"ID\":\"abc-123\",\"Operation\":\"OperationTypeApply\",\"Who\":\"yoshi@macbook\",\"Created\":\"2026-04-18T...\"}" },
+    "Digest": { "S": "..." },
+    "Path": { "S": "atcoder-review-tfstate/terraform.tfstate" }
+  }]
+}</code></pre>
+
+<table>
+  <thead>
+    <tr><th>属性</th><th>内容</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>LockID</code> (PK)</td><td>S3バケット名/state キー = 「どの state に対するロックか」</td></tr>
+    <tr><td><code>Info</code></td><td>誰が、いつ、どの操作でロックを取ったか（デバッグ用の JSON）</td></tr>
+    <tr><td><code>Digest</code></td><td>tfstate のハッシュ（整合性チェック用）</td></tr>
+    <tr><td><code>Path</code></td><td>state ファイルのパス</td></tr>
+  </tbody>
+</table>
+
+<p><code>apply</code> が正常終了するとこのレコードは<strong>自動削除される</strong>。</p>
+
+<h3>tflock テーブルの Terraform 定義</h3>
+
+<p>Bootstrap で以下のように作られている:</p>
+
+<pre><code class="language-hcl">resource "aws_dynamodb_table" "tflock" {
+  name         = "atcoder-review-tflock"
+  billing_mode = "PAY_PER_REQUEST"   # ロック取得時のみ課金、月数セント
+  hash_key     = "LockID"            # ← Terraform が要求する固定キー名
+
+  attribute {
+    name = "LockID"
+    type = "S"
+  }
+}</code></pre>
+
+<ul>
+  <li><strong><code>hash_key = "LockID"</code> は固定</strong>（Terraform 側が決め打ち）</li>
+  <li><code>billing_mode = "PAY_PER_REQUEST"</code> で十分（書き込み頻度は極小）</li>
+  <li>他の設定（暗号化、レプリケーション）は必要なら追加</li>
+</ul>
+
+<h3>なぜ DynamoDB が選ばれたか</h3>
+
+<p>ロック基盤の要件:</p>
+
+<ol>
+  <li><strong>Conditional Write</strong> — 既にロックがある時だけ失敗する挙動が必要</li>
+  <li><strong>Strongly Consistent Read</strong> — ロック取得状況が全員から瞬時に同じに見える必要</li>
+  <li><strong>高可用性</strong> — ロック基盤が落ちるとプロジェクト全体の apply が止まる</li>
+</ol>
+
+<p>S3 は歴史的に:</p>
+<ul>
+  <li>結果整合性が強く、Conditional Write が弱かった</li>
+  <li>→ 単独では競合状態を完全に防げなかった</li>
+</ul>
+
+<p>DynamoDB はこれらをクリアしていたので、「S3 + DynamoDB」の組み合わせが業界標準になった。</p>
+
+<h3>ロックが解放されないケース（stuck lock）</h3>
+
+<p><code>apply</code> 中に強制終了 (<code>Ctrl+C</code>、PC クラッシュ、ネットワーク断など) すると、<strong>ロック解放の処理がスキップされる</strong>:</p>
+
+<pre><code class="language-bash">terraform apply
+  → ⚡ PC がフリーズ
+  → ロック削除のタイミングを逃す
+  → DynamoDB に孤立レコードが残る
+
+# 次の apply:
+$ terraform apply
+Error: Error acquiring the state lock
+  ID: abc-123
+  Path: atcoder-review-tfstate/terraform.tfstate
+  Created: 2026-04-18T10:00:00
+  Who: yoshi@macbook</code></pre>
+
+<h3>stuck lock の解除方法</h3>
+
+<h4>方法1: <code>terraform force-unlock</code>（推奨）</h4>
+
+<pre><code class="language-bash">terraform force-unlock abc-123</code></pre>
+
+<p>⚠️ <strong>注意</strong>: 他の誰かが本当に apply 実行中でないか必ず確認してから。同時実行中に force-unlock すると state drift が起きる。</p>
+
+<h4>方法2: DynamoDB から直接削除（最終手段）</h4>
+
+<pre><code class="language-bash">aws dynamodb delete-item \
+  --table-name atcoder-review-tflock \
+  --region ap-northeast-1 \
+  --key '{"LockID":{"S":"atcoder-review-tfstate/terraform.tfstate"}}'</code></pre>
+
+<p>これは「ロック機構を信じない」操作なので、force-unlock で解決できないとき以外は避ける。</p>
+
+<h3>Terraform 1.10+ の <code>use_lockfile</code> 方式</h3>
+
+<p>Terraform 1.10 以降、<strong>DynamoDB 不要で S3 だけでロックできる</strong>新方式が追加:</p>
+
+<pre><code class="language-hcl"># 旧（このプロジェクトの現状）
+backend "s3" {
+  bucket         = "atcoder-review-tfstate"
+  dynamodb_table = "atcoder-review-tflock"
+  encrypt        = true
+}
+
+# 新
+backend "s3" {
+  bucket       = "atcoder-review-tfstate"
+  use_lockfile = true
+  encrypt      = true
+}</code></pre>
+
+<h4>新方式の仕組み</h4>
+
+<p>S3 が<strong>条件付き PUT</strong>（<code>If-None-Match: "*"</code>）に対応したので、DynamoDB の Conditional Write と同等の排他制御が S3 単独で実現可能になった。</p>
+
+<ul>
+  <li>ロックファイル名: <code>&lt;state-key&gt;.tflock</code> （例: <code>terraform.tfstate.tflock</code>）</li>
+  <li>同じ S3 バケットに置かれる</li>
+  <li>apply 中のみ存在、終了で削除</li>
+</ul>
+
+<h4>移行のメリット・デメリット</h4>
+
+<table>
+  <thead>
+    <tr><th>観点</th><th><code>dynamodb_table</code>（旧）</th><th><code>use_lockfile</code>（新）</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>管理対象リソース</td><td>S3 + DynamoDB</td><td>S3 のみ</td></tr>
+    <tr><td>コスト</td><td>DynamoDB 課金あり（微々たる）</td><td>S3 のみ（さらに微々たる）</td></tr>
+    <tr><td>デバッグ情報</td><td>Info JSON で Who/When が豊富</td><td>やや簡素</td></tr>
+    <tr><td>実績</td><td>長年の実運用事例あり</td><td>Terraform 1.10+ の新機能</td></tr>
+    <tr><td>警告</td><td>deprecation warning が出る</td><td>出ない（将来の標準）</td></tr>
+  </tbody>
+</table>
+
+<h4>移行手順（参考）</h4>
+
+<ol>
+  <li><code>terraform/main.tf</code> の backend ブロックを書き換え（<code>dynamodb_table</code> → <code>use_lockfile = true</code>）</li>
+  <li><code>terraform init -migrate-state</code> で state の移行（実際は state 本体は S3 のまま、メタデータのみ更新）</li>
+  <li>Bootstrap から <code>aws_dynamodb_table.tflock</code> を削除</li>
+  <li><code>terraform apply</code>（Bootstrap ディレクトリで）で DynamoDB テーブルを destroy</li>
+</ol>
+
+<p>今すぐやる必要はない。プロジェクトが落ち着いたタイミングで。</p>
+
+<h3>学びのポイント</h3>
+
+<table>
+  <thead>
+    <tr><th>概念</th><th>要点</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>state drift</td><td>同時 apply による tfstate の不整合。復旧が大変</td></tr>
+    <tr><td>排他ロック</td><td>「一度に1人しか apply しない」を機械的に保証する仕組み</td></tr>
+    <tr><td>Conditional Write</td><td>「既にある場合は失敗」という原子的書き込み。ロック実装の核</td></tr>
+    <tr><td>LockID</td><td>S3バケット名/keyの組み合わせ。どの state に対するロックかを識別</td></tr>
+    <tr><td>stuck lock</td><td>異常終了で残ったロック。force-unlock で解除</td></tr>
+    <tr><td>use_lockfile</td><td>DynamoDB 不要の新方式。Terraform 1.10+</td></tr>
+  </tbody>
+</table>
+
+<h2>Q&amp;A</h2>
+
+<p><strong>Q: tflock って何？</strong></p>
+
+<p>Terraform の状態ロック用 DynamoDB テーブル。<code>terraform apply</code> を複数プロセスが同時実行したときの競合（state drift）を防ぐため、排他ロックを DynamoDB の Conditional Write で実現している。</p>
+
+<p><strong>Q: ロックを使わないとどうなる？</strong></p>
+
+<p>2人が同時に apply すると tfstate が上書きされ、AWS の実リソースとの不一致が起きる。復旧には <code>terraform import</code> での手動修復が必要で、実質的にプロジェクトのIaC管理が破綻する。</p>
+
+<p><strong>Q: 個人開発で1人しか触らないなら不要では？</strong></p>
+
+<p>技術的には最小限で運用可能だが、以下のリスクがあるのでロックは入れておくべき:</p>
+
+<ul>
+  <li>CI/CD から apply することになったとき（GitHub Actions 等）、人が手動で打つ apply と競合しうる</li>
+  <li>複数端末から触る可能性（自宅PC と ラップトップ）</li>
+  <li>プロジェクトを将来誰かと共同開発する可能性</li>
+</ul>
+
+<p>「1人でも入れておく」のが無難。コストも微々たる。</p>
+
+<p><strong>Q: stuck lock になったら？</strong></p>
+
+<ol>
+  <li>本当に他の apply が動いていないか確認（<code>ps aux | grep terraform</code>、他の端末、CI 実行履歴）</li>
+  <li>問題なければ <code>terraform force-unlock &lt;LOCK_ID&gt;</code> で解除</li>
+  <li>同時 apply 中に force-unlock すると state drift するので最終手段</li>
+</ol>
+
+<p><strong>Q: use_lockfile に今すぐ移行すべき？</strong></p>
+
+<p>しなくてOK。deprecation 警告は出るが動作は続く。以下のタイミングでまとめて移行が効率的:</p>
+
+<ul>
+  <li>プロジェクトが安定して変更頻度が下がったタイミング</li>
+  <li>DynamoDB テーブル管理が煩わしくなった時</li>
+  <li>Terraform バージョンを大幅に上げた時</li>
+</ul>
+
+<h2>関連</h2>
+
+<ul>
+  <li><a href="07-terraform-bootstrap.md">07-terraform-bootstrap.md</a> - Bootstrap パターンで tflock テーブル自体をどう作るか</li>
+  <li><a href="02-terraform-code-walkthrough.md">02-terraform-code-walkthrough.md</a> - <code>backend "s3"</code> ブロックの設定解説</li>
+  <li><a href="reference/terraform-basics.md">reference/terraform-basics.md</a> - Terraform 基礎リファレンス</li>
+</ul>
+
+<hr>
+
+<p><em>Saved at 2026-04-18 via /learning-flow:topic</em></p>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase1</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase1</span></li>
+<li><b>負荷生成</b> — 無認証トラフィックを生成（認証あり負荷は TEST_PASSWORD=... を付ける）<span class="cmd">make sandbox-load-phase1</span></li>
+<li><b>観測</b> — API GW の Count/4XXError/Latency、Lambda、DynamoDB、Cognito メトリクス<span class="cmd">make sandbox-watch-phase1</span><div class="tstamp">⏱ 反映まで 2〜5 分</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase1</span></li>
+</ol>
+<p class="note warn">⚠ phase1 は本番スタックを観測するダッシュボードのみ作成（本番アプリは別途デプロイ済みが前提）。</p>
+</section>
+<div class="foot">← <a href="../index.html">Phase 1 ルーター</a> ／ <a href="../main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main>
+</body>
+</html>

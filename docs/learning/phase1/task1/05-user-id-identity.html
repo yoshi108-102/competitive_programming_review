@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 教材</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}
+.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;line-height:1.5;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}
+h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}img{max-width:100%}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}
+.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style>
+</head>
+<body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 教材 · <a href="../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>ユーザーIDの正体（Cognito sub vs AtCoder handle）</h1>
+
+<h2>概要</h2>
+
+<p>このプロジェクトには「ユーザーID」的な値が <strong>2種類</strong> 登場する。users テーブルの PK である <code>user_id</code> は <strong>Cognito sub</strong> のことであり、AtCoder のハンドル名ではない。この区別が曖昧だと設計ミスにつながる。</p>
+
+<h2>解説</h2>
+
+<h3>2つのユーザーIDの違い</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>種類</th>
+      <th>例</th>
+      <th>出所</th>
+      <th>役割</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Cognito sub</strong></td>
+      <td><code>abc123-def456-...</code> (UUID)</td>
+      <td>認証基盤（Cognito）</td>
+      <td>このアプリの内部ユーザーID。PKとして使う</td>
+    </tr>
+    <tr>
+      <td><strong>AtCoder handle</strong></td>
+      <td><code>tourist</code>, <code>yoshi108-102</code></td>
+      <td>AtCoder の URL</td>
+      <td>AtCoder のハンドル名。ユーザーが「連携」で自分の手で入力する値</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>なぜ Cognito sub を PK にするのか</h3>
+
+<h4>理由1: 認証基盤が source of truth</h4>
+
+<p>ユーザーがこのアプリにログインする際、Cognito で認証する → Cognito が JWT (IDトークン) の中に sub を入れて返す。アプリ側はユーザーが誰かを判別するのに Cognito sub を使う。AtCoder の handle は「アプリ内の属性」に過ぎない（ユーザーが申告した値）。</p>
+
+<h4>理由2: sub は不変、handle は変わりうる</h4>
+
+<ul>
+  <li><strong>Cognito sub</strong>: Cognito User Pool 内で一意・不変（ユーザー登録時に自動採番）</li>
+  <li><strong>AtCoder handle</strong>: AtCoder側で変更できる</li>
+</ul>
+
+<p>PK を handle にすると、handle 変更時に「全submissionsのキーを書き換える」という悲劇が起きる。sub なら安定。</p>
+
+<h4>理由3: 未連携ユーザーも扱える</h4>
+
+<p>ユーザーが「まずはこのアプリにサインアップしたが、AtCoder アカウントはまだ連携していない」状態もありうる。このとき handle はまだ存在しない。sub なら最初からある。</p>
+
+<h3>users テーブルの実際のアイテムイメージ</h3>
+
+<pre><code>{
+  &quot;user_id&quot;: &quot;abc123-def456-789&quot;,        // PK。Cognito sub。ユーザーが入力しない値
+  &quot;handle&quot;: &quot;yoshi108-102&quot;,              // AtCoder のハンドル（ユーザー申告）
+  &quot;atcoder_linked_at&quot;: &quot;2026-04-18T10:00:00Z&quot;,
+  &quot;created_at&quot;: &quot;2026-04-18T09:55:00Z&quot;
+}</code></pre>
+
+<ul>
+  <li>PK = Cognito sub</li>
+  <li>非キー属性として handle を持つ</li>
+  <li>アプリのフロー: 「ログイン → users テーブル取得 → handle を読む → AtCoder API 叩く」</li>
+</ul>
+
+<h3>submissions テーブルの意味</h3>
+
+<pre><code>{
+  &quot;user_id&quot;: &quot;abc123-def456-789&quot;,  // PK。Cognito sub（users.user_idと一致）
+  &quot;submission_id&quot;: &quot;SUB#12345&quot;,    // SK。AtCoder側のsubmission ID
+  &quot;problem_id&quot;: &quot;abc300_a&quot;,
+  &quot;result&quot;: &quot;AC&quot;
+}</code></pre>
+
+<p><strong>submissions.user_id = users.user_id</strong> で users テーブルと論理的に結合している（RDB の FK 的な発想。ただし DynamoDB は FK 制約を持たない）。</p>
+
+<h3>命名についての選択肢</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>命名</th>
+      <th>メリット</th>
+      <th>デメリット</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>user_id</code>（現状）</td>
+      <td>短い、一般的</td>
+      <td>AtCoder handle と混同しやすい</td>
+    </tr>
+    <tr>
+      <td><code>cognito_sub</code></td>
+      <td>意図が明確</td>
+      <td>冗長、AWSサービス名が漏れる</td>
+    </tr>
+    <tr>
+      <td><code>sub</code></td>
+      <td>JWT の用語と一致</td>
+      <td>短すぎ、文脈ないと分からない</td>
+    </tr>
+    <tr>
+      <td><code>internal_user_id</code></td>
+      <td>意図が明確</td>
+      <td>長い</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>実装計画書は <code>user_id</code> を採用。<strong>コード上のコメントで明記する</strong>のが実用的。現状のコメント:</p>
+
+<pre><code># users テーブル: Cognito sub をキーに、ユーザーメタデータを保存</code></pre>
+
+<p>このコメントで「user_id = Cognito sub」の意図を補う設計判断。</p>
+
+<h2>Q&amp;A</h2>
+
+<p><strong>Q: <code>user_id</code> というのは、AtCoder の user_id のことという認識で良い？</strong></p>
+
+<p>違う。<code>user_id</code> は <strong>Cognito sub</strong>（このアプリの内部ユーザーID）のこと。AtCoderのハンドル名ではない。</p>
+
+<ul>
+  <li><strong>Cognito sub</strong> = 認証基盤が発行する不変のUUID。ユーザーが入力しない</li>
+  <li><strong>AtCoder handle</strong> = ユーザーが連携時に申告する AtCoder のハンドル名</li>
+</ul>
+
+<p>AtCoder のハンドルは users テーブルの<strong>非キー属性</strong> <code>handle</code> として格納する。</p>
+
+<p>PK に Cognito sub を使う理由:</p>
+
+<ol>
+  <li>認証基盤が source of truth（JWT に sub が入って返る）</li>
+  <li>sub は不変、handle は変更される可能性がある</li>
+  <li>未連携ユーザー（サインアップしたが AtCoder連携していない）も扱える</li>
+</ol>
+
+<h2>関連</h2>
+
+<ul>
+  <li><a href="01-dynamodb-keys.md">01-dynamodb-keys.md</a> - DynamoDBのキー設計（PK/SK/GSI）</li>
+  <li><a href="04-dynamodb-item-design.md">04-dynamodb-item-design.md</a> - DynamoDBのアイテム設計</li>
+</ul>
+
+<hr>
+
+<p><em>Saved at 2026-04-18 via /learning-flow:topic</em></p>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase1</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase1</span></li>
+<li><b>負荷生成</b> — 無認証トラフィックを生成（認証あり負荷は TEST_PASSWORD=... を付ける）<span class="cmd">make sandbox-load-phase1</span></li>
+<li><b>観測</b> — API GW の Count/4XXError/Latency、Lambda、DynamoDB、Cognito メトリクス<span class="cmd">make sandbox-watch-phase1</span><div class="tstamp">⏱ 反映まで 2〜5 分</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase1</span></li>
+</ol>
+<p class="note warn">⚠ phase1 は本番スタックを観測するダッシュボードのみ作成（本番アプリは別途デプロイ済みが前提）。</p>
+</section>
+<div class="foot">← <a href="../index.html">Phase 1 ルーター</a> ／ <a href="../main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main>
+</body>
+</html>

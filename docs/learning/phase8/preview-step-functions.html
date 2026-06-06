@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 8 教材</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#7c3aed;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}
+.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;line-height:1.5;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}
+h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}img{max-width:100%}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}
+.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style>
+</head>
+<body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 8 教材 · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Phase 8 プレビュー教材: Step Functions</h1>
+
+<blockquote>
+<p>プレビュー教材: デモ体験のために先行生成しました。正式な lesson / 振り返りクイズ / 採点は Phase 8 到達時に実施します。</p>
+</blockquote>
+
+<hr>
+
+<h2>このサービスは何か</h2>
+
+<p>AWS Step Functions は、<strong>ステートマシン</strong>（状態機械）として複数の処理ステップを宣言的に定義し、オーケストレーションするサーバーレスサービス。<br>
+ワークフローは <strong>Amazon States Language (ASL)</strong> という JSON 形式で記述し、各ステートが「何をするか」「次にどこへ行くか」「失敗時にどうするか」を明示的に宣言する。<br>
+実行の可視化・履歴記録・自動リトライを組み込みで提供するため、複数 Lambda の連鎖ロジックを Lambda 内コードで管理する必要がなくなる。</p>
+
+<hr>
+
+<h2>いつ使うか・使わないか</h2>
+
+<table>
+<thead>
+<tr><th>使う場面</th><th>使わない場面</th></tr>
+</thead>
+<tbody>
+<tr><td>複数 Lambda / サービスを順次・並列・条件分岐で呼び出す</td><td>単一 Lambda で完結する処理</td></tr>
+<tr><td>長時間ワークフロー（数分〜数ヶ月）の状態管理が必要</td><td>単純な SQS キュー → Lambda のパイプライン</td></tr>
+<tr><td>失敗箇所を可視化・再実行したい</td><td>超低レイテンシ(&lt;10ms)が最優先のリアルタイム処理</td></tr>
+<tr><td>人間の承認ステップ（waitForTaskToken）を挟む</td><td>ランニングコストを最小化したいシンプルな非同期処理</td></tr>
+<tr><td>冪等性を保証した再試行が必要</td><td></td></tr>
+</tbody>
+</table>
+
+<hr>
+
+<h2>コアコンセプト</h2>
+
+<h3>ステートマシンと ASL</h3>
+
+<p>ステートマシンは <code>States</code> オブジェクトで複数のステートを宣言し、<code>StartAt</code> で開始ステートを指定する。</p>
+
+<pre><code class="language-json">{
+  &quot;Comment&quot;: &quot;サンプル&quot;,
+  &quot;StartAt&quot;: &quot;ValidateInput&quot;,
+  &quot;States&quot;: {
+    &quot;ValidateInput&quot;: {
+      &quot;Type&quot;: &quot;Task&quot;,
+      &quot;Resource&quot;: &quot;arn:aws:lambda:ap-northeast-1:123456789012:function:validate&quot;,
+      &quot;Next&quot;: &quot;RouteChoice&quot;
+    },
+    &quot;RouteChoice&quot;: {
+      &quot;Type&quot;: &quot;Choice&quot;,
+      &quot;Choices&quot;: [
+        { &quot;Variable&quot;: &quot;$.valid&quot;, &quot;BooleanEquals&quot;: true, &quot;Next&quot;: &quot;Process&quot; }
+      ],
+      &quot;Default&quot;: &quot;FailState&quot;
+    },
+    &quot;Process&quot;: { &quot;Type&quot;: &quot;Task&quot;, &quot;Resource&quot;: &quot;arn:...&quot;, &quot;End&quot;: true },
+    &quot;FailState&quot;: { &quot;Type&quot;: &quot;Fail&quot;, &quot;Error&quot;: &quot;InvalidInput&quot; }
+  }
+}</code></pre>
+
+<h3>ステートの種類</h3>
+
+<table>
+<thead>
+<tr><th>Type</th><th>役割</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Task</strong></td><td>Lambda・ECS・DynamoDB 等のサービスを呼び出す</td></tr>
+<tr><td><strong>Choice</strong></td><td>条件分岐（if/else 相当）。<code>End</code> は持てない</td></tr>
+<tr><td><strong>Parallel</strong></td><td>複数のブランチを並列実行し、全完了を待つ</td></tr>
+<tr><td><strong>Map</strong></td><td>配列の各要素に同一ワークフローを並列適用</td></tr>
+<tr><td><strong>Wait</strong></td><td>指定秒数 or タイムスタンプまで待機</td></tr>
+<tr><td><strong>Pass</strong></td><td>入力をそのまま（変換して）次へ渡す。デバッグに便利</td></tr>
+<tr><td><strong>Succeed</strong></td><td>正常終了</td></tr>
+<tr><td><strong>Fail</strong></td><td>エラーを指定して終了</td></tr>
+</tbody>
+</table>
+
+<h3>入出力処理</h3>
+
+<p>各ステートは JSON ドキュメントを入力として受け取り、出力を次ステートへ渡す。4 つのパスフィルタで制御する。</p>
+
+<table>
+<thead>
+<tr><th>フィールド</th><th>役割</th></tr>
+</thead>
+<tbody>
+<tr><td><code>InputPath</code></td><td>入力 JSON のどの部分をタスクに渡すか（デフォルト <code>$</code> = 全体）</td></tr>
+<tr><td><code>Parameters</code></td><td>タスクへ渡す入力を静的値や JsonPath で再構築</td></tr>
+<tr><td><code>ResultPath</code></td><td>タスク結果を入力 JSON のどのキーに格納するか</td></tr>
+<tr><td><code>OutputPath</code></td><td>次ステートへ渡す範囲を絞る</td></tr>
+</tbody>
+</table>
+
+<pre><code class="language-json">&quot;ResultPath&quot;: &quot;$.taskResult&quot;,
+&quot;OutputPath&quot;: &quot;$.taskResult&quot;</code></pre>
+
+<h3>Retry と Catch</h3>
+
+<pre><code class="language-json">&quot;Retry&quot;: [
+  {
+    &quot;ErrorEquals&quot;: [&quot;Lambda.ServiceException&quot;, &quot;States.TaskFailed&quot;],
+    &quot;IntervalSeconds&quot;: 2,
+    &quot;MaxAttempts&quot;: 3,
+    &quot;BackoffRate&quot;: 2.0
+  }
+],
+&quot;Catch&quot;: [
+  {
+    &quot;ErrorEquals&quot;: [&quot;States.ALL&quot;],
+    &quot;Next&quot;: &quot;FallbackState&quot;,
+    &quot;ResultPath&quot;: &quot;$.error&quot;
+  }
+]</code></pre>
+
+<ul>
+<li><strong>Retry</strong>: 指数バックオフ（<code>IntervalSeconds × BackoffRate^n</code>）で再試行。Lambda の一時障害に対して有効。</li>
+<li><strong>Catch</strong>: <code>MaxAttempts</code> 超過後に <code>ErrorEquals</code> に一致したエラーを捕捉し、代替ステートへ遷移。Lambda 内 <code>try/except</code> をオーケストレーション層に引き上げる。</li>
+</ul>
+
+<h3>Standard vs Express</h3>
+
+<table>
+<thead>
+<tr><th></th><th>Standard</th><th>Express</th></tr>
+</thead>
+<tbody>
+<tr><td>最大実行時間</td><td>1 年</td><td>5 分</td></tr>
+<tr><td>実行履歴</td><td>AWS コンソールで完全保存</td><td>CloudWatch Logs に保存</td></tr>
+<tr><td>課金モデル</td><td>状態遷移数</td><td>実行回数 × 実行時間</td></tr>
+<tr><td>用途</td><td>長時間・冪等・監査が必要</td><td>高頻度・短命・低コスト</td></tr>
+</tbody>
+</table>
+
+<hr>
+
+<h2>主要な設定・API・パラメータ</h2>
+
+<h3>ASL 必須フィールド</h3>
+
+<table>
+<thead>
+<tr><th>フィールド</th><th>必須</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Type</code></td><td>○</td><td>ステートの種類</td></tr>
+<tr><td><code>Next</code> or <code>End</code></td><td>○</td><td>次ステート名 or <code>true</code> で終了</td></tr>
+<tr><td><code>Resource</code></td><td>Task のみ</td><td>呼び出す ARN</td></tr>
+<tr><td><code>Choices</code></td><td>Choice のみ</td><td>条件ルールの配列</td></tr>
+<tr><td><code>Branches</code></td><td>Parallel のみ</td><td>並列ブランチの配列</td></tr>
+<tr><td><code>Iterator</code></td><td>Map のみ</td><td>各要素に適用するサブ SM</td></tr>
+</tbody>
+</table>
+
+<h3>代表的な比較演算子（Choice ステート）</h3>
+
+<p><code>StringEquals</code> / <code>NumericGreaterThan</code> / <code>BooleanEquals</code> / <code>IsNull</code> / <code>TimestampLessThan</code><br>
+複合条件は <code>And</code> / <code>Or</code> / <code>Not</code> で組み合わせ可能。</p>
+
+<h3>StartExecution API</h3>
+
+<pre><code class="language-bash">aws stepfunctions start-execution \
+  --state-machine-arn arn:aws:states:ap-northeast-1:123456789012:stateMachine:MyMachine \
+  --input '{&quot;userId&quot;: &quot;u001&quot;}'</code></pre>
+
+<hr>
+
+<h2>よくある落とし穴・誤解</h2>
+
+<ol>
+<li><p><strong>Choice ステートに <code>End</code> は使えない</strong> — 必ず <code>Next</code> で別ステートに遷移するか <code>Default</code> を設定する。設定漏れは実行時エラー。</p></li>
+<li><p><strong>ResultPath を設定しないと元の入力が上書きされる</strong> — デフォルト <code>ResultPath: "$"</code> はタスク結果で入力を完全に置き換えるため、後続ステートで元の値が消える。</p></li>
+<li><p><strong>Parallel の全ブランチが成功しないと次ステートに進めない</strong> — 1 ブランチが失敗すると Parallel ステート全体が失敗する。ブランチ内で Catch を設けて局所的に処理することを検討する。</p></li>
+<li><p><strong>Lambda の 15 分タイムアウトと Task ステートのタイムアウトは別物</strong> — <code>TimeoutSeconds</code> を Task ステートに設定しないと、Lambda が無応答でもデフォルト 1 年待ち続ける（Standard の場合）。</p></li>
+<li><p><strong>Express はコンソールで実行履歴を確認できない</strong> — CloudWatch Logs へのエクスポート設定を忘れると失敗の原因追跡が困難になる。</p></li>
+<li><p><strong>Map の MaxConcurrency を指定しないと無制限並列</strong> — 下流サービスのスロットリングを引き起こすことがある。</p></li>
+</ol>
+
+<hr>
+
+<h2>このプロジェクト(AtCoder復習)での使いどころ</h2>
+
+<p>AtCoder 復習ツールのバックエンドでは現在 Lambda を個別に呼び出しているが、Phase 8 では以下のオーケストレーションを Step Functions で管理することを想定している。</p>
+
+<pre><code>Start
+  └─ Task: SyncSubmissions (AtCoder スクレイピング)
+       └─ Choice: 新規提出あり?
+            ├─ Yes → Parallel
+            │          ├─ Task: SaveSubmissions (DynamoDB 書き込み)
+            │          └─ Task: TriggerReview  (SES/SNS 通知)
+            └─ No  → Succeed</code></pre>
+
+<ul>
+<li><strong>可視化</strong>: コンソールで同期処理のどのステップで詰まったか即座に特定できる。</li>
+<li><strong>Retry</strong>: AtCoder HTML スクレイピングで一時的な接続エラーが起きても自動リトライ。</li>
+<li><strong>Parallel</strong>: DynamoDB 保存と通知送信を並列化してレイテンシを削減。</li>
+<li><strong>Map</strong>: 複数コンテスト分の提出を配列で受け取り、各コンテストを並列処理。</li>
+</ul>
+
+<hr>
+
+<h2>デモで体験したこと</h2>
+
+<p>デモページ（<code>docs/learning/phase8/demo/index.html</code>）では、以下を操作して確認できる。</p>
+
+<ol>
+<li><p><strong>ステップ遷移の可視化</strong> — 「実行開始」ボタンを押すと <code>Start → ValidateInput → Choice → Process → Parallel → Map → Wait → Succeed</code> の順に <code>.flow-node.active</code> がハイライトされ、各ステートで JSON ペイロードの入力・出力がどう変化するかをリアルタイムで確認できる。</p></li>
+<li><p><strong>ASL との対応</strong> — 画面右の ASL JSON ペースト欄では現在実行中のステートの行が <code>.hl</code> でハイライトされ、宣言的な記述と実際の遷移が 1 対 1 で対応していることを体感できる。</p></li>
+<li><p><strong>Retry/Catch の動作</strong> — Task を意図的に失敗させると、指数バックオフで Retry が走り、上限超過後に Catch が発火してフォールバックブランチへ遷移する様子を確認できる。これにより Lambda 内の <code>try/except</code> との責務分担が視覚的に理解できる。</p></li>
+</ol>
+
+<hr>
+
+<h2>公式ドキュメント（出典）</h2>
+
+<ul>
+<li><a href="https://docs.aws.amazon.com/step-functions/latest/dg/welcome.html">What is Step Functions? — AWS Step Functions</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/step-functions/latest/dg/concepts-amazon-states-language.html">Using Amazon States Language — AWS Step Functions</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/step-functions/latest/dg/concepts-states.html">Step Functions states — AWS Step Functions</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/step-functions/latest/dg/concepts-error-handling.html">Handling errors in Step Functions workflows — AWS Step Functions</a>（閲覧日 2026-05-31）</li>
+</ul>
+
+<hr>
+
+<h2>関連・発展サービス</h2>
+
+<h3>Standard vs Express — 何を基準に選ぶか</h3>
+
+<p>表面的には「5 分制限かどうか」で語られるが、実際の選択基準はもっと多軸になる。</p>
+
+<table>
+<thead>
+<tr><th>観点</th><th>Standard</th><th>Express</th></tr>
+</thead>
+<tbody>
+<tr><td>最大実行時間</td><td>1 年</td><td>5 分</td></tr>
+<tr><td>実行セマンティクス</td><td><strong>Exactly-once</strong></td><td><strong>At-least-once</strong></td></tr>
+<tr><td>実行履歴保持</td><td>90 日（コンソール/API で参照可）</td><td>なし（CloudWatch Logs への書き出しが必須）</td></tr>
+<tr><td>料金</td><td>状態遷移数 × $0.025/1000</td><td>実行数 × 時間 × メモリ（Lambda 類似）</td></tr>
+<tr><td>スループット</td><td>2,000 req/s（緩和申請で増枠可）</td><td>100,000 req/s</td></tr>
+<tr><td>向いている用途</td><td>Saga・人手承認・長時間 ETL</td><td>IoT パイプライン・高頻度マイクロバッチ</td></tr>
+</tbody>
+</table>
+
+<p><strong>なぜ Saga には Standard か</strong>: Express は「At-least-once」なので、Lambda 側が冪等でないと重複課金・重複 INSERT が発生する。Saga は補償トランザクションという概念上「一度だけ実行されたことが追跡できる」ことが前提なので、Exactly-once の Standard が本命になる。<br>
+<strong>Standard のコスト地雷</strong>: Map ステートで 1,000 アイテムを直列処理すると 1,000 回分の状態遷移が課金される。大量アイテムには後述の Distributed Map + Express の組み合わせへ移行するのが実務のパターン。</p>
+
+<hr>
+
+<h3>SDK 統合（Optimized Integration） — Lambda なしで AWS API を直接呼ぶ</h3>
+
+<p><code>Resource: "arn:aws:states:::dynamodb:putItem"</code> のような <strong>Optimized Integration</strong> を使うと Lambda を挟まずに DynamoDB・SQS・SNS・ECS・Glue・Bedrock などを直接呼べる。</p>
+
+<pre><code class="language-json">{
+  &quot;Type&quot;: &quot;Task&quot;,
+  &quot;Resource&quot;: &quot;arn:aws:states:::dynamodb:putItem&quot;,
+  &quot;Parameters&quot;: {
+    &quot;TableName&quot;: &quot;phase8-orders&quot;,
+    &quot;Item&quot;: {
+      &quot;order_id&quot;: { &quot;S.$&quot;: &quot;$.order_id&quot; },
+      &quot;status&quot;:   { &quot;S&quot;: &quot;CREATED&quot; }
+    }
+  },
+  &quot;ResultPath&quot;: &quot;$.dynamoResult&quot;,
+  &quot;Next&quot;: &quot;NextState&quot;
+}</code></pre>
+
+<p><strong>メリット</strong>: Lambda コールドスタートの排除・Lambda 課金ゼロ・シンプルな IAM 設計。<br>
+<strong>デメリット</strong>: エラーハンドリングが粗い（AWS SDK エラーコードと States エラーのマッピングが必要）、ビジネスロジックが ASL に滲み出す。<br>
+<strong>つまずき</strong>: <code>Parameters</code> 内のフィールドで <code>.$</code> サフィックスをつけないと参照ではなくリテラル文字列として扱われる。Visual Editor では自動補完があるが、JSON 手書き時は頻発するミス。慣れるまでは <code>"order_id": { "S.$": "$.order_id" }</code> と <code>"status": { "S": "CREATED" }</code> を並べて「ドル記号がない方はリテラル」と覚えるとよい。</p>
+
+<hr>
+
+<h3>Map / Distributed Map — 並列ファンアウトの本命</h3>
+
+<p><code>Map</code> ステートは配列の各要素を並列処理する。<code>MaxConcurrency: 10</code> で同時実行数を制御でき、下流 Lambda のスロットリングを防ぐ。</p>
+
+<p>配列が数千件になると Standard の状態遷移コストが爆発する。ここで <strong>Distributed Map</strong>（2022 年末 GA）が登場する。S3 上の CSV/JSON/Parquet を直接ソースにして、チャイルドワークフローを最大 10,000 並列で起動できる。</p>
+
+<pre><code class="language-json">{
+  &quot;Type&quot;: &quot;Map&quot;,
+  &quot;ItemReader&quot;: {
+    &quot;Resource&quot;: &quot;arn:aws:states:::s3:getObject&quot;,
+    &quot;ReaderConfig&quot;: { &quot;InputType&quot;: &quot;CSV&quot;, &quot;CSVHeaderLocation&quot;: &quot;FIRST_ROW&quot; },
+    &quot;Parameters&quot;: {
+      &quot;Bucket&quot;: &quot;phase8-data&quot;,
+      &quot;Key.$&quot;: &quot;$.s3_key&quot;
+    }
+  },
+  &quot;MaxConcurrency&quot;: 100,
+  &quot;ToleratedFailurePercentage&quot;: 10,
+  &quot;ItemBatcher&quot;: { &quot;MaxItemsPerBatch&quot;: 50 },
+  &quot;ItemProcessor&quot;: {
+    &quot;ProcessorConfig&quot;: { &quot;Mode&quot;: &quot;DISTRIBUTED&quot;, &quot;ExecutionType&quot;: &quot;EXPRESS&quot; },
+    &quot;StartAt&quot;: &quot;ProcessRecord&quot;,
+    &quot;States&quot;: { }
+  }
+}</code></pre>
+
+<p><code>ToleratedFailurePercentage: 10</code> がポイント。全件失敗でなく 10% まで失敗を許容して残りを続ける。大規模 ETL で「1 件の壊れたレコードで全処理が止まる」問題を防ぐ。<code>ItemBatcher</code> で 50 件ずつバッチにまとめることで Lambda 呼び出し回数を削減し、コールドスタートのオーバーヘッドを圧縮できる。</p>
+
+<hr>
+
+<h3>コールバック / waitForTaskToken — 非同期人手承認</h3>
+
+<pre><code class="language-json">{
+  &quot;Type&quot;: &quot;Task&quot;,
+  &quot;Resource&quot;: &quot;arn:aws:states:::sqs:sendMessage.waitForTaskToken&quot;,
+  &quot;Parameters&quot;: {
+    &quot;QueueUrl&quot;: &quot;https://sqs.ap-northeast-1.amazonaws.com/123456789012/approval-queue&quot;,
+    &quot;MessageBody&quot;: {
+      &quot;TaskToken.$&quot;: &quot;$$.Task.Token&quot;,
+      &quot;OrderId.$&quot;:   &quot;$.order_id&quot;,
+      &quot;Amount.$&quot;:    &quot;$.amount&quot;
+    }
+  },
+  &quot;HeartbeatSeconds&quot;: 3600,
+  &quot;TimeoutSeconds&quot;: 86400,
+  &quot;Next&quot;: &quot;OrderApproved&quot;
+}</code></pre>
+
+<p>人手承認フローの典型: SQS に TaskToken を送る → Lambda で Slack/メール通知 → 承認者がボタンを押すと <code>send-task-success</code> が呼ばれてワークフロー再開。<br>
+<strong>HeartbeatSeconds を必ず入れる</strong>: 省略すると Standard では最大 1 年待ち続けるためコストが膨らみ、タイムアウトによる再通知もできなくなる。<br>
+承認期限切れは <code>HeartbeatTimeoutError</code> を Catch してリマインダ通知ステップに飛ばすか <code>OrderExpired</code> 状態に遷移させるのが実務標準のパターン。</p>
+
+<p><strong>TaskToken の保存場所</strong>: DynamoDB に格納してから Slack に送る順番が重要。Slack 送信を先にするとトークンが消えた場合に復旧不能になる。DynamoDB への Write に条件付き PutItem を使って重複防止するのが定石。</p>
+
+<hr>
+
+<h3>EventBridge Pipes — Lambda グルーコード不要のイベント駆動接続</h3>
+
+<p>2023 年 GA の EventBridge Pipes を使うと DynamoDB Streams → フィルタリング → Step Functions をコード不要で繋げられる。</p>
+
+<pre><code class="language-hcl">resource &quot;aws_pipes_pipe&quot; &quot;ddb_to_sfn&quot; {
+  name     = &quot;phase8-ddb-stream-to-sfn&quot;
+  role_arn = aws_iam_role.pipes_exec.arn
+
+  source = aws_dynamodb_table.orders.stream_arn
+  source_parameters {
+    dynamodb_stream_parameters {
+      starting_position = &quot;LATEST&quot;
+      batch_size        = 1
+    }
+    filter_criteria {
+      filter {
+        pattern = jsonencode({ eventName = [&quot;INSERT&quot;] })
+      }
+    }
+  }
+
+  target = aws_sfn_state_machine.order_saga.arn
+  target_parameters {
+    step_function_state_machine_parameters {
+      invocation_type = &quot;FIRE_AND_FORGET&quot;
+    }
+  }
+}</code></pre>
+
+<p>DynamoDB に新規レコードが INSERT されると自動でワークフローが起動する完全イベント駆動アーキテクチャ。<code>FIRE_AND_FORGET</code> vs <code>REQUEST_RESPONSE</code> の選択は「Pipe レベルで起動失敗を知りたいか」で決まる。<br>
+<strong>注意点</strong>: Pipes 自体のログを CloudWatch に出す設定を忘れると、フィルタリングや変換がどう動いているかデバッグが困難になる。<code>log_configuration</code> ブロックを Terraform に必ず入れること。</p>
+
+<hr>
+
+<h3>Step Functions Local — CI でのローカルテスト</h3>
+
+<pre><code class="language-bash"># Docker で SFN Local を起動
+docker run -p 8083:8083 \
+  -e AWS_DEFAULT_REGION=ap-northeast-1 \
+  amazon/aws-stepfunctions-local
+
+# ローカルでステートマシンを作成
+aws stepfunctions create-state-machine \
+  --endpoint-url http://localhost:8083 \
+  --name &quot;local-order-saga&quot; \
+  --definition file://state_machine_definition.json \
+  --role-arn &quot;arn:aws:iam::123456789012:role/DummyRole&quot;
+
+# Mock Lambda レスポンスで実行
+aws stepfunctions start-execution \
+  --endpoint-url http://localhost:8083 \
+  --state-machine-arn &quot;arn:aws:states:ap-northeast-1:123456789012:stateMachine:local-order-saga&quot; \
+  --input '{&quot;order_id&quot;:&quot;local-test-001&quot;,&quot;amount&quot;:5000}'</code></pre>
+
+<p>Lambda のモックレスポンスは <code>MockConfigFile.json</code> で定義する。CI/CD パイプラインで AWS 接続不要なステートマシンロジックテストが可能になり、GitHub Actions で <code>state_machine_definition.json</code> の構文エラーをマージ前に検出できる。</p>
+
+<hr>
+
+<h2>セキュリティ課題と対策</h2>
+
+<h3>1. IAM の 2 層構造 — 「誰が SFN を起動するか」と「SFN が何を呼べるか」</h3>
+
+<p>Step Functions の IAM は 2 層になっている。混同するとどちらかに過剰権限を与えてしまう。</p>
+
+<p><strong>呼び出し元ポリシー</strong>（EventBridge や Lambda が SFN を起動する場合）:</p>
+
+<pre><code class="language-json">{
+  &quot;Action&quot;: &quot;states:StartExecution&quot;,
+  &quot;Resource&quot;: &quot;arn:aws:states:ap-northeast-1:123456789012:stateMachine:phase8-order-saga&quot;
+}</code></pre>
+
+<p>ステートマシン ARN を個別指定するのが鉄則。<code>"Resource": "*"</code> にするとアカウント内の全ステートマシンを起動できてしまう。</p>
+
+<p><strong>ステートマシン実行ロール</strong>（SFN が Lambda を呼ぶ場合）: 本 sandbox の <code>main.tf</code> を参照。<code>lambda:InvokeFunction</code> の Resource に <code>phase8-*</code> の ARN を個別列挙している。<code>*</code> にすると同アカウントの全 Lambda を呼べてしまうので関数 ARN を明示する。</p>
+
+<p><strong>Condition: ArnLike による SourceArn 制約</strong>: <code>assume_role_policy</code> の Condition に入れた <code>aws:SourceArn</code> が重要。SFN サービスが Assume Role する際に、どのステートマシンからの要求かを制約する。これを入れないと同アカウント内の他ステートマシンが同じロールを使い回せる。</p>
+
+<hr>
+
+<h3>2. 実行データのログ可視性 — 最大の盲点</h3>
+
+<pre><code class="language-hcl">logging_configuration {
+  include_execution_data = true   # ← これが諸刃の剣
+  level                  = &quot;ALL&quot;
+}</code></pre>
+
+<p><code>include_execution_data = true</code> にすると、<strong>ステートマシンへの入力・各ステートの出力・エラー詳細がすべて CloudWatch Logs に書き込まれる</strong>。デバッグには非常に便利だが、入力に PII・クレカ番号・パスワードが含まれる場合、ログ経由で情報漏洩する。</p>
+
+<p><strong>対策パターン（優先順位順）</strong>:</p>
+
+<ol>
+<li><strong>入力サニタイズ</strong>: 最初の ValidateOrder ステート内で機微フィールドを削除/マスクし、後続ステートに渡さない（最も根本的な対策）</li>
+<li><strong>ログレベルを ERROR に下げる</strong>: <code>level = "ERROR"</code> にすると失敗時のみログが出る。成功時の機微データはログに残らない。運用可観測性と機密保護のトレードオフ</li>
+<li><strong>CloudWatch Logs の KMS 暗号化</strong>: 本 sandbox で実施済み。ログ自体を暗号化することで「ログへのアクセス = KMS デクリプト権限が必要」という防御層を追加</li>
+<li><strong>ログアクセス IAM の最小化</strong>: CloudWatch Logs へのアクセスを特定の IAM ロール・Principal のみに付与</li>
+</ol>
+
+<pre><code class="language-bash"># ログに含まれる機微データを確認するコマンド（destroy 前の確認用）
+aws logs filter-log-events \
+  --log-group-name &quot;/aws/states/phase8-order-saga&quot; \
+  --filter-pattern &quot;{ $.type = \&quot;ExecutionStarted\&quot; }&quot; \
+  --query &quot;events[0].message&quot; \
+  --output text | jq .</code></pre>
+
+<hr>
+
+<h3>3. X-Ray トレース — セキュリティの二面性</h3>
+
+<p>X-Ray は便利だが、トレースデータにも入出力データが含まれる場合がある。特に Lambda Powertools を使うと <code>@tracer.capture_method</code> アノテーションがメソッドの引数を自動でトレースセグメントに付与する設定があるので注意が必要。</p>
+
+<p><strong>X-Ray の機密データマスク</strong>: Powertools は <code>capture_response=False</code> オプションで応答データをトレースから除外できる。</p>
+
+<pre><code class="language-python">from aws_lambda_powertools import Tracer
+tracer = Tracer()
+
+@tracer.capture_lambda_handler(capture_response=False)  # レスポンスをトレースに含めない
+def lambda_handler(event, context):
+    ...</code></pre>
+
+<p><strong>X-Ray トレースの KMS 暗号化</strong>: X-Ray コンソール → 暗号化設定 → CMK 指定、または Terraform で:</p>
+
+<pre><code class="language-hcl">resource &quot;aws_xray_encryption_config&quot; &quot;phase8&quot; {
+  type   = &quot;KMS&quot;
+  key_id = aws_kms_key.phase8.arn
+}</code></pre>
+
+<p>トレースデータはデフォルトで AWS マネージドキーで暗号化されているが、CMK に切り替えると「トレース参照 = KMS 権限が必要」という統制が加わる。</p>
+
+<hr>
+
+<h3>4. VPC 内 Lambda と Step Functions エンドポイント</h3>
+
+<p>Lambda を VPC 内に配置する場合、Step Functions が Lambda を呼び出すためには <strong>Interface Endpoint</strong>（PrivateLink）が必要。ないと Step Functions サービスからの呼び出しがインターネット経由になる。</p>
+
+<pre><code class="language-hcl">resource &quot;aws_vpc_endpoint&quot; &quot;sfn&quot; {
+  vpc_id              = aws_vpc.main.id
+  service_name        = &quot;com.amazonaws.ap-northeast-1.states&quot;
+  vpc_endpoint_type   = &quot;Interface&quot;
+  subnet_ids          = aws_subnet.private[*].id
+  security_group_ids  = [aws_security_group.vpce.id]
+  private_dns_enabled = true
+}</code></pre>
+
+<p><strong>つまずき</strong>: VPC エンドポイントを作っても、セキュリティグループが HTTPS:443 をブロックしていると繋がらない。エンドポイントの SG インバウンドに「Lambda の SG からの 443」を許可するのを忘れがち。エンドポイントの SG と Lambda の SG が別物なので、双方向の参照を設計する。</p>
+
+<hr>
+
+<h3>5. 実行クォータとスロットリング対策</h3>
+
+<p>Standard ステートマシンの状態遷移は <strong>リージョン単位で 5,000 req/s</strong>（緩和申請で 100,000 まで可）。Distributed Map などで大量の子ワークフローを起動すると <code>ThrottlingException</code> が出る。</p>
+
+<pre><code class="language-json">&quot;Retry&quot;: [
+  {
+    &quot;ErrorEquals&quot;: [&quot;States.ExceedToleratedFailureThreshold&quot;, &quot;States.RuntimeExceeded&quot;, &quot;ThrottlingException&quot;],
+    &quot;IntervalSeconds&quot;: 5,
+    &quot;MaxAttempts&quot;: 5,
+    &quot;BackoffRate&quot;: 2.0,
+    &quot;JitterStrategy&quot;: &quot;FULL&quot;
+  }
+]</code></pre>
+
+<p>本番では CloudWatch Metric <code>ThrottledRequests</code>（Namespace: <code>AWS/States</code>）にアラームを張り、閾値超過前にクォータ緩和申請を行う。</p>
+
+<hr>
+
+<h2>インフラ応用パターン</h2>
+
+<h3>Saga パターン — なぜ Step Functions が最適解か</h3>
+
+<p>マイクロサービス間の分散トランザクションで ACID を保証する手段として Saga パターンがある。2 フェーズコミット（2PC）の代替で、各ステップが失敗したら逆順で補償トランザクションを実行する。</p>
+
+<p><strong>Step Functions が Saga に向いている理由</strong>:</p>
+<ul>
+<li>実行履歴が 90 日間保存され、どこで失敗したか完全に追跡できる</li>
+<li><code>Catch</code> → 補償ステートへの遷移が ASL で宣言的に書ける（補償ロジックをアプリコードから分離できる）</li>
+<li>Lambda の冪等性さえ担保すれば Exactly-once の処理保証が得られる</li>
+</ul>
+
+<p><strong>補償設計の要点</strong>:</p>
+
+<p>補償は「べき等であること」が前提。ChargePayment の補償（払い戻し）を 2 回実行しても安全な設計が必要。DynamoDB の条件付き書き込み（<code>ConditionExpression</code>）が鍵になる:</p>
+
+<pre><code class="language-python"># compensate_order_handler の中
+dynamodb.update_item(
+    TableName=os.environ[&quot;ORDERS_TABLE&quot;],
+    Key={&quot;order_id&quot;: {&quot;S&quot;: order_id}},
+    UpdateExpression=&quot;SET #s = :cancelled&quot;,
+    ConditionExpression=&quot;attribute_exists(order_id) AND #s &lt;&gt; :cancelled&quot;,
+    ExpressionAttributeNames={&quot;#s&quot;: &quot;status&quot;},
+    ExpressionAttributeValues={&quot;:cancelled&quot;: {&quot;S&quot;: &quot;CANCELLED&quot;}},
+)</code></pre>
+
+<p><strong>補償ステート自体が失敗した場合の設計を忘れない</strong>: CompensateOrder が失敗すると「補償も失敗した中途半端な状態」が無音で放置される。CloudWatch Alarm + SNS 通知で必ず気づける仕組みを用意する</p>
+
+<hr>
+
+<h3>人手承認ワークフロー — Slack ボタン統合の実装パターン</h3>
+
+<p>実務でよく出る「金額が 10 万円超えたら上長承認が必要」パターン:</p>
+
+<pre><code>[Amount Check] --超過--&gt; [Send Slack DM with TaskToken] --waitForTaskToken--&gt;
+  --approve--&gt; [Process Order]
+  --reject--&gt;  [Cancel Order]
+  --timeout (HeartbeatTimeoutError)--&gt; [Remind Manager] --&gt; [Send Slack DM with TaskToken]</code></pre>
+
+<p>Slack Bolt + Lambda で <code>send-task-success</code> / <code>send-task-failure</code> を呼ぶ実装。</p>
+
+<pre><code class="language-python"># Slack の承認ボタン押下時
+import boto3
+sfn = boto3.client(&quot;stepfunctions&quot;)
+
+@app.action(&quot;approve_order&quot;)
+def handle_approve(ack, body):
+    ack()
+    task_token = body[&quot;actions&quot;][0][&quot;value&quot;]  # Slack メッセージに埋め込んだトークン
+    sfn.send_task_success(
+        taskToken=task_token,
+        output=json.dumps({&quot;approved&quot;: True, &quot;approver&quot;: body[&quot;user&quot;][&quot;name&quot;]})
+    )</code></pre>
+
+<pre><code class="language-bash"># CLI で手動承認する場合（テスト時に便利）
+aws stepfunctions send-task-success \
+  --task-token &quot;AQDkAAAAKgAAAAAAAA...&quot; \
+  --task-output '{&quot;approved&quot;: true}'</code></pre>
+
+<p>TaskToken の保存: DynamoDB に格納してから Slack に送る順番が重要。Slack 送信が失敗した場合でも DynamoDB からトークンを取り出してリトライできる。</p>
+
+<hr>
+
+<h3>ETL オーケストレーション — Glue + Distributed Map</h3>
+
+<pre><code>[Trigger from S3 Event]
+  --&gt; [List S3 Objects] (SDK Integration)
+  --&gt; [Distributed Map: MaxConcurrency=50]
+      --&gt; [Glue Job per partition] (arn:aws:states:::glue:startJobRun.sync)
+  --&gt; [Aggregate Results]
+  --&gt; [Update Data Catalog]</code></pre>
+
+<p><code>.sync</code> サフィックスで Glue ジョブの完了を待てる。Lambda でポーリングするグルーコードが不要になり、Glue の実行ログも X-Ray サービスマップに統合される。</p>
+
+<p><strong>コスト最適化</strong>: Glue G.025X（0.25 DPU）で足りるジョブを G.1X で動かすと 4 倍の課金。Step Functions オーケストレーション層でジョブサイズを動的に選択する設計が実務では有効:</p>
+
+<pre><code class="language-json">{
+  &quot;Type&quot;: &quot;Choice&quot;,
+  &quot;Choices&quot;: [
+    {
+      &quot;Variable&quot;: &quot;$.file_size_mb&quot;,
+      &quot;NumericLessThan&quot;: 100,
+      &quot;Next&quot;: &quot;GlueJobSmall&quot;
+    }
+  ],
+  &quot;Default&quot;: &quot;GlueJobLarge&quot;
+}</code></pre>
+
+<hr>
+
+<h3>Retry/Catch の設計論 — エラーカテゴリ別に分ける</h3>
+
+<p><code>States.ALL</code> で全エラーに同一リトライ設定を入れるのは初期実装として悪くないが、本番では分けて考える:</p>
+
+<table>
+<thead>
+<tr><th>エラーカテゴリ</th><th>推奨</th><th>理由</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Lambda.ServiceException</code></td><td>Retry 3 回 / 指数 2x / JitterStrategy FULL</td><td>AWS 側の一時障害</td></tr>
+<tr><td><code>Lambda.AWSLambdaException</code></td><td>Retry 1 回のみ</td><td>アプリ例外の可能性大。過剰リトライは副作用を生む</td></tr>
+<tr><td><code>Lambda.TooManyRequestsException</code></td><td>Retry 5 回 / 指数 2x / Jitter FULL</td><td>スロットリングには長めの待機が必要</td></tr>
+<tr><td><code>States.TaskFailed</code></td><td>Catch して補償ステートへ</td><td>ビジネスロジック失敗はリトライより補償</td></tr>
+<tr><td><code>States.Timeout</code></td><td>Catch してアラート</td><td>タイムアウトはリトライより原因調査を優先</td></tr>
+</tbody>
+</table>
+
+<p><code>JitterStrategy: "FULL"</code> を全 Retry に入れるのが現代の標準。均一なバックオフは Thundering Herd（一斉リトライによる再スロットリング）を引き起こす。FULL Jitter は <code>[0, interval × backoffRate^n]</code> の一様分布でリトライタイミングを散らす。</p>
+
+<hr>
+
+<h3>長時間ワークフローの罠 — Wait ステートの活用</h3>
+
+<p>Standard は最大 1 年間実行できるが、料金は <strong>状態遷移回数</strong>に比例する。<code>Wait</code> ステートは遷移回数に<strong>カウントされない</strong>ため、長時間待機は <code>Wait</code> で実装するのが鉄則。</p>
+
+<pre><code class="language-json">{
+  &quot;Type&quot;: &quot;Wait&quot;,
+  &quot;Seconds&quot;: 86400,
+  &quot;Next&quot;: &quot;CheckDeadline&quot;
+}</code></pre>
+
+<p>あるいは <code>TimestampPath: "$.deadline"</code> で特定の日時まで待機することもできる。</p>
+
+<pre><code class="language-json">{
+  &quot;Type&quot;: &quot;Wait&quot;,
+  &quot;TimestampPath&quot;: &quot;$.deadline&quot;,
+  &quot;Next&quot;: &quot;SendReminder&quot;
+}</code></pre>
+
+<p><strong>つまずき</strong>: <code>Wait</code> 中は実行が「Running」状態のまま残るため、コンソールの実行リストが大量の「実行中」で埋まる。Dashboard でフィルタリングして「RUNNING 件数」を可視化しておくと管理しやすい。</p>
+
+<hr>
+
+<h3>追加: X-Ray Groups + Sampling Rules でエラーに集中する</h3>
+
+<p>本番運用時にすべてのトレースを保存するとコストが爆発する。Sampling Rules でエラーを優先的にサンプリングする設計が有効:</p>
+
+<pre><code class="language-hcl">resource &quot;aws_xray_sampling_rule&quot; &quot;phase8_errors_full&quot; {
+  rule_name      = &quot;phase8-errors-full-sample&quot;
+  priority       = 100                          # 低い数字ほど優先
+  reservoir_size = 5
+  fixed_rate     = 1.0                          # エラーは 100% サンプリング
+  url_path       = &quot;*&quot;
+  host           = &quot;*&quot;
+  http_method    = &quot;*&quot;
+  service_type   = &quot;AWS::StepFunctions::StateMachine&quot;
+  service_name   = &quot;phase8-order-saga&quot;
+  resource_arn   = &quot;*&quot;
+  version        = 1
+  attributes = {
+    &quot;http.status&quot; = &quot;5*&quot;                        # 5xx のみ対象
+  }
+}
+
+resource &quot;aws_xray_sampling_rule&quot; &quot;phase8_normal&quot; {
+  rule_name      = &quot;phase8-normal-low-sample&quot;
+  priority       = 200
+  reservoir_size = 2
+  fixed_rate     = 0.05                         # 正常系は 5% のみ
+  url_path       = &quot;*&quot;
+  host           = &quot;*&quot;
+  http_method    = &quot;*&quot;
+  service_type   = &quot;AWS::StepFunctions::StateMachine&quot;
+  service_name   = &quot;phase8-order-saga&quot;
+  resource_arn   = &quot;*&quot;
+  version        = 1
+}</code></pre>
+
+<p>X-Ray Groups の <code>filter_expression</code> と組み合わせると、エラーが発生したトレースだけを抽出したビューを常時表示しておける。CloudWatch Insights との統合で「エラーが増え始めたタイムスタンプ」を特定し、X-Ray でそのタイムスタンプ前後のトレースを掘り下げる、という運用フローが実務の標準になりつつある。</p>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase8</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase8</span></li>
+<li><b>負荷生成</b> — start-execution で実行開始<span class="cmd">make sandbox-load-phase8</span></li>
+<li><b>観測</b> — 実行開始/成功/失敗数・所要時間＋ビジュアル実行<span class="cmd">make sandbox-watch-phase8</span><div class="tstamp">⏱ 反映 1〜2 分</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase8</span></li>
+</ol>
+<p class="note warn">⚠ KMS を使う Phase は destroy 後も 7 日間の削除保留期間がある（ごく僅かな残コスト）。</p>
+</section>
+<div class="foot">← <a href="index.html">Phase 8 ルーター</a> ／ <a href="main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main>
+</body>
+</html>

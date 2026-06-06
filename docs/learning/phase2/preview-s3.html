@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 2 教材</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#3b82f6;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}
+.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;line-height:1.5;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}
+h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}img{max-width:100%}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}
+.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style>
+</head>
+<body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 2 教材 · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Phase 2 プレビュー教材: S3 — オブジェクトストレージを触ってみる</h1>
+
+<blockquote>プレビュー教材: デモ体験のために先行生成しました。正式な lesson / 振り返りクイズ / 採点は Phase 2 到達時に実施します。</blockquote>
+
+<hr>
+
+<h2>このサービスは何か</h2>
+
+<p>Amazon S3（Simple Storage Service）は、AWS のオブジェクトストレージサービスです。データを <strong>オブジェクト</strong> 単位で保存し、各オブジェクトは次の 3 要素で構成されます。</p>
+
+<table>
+<thead>
+<tr><th>要素</th><th>内容</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>キー</strong></td><td>バケット内で一意な文字列（例: <code>submissions/2026/abc.json</code>）</td></tr>
+<tr><td><strong>本体（データ）</strong></td><td>最大 5 TB のバイト列</td></tr>
+<tr><td><strong>メタデータ</strong></td><td>Content-Type / ETag / ストレージクラス / Last-Modified など</td></tr>
+</tbody>
+</table>
+
+<p>S3 はファイルシステム（POSIX）でも ブロックデバイス（EBS）でもありません。オブジェクトは <strong>丸ごと PUT/GET</strong> が基本操作であり、一部分だけを書き換える（部分更新）はできません（バイト範囲 GET による部分読み込みは可能）。</p>
+
+<hr>
+
+<h2>いつ使うか・使わないか</h2>
+
+<h3>使うべきケース</h3>
+<ul>
+<li>静的ファイル（HTML / JS / CSS / 画像）のホスティング</li>
+<li>Lambda や EC2 から参照するアーティファクト（ZIP / JSON / CSV）の保存</li>
+<li>ログ・バックアップ・データレイクの中間ストレージ</li>
+<li>CloudFront のオリジンとして CDN コンテンツを配信</li>
+<li>プリサインド URL による短期間の安全なファイル共有</li>
+</ul>
+
+<h3>使わないケース</h3>
+<ul>
+<li>ミリ秒以下のレイテンシが必要なランダム I/O → EBS / ElastiCache</li>
+<li>トランザクションや SQL クエリが必要 → RDS / DynamoDB</li>
+<li>POSIX ファイルシステムが必要（<code>ls</code>, <code>chmod</code> など）→ EFS</li>
+</ul>
+
+<hr>
+
+<h2>コアコンセプト</h2>
+
+<h3>1. バケットとキー空間</h3>
+
+<p>S3 のキー空間は <strong>フラット</strong>（階層なし）です。スラッシュ <code>/</code> はキーの一部の文字列であり、ディレクトリではありません。</p>
+
+<pre><code>バケット: atcoder-review-artifacts
+  └── キー: submissions/2026/abc.json   ← スラッシュは単なる文字
+  └── キー: submissions/2026/def.json
+  └── キー: exports/report.csv</code></pre>
+
+<p>マネジメントコンソールや SDK では <code>Prefix</code> パラメータを指定してスラッシュ手前までを「擬似フォルダ」として扱えますが、実体はすべて同一の平坦なキー空間に存在します。</p>
+
+<h3>2. 強整合性モデル（read-after-write）</h3>
+
+<p>2020 年末以降、S3 はすべての操作（PUT / DELETE / LIST）で <strong>強整合性</strong> を保証します。</p>
+
+<ul>
+<li>オブジェクトを PUT した直後に GET すると、必ず最新データが返る</li>
+<li>LIST も PUT 直後に反映される（以前の結果整合とは異なる）</li>
+</ul>
+
+<p>キャッシュや再試行ループを設けなくてもデータの一貫性が担保されるため、ワークフローが簡素化されます。</p>
+
+<h3>3. プリサインド URL</h3>
+
+<p>S3 のオブジェクトに一時的にアクセスさせたい場合、IAM 認証情報を相手に渡す代わりに <strong>署名付き URL（Presigned URL）</strong> を発行します。</p>
+
+<pre><code>https://BUCKET.s3.amazonaws.com/KEY
+  ?X-Amz-Algorithm=AWS4-HMAC-SHA256
+  &amp;X-Amz-Credential=...
+  &amp;X-Amz-Date=...
+  &amp;X-Amz-Expires=3600        ← TTL（秒）
+  &amp;X-Amz-Signature=...</code></pre>
+
+<ul>
+<li>URL を知っている人だけが、指定した TTL の間だけアクセスできる</li>
+<li>発行者の IAM 権限を超えたアクセスは許可されない</li>
+<li>PUT 用プリサインド URL も発行可能（フロントエンドから直接 S3 へアップロード）</li>
+</ul>
+
+<h3>4. ストレージクラス</h3>
+
+<table>
+<thead>
+<tr><th>クラス</th><th>用途</th><th>取り出しコスト</th><th>取り出し時間</th></tr>
+</thead>
+<tbody>
+<tr><td>S3 Standard</td><td>頻繁にアクセスするデータ</td><td>なし</td><td>ミリ秒</td></tr>
+<tr><td>S3 Standard-IA</td><td>低頻度アクセス、長期保存</td><td>あり（GB 単位）</td><td>ミリ秒</td></tr>
+<tr><td>S3 Glacier Instant Retrieval</td><td>アーカイブ、即時取り出し</td><td>あり（高め）</td><td>ミリ秒</td></tr>
+<tr><td>S3 Glacier Flexible Retrieval</td><td>アーカイブ</td><td>あり</td><td>分〜時間</td></tr>
+<tr><td>S3 Glacier Deep Archive</td><td>長期アーカイブ</td><td>あり（最高）</td><td>12 時間〜</td></tr>
+</tbody>
+</table>
+
+<p>Standard-IA は保存コストが安い反面、取り出しのたびに料金が発生します。取り出し頻度が月 1 回未満程度のデータに適しています。</p>
+
+<hr>
+
+<h2>主要な設定・API・パラメータ</h2>
+
+<h3>バケット作成時の主要パラメータ</h3>
+
+<table>
+<thead>
+<tr><th>パラメータ</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>BucketName</code></td><td>グローバル一意な名前（3〜63 文字、小文字）</td></tr>
+<tr><td><code>Region</code></td><td>バケットのリージョン（後から変更不可）</td></tr>
+<tr><td><code>BlockPublicAccess</code></td><td>パブリックアクセスのブロック設定（デフォルト: 全ブロック）</td></tr>
+<tr><td><code>Versioning</code></td><td>オブジェクトのバージョン管理（有効化すると削除マーカーが付く）</td></tr>
+<tr><td><code>ServerSideEncryption</code></td><td>暗号化（SSE-S3 / SSE-KMS / SSE-C）</td></tr>
+</tbody>
+</table>
+
+<h3>主要 API（boto3 例）</h3>
+
+<pre><code>import boto3
+s3 = boto3.client("s3")
+
+# アップロード
+s3.put_object(
+    Bucket="atcoder-review-artifacts",
+    Key="submissions/2026/abc.json",
+    Body=b'{"status": "AC"}',
+    ContentType="application/json",
+    StorageClass="STANDARD",
+)
+
+# ダウンロード
+response = s3.get_object(
+    Bucket="atcoder-review-artifacts",
+    Key="submissions/2026/abc.json",
+)
+data = response["Body"].read()
+
+# プリサインド URL 発行
+url = s3.generate_presigned_url(
+    "get_object",
+    Params={"Bucket": "atcoder-review-artifacts", "Key": "submissions/2026/abc.json"},
+    ExpiresIn=3600,  # 秒
+)
+
+# プリフィックスで一覧
+paginator = s3.get_paginator("list_objects_v2")
+for page in paginator.paginate(Bucket="atcoder-review-artifacts", Prefix="submissions/2026/"):
+    for obj in page.get("Contents", []):
+        print(obj["Key"], obj["Size"])</code></pre>
+
+<h3>ListObjectsV2 vs ListObjects</h3>
+
+<p><code>ListObjects</code>（v1）は非推奨です。常に <code>ListObjectsV2</code> を使用してください。大量オブジェクトがある場合は Paginator を使い、<code>ContinuationToken</code> を自動処理させます。</p>
+
+<hr>
+
+<h2>よくある落とし穴・誤解</h2>
+
+<h3>1. 「フォルダ」は存在しない</h3>
+
+<p>コンソール上でフォルダのように見えても、S3 に「ディレクトリ」の概念はありません。<code>submissions/</code> というキーのオブジェクトが存在しても、それは 0 バイトの「プレースホルダー」オブジェクトです。プリフィックスで絞り込む設計を意識してください。</p>
+
+<h3>2. バケット名はグローバル一意</h3>
+
+<p>バケット名は AWS 全アカウントを通じて一意です。自分のアカウントで削除した名前を他のアカウントが取得する可能性があります。機密情報をバケット名に含めないよう注意してください。</p>
+
+<h3>3. Standard-IA の最小保存期間</h3>
+
+<p>Standard-IA は <strong>30 日未満</strong> の保存でも 30 日分の料金が発生します。短命なデータに IA を使うと逆にコスト高になります。</p>
+
+<h3>4. プリサインド URL と ACL</h3>
+
+<p>バケットに <code>BlockPublicAccess</code> が有効でも、プリサインド URL は IAM ポリシーの許可があれば機能します。ただし URL の漏洩に注意が必要です。TTL は最小限に設定してください。</p>
+
+<h3>5. リージョン外通信コスト</h3>
+
+<p>Lambda と S3 が同一リージョンであればデータ転送料は無料です。クロスリージョンアクセスは転送コストが発生します。</p>
+
+<hr>
+
+<h2>このプロジェクト（AtCoder 復習）での使いどころ</h2>
+
+<table>
+<thead>
+<tr><th>ユースケース</th><th>キー設計例</th></tr>
+</thead>
+<tbody>
+<tr><td>AC コードのアーカイブ</td><td><code>codes/{user}/{contest}/{problem}.py</code></td></tr>
+<tr><td>提出履歴の JSON スナップショット</td><td><code>submissions/{user}/{date}.json</code></td></tr>
+<tr><td>静的フロントエンドのホスティング</td><td><code>index.html</code>, <code>_next/static/...</code></td></tr>
+<tr><td>Lambda デプロイパッケージの保存</td><td><code>lambda-artifacts/{function}/{version}.zip</code></td></tr>
+</tbody>
+</table>
+
+<p>Phase 1 では DynamoDB に提出データを保存しましたが、<strong>コードの生文字列（数 KB〜数十 KB）</strong> は DynamoDB の 400 KB アイテム制限に引っかかる恐れがあります。S3 にコード本体を置き、DynamoDB には S3 キーだけを持たせる <strong>参照パターン</strong> が自然な設計です。</p>
+
+<p>また、フロントエンドを S3 + CloudFront で配信すれば API Gateway / Lambda の実行コストをゼロにできる部分もあります（静的アセット限定）。</p>
+
+<hr>
+
+<h2>デモで体験したこと</h2>
+
+<p><code>docs/learning/phase2/demo/index.html</code> のバケットエクスプローラでは、疑似ファイルを「アップロード」すると <code>submissions/2026/abc.json</code> のようなキーで一覧に追加されます。オブジェクトをクリックするとキー / サイズ / Content-Type / ETag / Last-Modified などのメタデータが表示され、S3 の「オブジェクト = キー + メタデータ + 本体」という構造を視覚的に確認できます。</p>
+
+<p>プリフィックスの擬似フォルダ表示では、スラッシュ区切りのキーがフォルダのように見えても実体はフラットなキー空間であることが図示されており、「フォルダは存在しない」というコアコンセプトを直感的に理解できます。</p>
+
+<p>プリサインド URL のデモでは TTL スライダーで有効期限を設定して URL を発行し、期限切れ後に「ダウンロード」を押すと 403 エラー（<code>.badge.err</code>）になることを確認できます。これにより、署名付き URL の「一時的な認可」という性質が体感できます。</p>
+
+<p>ストレージクラスのトグルでは Standard / Standard-IA / Glacier を切り替えてコストと取り出し時間のトレードオフを比較表示で確認でき、ユースケースに応じたクラス選択の判断軸を養えます。</p>
+
+<hr>
+
+<h2>公式ドキュメント（出典）</h2>
+
+<ul>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html">Amazon S3 とは — ユーザーガイド</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/ShareObjectPreSignedURL.html">プリサインド URL を使用したオブジェクトの共有</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html">S3 ストレージクラスの使用</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html#ConsistencyModel">Amazon S3 強整合性モデル</a>（閲覧日 2026-05-31）</li>
+</ul>
+
+<hr>
+
+<h2>&#x1f9ed; 関連・発展サービス</h2>
+
+<h3>S3 Event Notification の 4 経路と使い分け</h3>
+
+<p>ObjectCreated をトリガーにする方法は Lambda への直接通知だけではない。「失敗時の挙動」と「ファンアウト可否」で経路を選ぶ。</p>
+
+<pre><code>ObjectCreated
+      │
+      ├─(1)─→ Lambda              — 最速、非同期呼び出し（失敗時 S3 は再試行しない）
+      ├─(2)─→ SQS Standard Queue  — バッファあり。Lambda の DLQ と組み合わせて再処理
+      ├─(3)─→ SNS Topic           — ファンアウト。SNS→SQS×複数 や SNS→Lambda×複数
+      └─(4)─→ EventBridge         — ルール/フィルタ/アーカイブ/リプレイが使える</code></pre>
+
+<p><strong>Lambda 直接通知のつまずき</strong>: S3 は非同期でイベントを送るため、Lambda がエラーを返しても S3 は「成功」として扱う。大量 PUT が短時間に集中すると Lambda が詰まり、古いイベントは <strong>最大 6 時間後</strong> にリトライされる。ワーカー数が重要なユースケースでは SQS を間に挟んで <code>VisibilityTimeout</code> でフロー制御するべき。</p>
+
+<p><strong>EventBridge を選ぶ理由</strong>: バケット側の通知設定を変えなくても <strong>アカウント内全バケットのイベントを受け取れる</strong>（CloudTrail S3 データイベントと連携）。EventBridge ルールでキーの prefix/suffix や metadata でフィルタし、複数ターゲットに並列配信できる。Step Functions のターゲット指定も可能で、ワークフローオーケストレーションに直結できる。</p>
+
+<hr>
+
+<h3>S3 Object Lambda — GetObject をインターセプトして変換</h3>
+
+<p>通常の S3 バケットの前に Lambda を挟み、クライアントには S3 の URL のまま変換後データを返すサービス。</p>
+
+<pre><code>クライアント
+  → S3 Object Lambda Access Point
+    → Lambda（PII マスキング / 画像リサイズ / CSV→JSON 変換など）
+      → 元バケット（SSE-KMS）</code></pre>
+
+<p>元データを書き換えずに、利用者ごとに異なるビューを提供できる。社内データレイクに PII が混在しているとき、Analytics チームには自動マスキングした行を返す Access Point を発行する、というのが典型的なユースケース。バケットを複製せずに済むのでコスト効率がよい。</p>
+
+<hr>
+
+<h3>S3 Select / Athena — オブジェクト内を SQL で絞り込む</h3>
+
+<table>
+<thead>
+<tr><th></th><th>S3 Select</th><th>Athena</th></tr>
+</thead>
+<tbody>
+<tr><td>対象</td><td>単一オブジェクト内の SQL</td><td>複数オブジェクト（Glue カタログ）</td></tr>
+<tr><td>フォーマット</td><td>CSV / JSON / Parquet</td><td>Parquet / ORC / JSON / CSV など</td></tr>
+<tr><td>コスト</td><td>スキャンバイト課金</td><td>スキャン $5/TB</td></tr>
+<tr><td>主な使い所</td><td>Lambda 内で大きな CSV の一部を取得</td><td>データレイク分析</td></tr>
+</tbody>
+</table>
+
+<p><strong>Athena のつまずき</strong>: <code>CREATE TABLE</code> で <code>LOCATION</code> を s3:// にする際、<strong>末尾スラッシュが必須</strong>。<code>s3://bucket/prefix/</code> ← これがないと全バケットをスキャンしてコストが爆発することがある。パーティション射影（Partition Projection）を使うと Glue Crawler のクロールコストが消え、クエリ応答速度も上がる。</p>
+
+<hr>
+
+<h3>S3 Access Points — チーム・アプリごとにバケットアクセスを分離</h3>
+
+<p>バケットポリシーに全チームの許可をまとめて書くとポリシーが肥大化する。Access Points を使うと、チームやアプリごとに別個のエンドポイントと IAM ポリシーを管理できる。</p>
+
+<pre><code>resource "aws_s3_access_point" "analytics" {
+  name   = "analytics-ap"
+  bucket = aws_s3_bucket.main.id
+  public_access_block_configuration {
+    block_public_acls       = true
+    block_public_policy     = true
+    ignore_public_acls      = true
+    restrict_public_buckets = true
+  }
+}</code></pre>
+
+<p>VPC 限定 Access Point（VPC Origin）にすると VPC 外からのアクセスを完全にブロックでき、インターネット経由アクセスを禁止したい本番ワークロードに有効。</p>
+
+<hr>
+
+<h3>ライフサイクル設計の実務パターン</h3>
+
+<pre><code>Day 0    STANDARD              — 高アクセス。読み書きコスト最小
+Day 30   STANDARD_IA           — アクセス頻度が落ちたら。取り出しコストが発生することに注意
+Day 90   GLACIER_IR            — 数ミリ秒で取り出せるアーカイブ
+Day 180  GLACIER               — 数時間かかるが安い。バックアップ/コンプライアンス保管
+Day 365  DEEP_ARCHIVE / 削除   — 最安（$0.00099/GB/月）。7 年保管の規制要件向け</code></pre>
+
+<p><strong>Intelligent-Tiering を選ぶ場面</strong>: アクセスパターンが予測不能なユーザー生成コンテンツ向け。監視コスト $0.0025/1,000 objects/月で、アクセス頻度に応じて Frequent/Infrequent/Archive を自動切替する。ただし 128KB 未満の小オブジェクトは常に Frequent に留まるため、ログの断片など小オブジェクトが大量にある場合は不向き。</p>
+
+<hr>
+
+<h3>Cross-Region Replication (CRR) — DR とデータ主権</h3>
+
+<p>DR・レイテンシ低減・データ主権対応。ソースとデスティネーションの両方で Versioning が必須。</p>
+
+<pre><code>resource "aws_s3_bucket_replication_configuration" "main" {
+  role   = aws_iam_role.replication.arn
+  bucket = aws_s3_bucket.main.id
+  rule {
+    id     = "replicate-all"
+    status = "Enabled"
+    destination {
+      bucket        = aws_s3_bucket.replica.arn
+      storage_class = "STANDARD_IA"  # DR バケットはコスト最適に
+    }
+  }
+}</code></pre>
+
+<p><strong>つまずき</strong>: CRR は <strong>設定後の PUT だけが対象</strong>。既存オブジェクトは複製されない。既存を複製するには <code>aws s3 sync</code> か S3 Batch Operations で <code>CopyObject</code> を走らせる。SSE-KMS バケットを複製する場合、デスティネーションリージョン用 KMS キーを別途作り、IAM ロールに <code>kms:ReplicateKey</code> 権限を付与する必要がある。</p>
+
+<hr>
+
+<h2>&#x1f6e1; セキュリティ課題と対策</h2>
+
+<h3>Block Public Access の 4 フラグを正しく理解する</h3>
+
+<p>「Block Public Access を全部有効にした」で安心するのは早計。フラグごとに守れる範囲が違う。</p>
+
+<table>
+<thead>
+<tr><th>フラグ</th><th>効果</th></tr>
+</thead>
+<tbody>
+<tr><td><code>block_public_acls</code></td><td>新規 ACL での public 付与をブロック</td></tr>
+<tr><td><code>ignore_public_acls</code></td><td>既存の public ACL を無視（既に public でも読ませない）</td></tr>
+<tr><td><code>block_public_policy</code></td><td><code>aws:PrincipalOrgID</code> なしの public バケットポリシーをブロック</td></tr>
+<tr><td><code>restrict_public_buckets</code></td><td>既存の public ポリシーを持つバケットへの匿名アクセスを制限</td></tr>
+</tbody>
+</table>
+
+<p><strong>全部 true でも防げないもの</strong>: クロスアカウントの IAM ロールからのアクセスは Block Public Access の対象外。バケットポリシーで別アカウントの Principal を許可していれば普通に通る。これが実際のインシデントで多い誤解のパターン。</p>
+
+<hr>
+
+<h3>バケットポリシー vs ACL — ACL は 2023 年以降レガシー</h3>
+
+<p>AWS は 2023 年以降、新規バケットのデフォルトを <code>ObjectOwnership=BucketOwnerEnforced</code>（ACL 無効）にした。バケットポリシーに一元化することで CloudTrail の監査ログが一本化され、インシデント調査が楽になる。</p>
+
+<p><strong>公開バケット流出インシデントの典型パターン</strong></p>
+
+<ol>
+<li><strong>設定ドリフト</strong>: Terraform 管理外で手動変更 → Block Public Access が外れる</li>
+<li><strong>プリサインド URL のログ漏洩</strong>: <code>--debug</code> モードで URL がログに出力され、CloudWatch Logs Insights から誰でも検索できてしまう</li>
+<li><strong>ワイルドカード Principal の Condition 誤記</strong>: <code>Principal: "*"</code> に <code>Condition</code> で制限するつもりが Condition の <code>StringEquals</code> の演算子をミスして全公開になる</li>
+<li><strong>古い SDK の ACL コード</strong>: <code>ACL: public-read</code> を指定したコードが CI でそのままデプロイされ続ける</li>
+</ol>
+
+<hr>
+
+<h3>SSE-S3 vs SSE-KMS vs CSE の選択基準</h3>
+
+<table>
+<thead>
+<tr><th></th><th>SSE-S3</th><th>SSE-KMS</th><th>CSE（クライアント側）</th></tr>
+</thead>
+<tbody>
+<tr><td>鍵管理</td><td>AWS が管理</td><td>CMK（ユーザー管理）</td><td>ユーザーが完全管理</td></tr>
+<tr><td>CloudTrail に復号ログ</td><td>No</td><td>Yes（<code>kms:Decrypt</code> が記録される）</td><td>N/A</td></tr>
+<tr><td>コスト</td><td>無料</td><td>KMS API 課金（$0.03/10k calls）</td><td>ライブラリコスト</td></tr>
+<tr><td>Bucket Key 対応</td><td>非対応</td><td>対応（API コール ~99% 削減）</td><td>N/A</td></tr>
+<tr><td>規制要件（PCI/HIPAA）</td><td>多くは OK</td><td>監査証跡が強い</td><td>最強だが運用が重い</td></tr>
+</tbody>
+</table>
+
+<p><strong>Bucket Key の重要性</strong>: SSE-KMS 有効バケットで大量 PUT すると KMS API コールが爆発し、デフォルトクォータ（10,000 req/s/リージョン）に達してスロットリングされることがある。<code>bucket_key_enabled = true</code> は必須設定と覚えておく。本 sandbox の <code>main.tf</code> でも設定済み。</p>
+
+<hr>
+
+<h3>アクセスログ vs CloudTrail データイベント — 目的で使い分ける</h3>
+
+<p><strong>S3 アクセスログ</strong></p>
+
+<ul>
+<li>S3 が独自フォーマットで別バケットに書く。到達に数分〜数時間の遅延。ベストエフォート（消える可能性あり）</li>
+<li>Athena でクエリ可能。コストは追加 0（配信先バケットの保存コストのみ）</li>
+<li>分析・統計・ビリング調査向き</li>
+</ul>
+
+<p><strong>CloudTrail データイベント</strong></p>
+
+<ul>
+<li>イベント単位で確実に記録。EventBridge と連携してリアルタイムアラートを作れる</li>
+<li>コスト $0.10/100k イベント</li>
+<li>インシデント対応・コンプライアンス監査向き</li>
+</ul>
+
+<pre><code># CloudTrail でデータイベントを有効化する場合
+resource "aws_cloudtrail" "s3_data" {
+  name           = "phase2-s3-data-events"
+  s3_bucket_name = aws_s3_bucket.logs.id
+
+  event_selector {
+    read_write_type           = "All"
+    include_management_events = false  # データイベントだけに絞る（コスト節約）
+
+    data_resource {
+      type   = "AWS::S3::Object"
+      values = ["${aws_s3_bucket.main.arn}/"]
+    }
+  }
+}</code></pre>
+
+<hr>
+
+<h3>VPC Gateway Endpoint — NAT Gateway コストとインターネット経由を排除</h3>
+
+<p>Lambda や EC2 が VPC 内にある場合、S3 へのアクセスは Internet Gateway → NAT Gateway 経由になりがち。NAT Gateway のデータ処理コストは <strong>$0.045/GB</strong>（東京リージョン）で、大量転送があると馬鹿にならない。S3 用の Gateway Endpoint は <strong>無料</strong>で使えるので入れない理由がない。</p>
+
+<pre><code>resource "aws_vpc_endpoint" "s3" {
+  vpc_id            = aws_vpc.main.id
+  service_name      = "com.amazonaws.${var.aws_region}.s3"
+  vpc_endpoint_type = "Gateway"  # S3/DynamoDB は Gateway 型（無料）
+
+  route_table_ids = [aws_route_table.private.id]
+}</code></pre>
+
+<p>Gateway Endpoint を経由させた上でバケットポリシーに <code>aws:sourceVpce</code> 条件を付けると、VPC エンドポイント経由以外のアクセスをバケット側で拒否できる。</p>
+
+<pre><code>{
+  "Condition": {
+    "StringEquals": {
+      "aws:sourceVpce": "vpce-xxxxxxxxxxxxxxxxx"
+    }
+  }
+}</code></pre>
+
+<p><strong>つまずき</strong>: Lambda が複数サブネットにまたがる場合、<strong>全サブネットのルートテーブル</strong> に Gateway Endpoint エントリを追加しないと、サブネットによって動いたり動かなかったりする。Terraform の <code>route_table_ids</code> に配列で渡すのを忘れずに。</p>
+
+<hr>
+
+<h3>プリサインド URL の期限と漏洩対策</h3>
+
+<p>プリサインド URL は署名した IAM エンティティの権限で動く。<strong>IAM ロールで署名した場合の有効期限は最大 1 時間</strong>（STS 一時認証情報の制限）。IAM ユーザーで署名すると最大 7 日だが、IAM ユーザーを削除しても署名済み URL は期限まで使えてしまう。</p>
+
+<p><strong>漏洩対策の実務パターン</strong></p>
+
+<ol>
+<li>有効期限は用途に応じて最短に（ダウンロードリンクは 5 分など）</li>
+<li>Lambda で URL 生成する際、ログに URL 本体を出力しない（<code>--debug</code> も禁止）</li>
+<li>CloudFront + Signed URL/Cookies に置き換えると CloudFront ディストリビューション側で即時無効化できる</li>
+<li>アクセスログを Athena でクエリして「どの IP が URL を使ったか」を追跡できるようにしておく</li>
+</ol>
+
+<hr>
+
+<h2>&#x1f3d7; インフラ応用パターン</h2>
+
+<h3>静的サイト + CloudFront OAC（Origin Access Control）</h3>
+
+<p>S3 の静的ウェブサイトホスティングをバケット直公開するのは最もやってはいけない構成。現在の標準は <strong>CloudFront + OAC</strong>。</p>
+
+<pre><code>クライアント
+  → CloudFront（HTTPS、WAF 統合可）
+    → OAC（署名付きリクエスト）
+      → S3 バケット（Block Public Access 有効のまま）</code></pre>
+
+<p>OAC は旧 OAI（Origin Access Identity）の後継で、<strong>SSE-KMS バケットにも対応</strong>している（OAI は SSE-KMS 未対応）。CloudFront が <code>s3:GetObject</code> を KMS で復号するには、CloudFront のサービスプリンシパルを KMS キーポリシーに追加する必要がある。</p>
+
+<pre><code>resource "aws_cloudfront_distribution" "frontend" {
+  origin {
+    domain_name              = aws_s3_bucket.main.bucket_regional_domain_name
+    origin_id                = "S3Origin"
+    origin_access_control_id = aws_cloudfront_origin_access_control.oac.id
+  }
+
+  default_cache_behavior {
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "S3Origin"
+    viewer_protocol_policy = "redirect-to-https"
+    # ... forwarded_values ...
+  }
+  # ...
+}
+
+resource "aws_cloudfront_origin_access_control" "oac" {
+  name                              = "phase2-oac"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}</code></pre>
+
+<p><strong>つまずき</strong>: OAC のバケットポリシーは <code>Principal: { Service: "cloudfront.amazonaws.com" }</code> に加えて <code>Condition: aws:SourceArn: &lt;distribution ARN&gt;</code> の組み合わせが必須。Distribution ARN は <code>arn:aws:cloudfront::ACCOUNT:distribution/DISTID</code> の形式。ARN を省くと他アカウントの CloudFront からもアクセスできてしまう。</p>
+
+<p><strong>CloudFront の destroy 注意</strong>: <code>terraform destroy</code> を実行しても CloudFront ディストリビューションの無効化（Disable）が完了するまで 15〜30 分かかることがある。destroy がタイムアウトしたように見えても待つのが正解。</p>
+
+<hr>
+
+<h3>データレイク構成（Bronze / Silver / Gold）</h3>
+
+<pre><code>Raw（Bronze）バケット
+  → Glue Crawler → Glue Data Catalog
+  → Glue ETL Job / Athena CTAS
+  → Curated（Silver）バケット（Parquet + 日付パーティション）
+  → Aggregated（Gold）バケット（Parquet、Redshift Spectrum 可）</code></pre>
+
+<p><strong>レイヤー別バケット設計</strong></p>
+
+<ul>
+<li><strong>Bronze</strong>: 全データを raw のまま保持。lifecycle で 1 年後 Glacier に移行。絶対に消さない</li>
+<li><strong>Silver</strong>: <code>year=YYYY/month=MM/day=DD/</code> 形式でパーティション。Parquet + Snappy で CSV 比 5〜10 倍の圧縮率</li>
+<li><strong>Gold</strong>: チームごとに Access Points を発行。Athena ワークグループで課金を分離</li>
+</ul>
+
+<p><strong>コスト設計のリアル</strong>: Athena は $5/TB スキャン。Silver で Parquet + Snappy にすると CSV 比 1/5〜1/10 のスキャン量になり、パーティションプルーニングと組み合わせると 100 倍の節約も珍しくない。</p>
+
+<hr>
+
+<h3>マルチパートアップロードの実運用と未完パーツの課金問題</h3>
+
+<p>S3 は 5GB を超えるオブジェクトには必ずマルチパートアップロードが必要（最大 5TB）。aws CLI はデフォルトで 8MB 以上のオブジェクトを自動的にマルチパートに切り替える。</p>
+
+<p><strong>落とし穴</strong>: アップロードに失敗して完了しなかったパーツが S3 に残り続けて課金される。大量アップロードシステムでは数百ドル規模の予期しない課金になることがある。lifecycle の <code>abort_incomplete_multipart_upload</code> で必ず自動クリーンアップを設定する。</p>
+
+<pre><code>resource "aws_s3_bucket_lifecycle_configuration" "main" {
+  bucket = aws_s3_bucket.main.id
+  rule {
+    id     = "abort-incomplete-multipart"
+    status = "Enabled"
+    filter {}
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7  # 7日で未完のパーツを自動削除
+    }
+  }
+}</code></pre>
+
+<p>本 sandbox では <code>load.sh</code> の step 2 で <code>dd if=/dev/urandom bs=1M count=12</code> を <code>aws s3 cp</code> に渡し、CLI が自動マルチパートに切り替えることを実際に確認できる。</p>
+
+<hr>
+
+<h3>S3 Inventory + S3 Batch Operations — 億単位のオブジェクト操作</h3>
+
+<p><strong>S3 Inventory</strong>: バケット内の全オブジェクト一覧を日次/週次で CSV/Parquet として別バケットに出力する。<code>ListObjectsV2</code> をページネーションで叩くよりはるかに高速かつ低コスト。大規模データレイクの棚卸しや、暗号化状況の確認、ストレージクラスの集計に使う。</p>
+
+<p><strong>S3 Batch Operations</strong>: Inventory の出力を入力に、全オブジェクトへの <code>CopyObject</code>（SSE の変更）、<code>RestoreObject</code>（Glacier 取り出し）、Lambda 関数呼び出しを一括実行できる。数十億オブジェクトの一括処理が現実的なコストで可能。</p>
+
+<pre><code>S3 Inventory（Parquet）
+  → Athena で対象を絞り込み
+    → manifest CSV 出力
+      → S3 Batch Operations（ジョブ定義）
+        → 1 オブジェクトずつ Lambda を呼ぶ / CopyObject / RestoreObject</code></pre>
+
+<p><strong>CRR と組み合わせる場面</strong>: 既存オブジェクトは CRR の対象外なので、CRR 設定前のオブジェクトを DR バケットに複製するときに Batch Operations の <code>CopyObject</code> を使う。</p>
+
+<hr>
+
+<h3>S3 Transfer Acceleration — 大陸をまたぐアップロードを高速化</h3>
+
+<p>大陸をまたぐアップロードでレイテンシが問題になる場合、CloudFront のエッジロケーション経由でアップロードを高速化できる。エンドポイントが <code>BUCKET.s3-accelerate.amazonaws.com</code> になる。追加コストは $0.04/GB（加速した転送量）。</p>
+
+<p>速度改善が保証されているわけではなく、エッジのキャパシティ次第では通常の S3 より遅いケースも稀にある。事前に <a href="https://s3-accelerate-speedtest.s3-accelerate.amazonaws.com/en/accelerate-speed-comparsion.html">S3 Transfer Acceleration Speed Comparison Tool</a> で計測してから採用を判断するとよい。</p>
+
+<hr>
+
+<h2>追加の公式ドキュメント（発展節の出典）</h2>
+
+<ul>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/EventNotifications.html">S3 イベント通知 — サービス使用の設定</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/transforming-objects.html">S3 Object Lambda を使用したデータの変換</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-block-public-access.html">Block Public Access を使用したパブリックアクセスのブロック</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/serv-side-encryption.html">Amazon S3 Server-Side Encryption</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-s3.html">Amazon CloudFront — Origin Access Control</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/batch-ops.html">S3 Batch Operations の使用</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/vpc/latest/privatelink/vpc-endpoints-s3.html">VPC エンドポイント — Amazon S3 の Gateway エンドポイント</a>（閲覧日 2026-05-31）</li>
+</ul>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase2</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase2</span></li>
+<li><b>負荷生成</b> — オブジェクトを put（ObjectCreated→Lambda が発火）<span class="cmd">make sandbox-load-phase2</span></li>
+<li><b>観測</b> — Lambda Invocations は即時 / S3 ストレージ系は日次<span class="cmd">make sandbox-watch-phase2</span><div class="tstamp">⏱ Lambda は数分、ストレージ系は翌日</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase2</span></li>
+</ol>
+<p class="note warn">⚠ バケットは force_destroy 済み。</p>
+</section>
+<div class="foot">← <a href="index.html">Phase 2 ルーター</a> ／ <a href="main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main>
+</body>
+</html>

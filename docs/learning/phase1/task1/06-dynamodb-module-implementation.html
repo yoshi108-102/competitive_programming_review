@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 教材</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}
+.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;line-height:1.5;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}
+h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}img{max-width:100%}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}
+.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style>
+</head>
+<body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 教材 · <a href="../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>DynamoDBモジュール実装の設計判断ログ</h1>
+
+<h2>概要</h2>
+
+<p>Task 1 で <code>terraform/modules/dynamodb/</code> を一から書く過程で行った設計判断のまとめ。「なぜこう書いたか」を残すことで、将来モジュールを変更するとき or 別モジュール（Lambda等）を書くときの判断材料にする。</p>
+
+<h2>解説</h2>
+
+<h3>Step 1: <code>variables.tf</code> の設計判断</h3>
+
+<h4>何を variable化するか</h4>
+
+<p>DynamoDB テーブルの設定項目のうち、<strong>外から変えたくなる値だけ</strong> variable にする。残りはハードコード。</p>
+
+<table>
+<thead>
+<tr><th>設定項目</th><th>variable化する？</th><th>理由</th></tr>
+</thead>
+<tbody>
+<tr><td>テーブル名prefix (<code>project_name</code>)</td><td>✅ する</td><td>dev/prod で分離、他プロジェクト再利用</td></tr>
+<tr><td>environment</td><td>✅ する</td><td>同一AWSアカウント内の環境別分離</td></tr>
+<tr><td><code>billing_mode</code></td><td>❌ しない</td><td>PAY_PER_REQUEST 固定で良い。将来必要になったら追加</td></tr>
+<tr><td>ハッシュキー名</td><td>❌ しない</td><td>テーブル固有の設計判断、実装詳細</td></tr>
+<tr><td>GSI設定</td><td>❌ しない</td><td>実装詳細</td></tr>
+<tr><td>region</td><td>❌ しない</td><td>provider で指定、モジュールに inheritされる</td></tr>
+</tbody>
+</table>
+
+<p><strong>原則</strong>: YAGNI（使われない柔軟性は無駄なコスト）。</p>
+
+<h4><code>default</code> の使い分け（ルート側は書く、モジュール側は書かない）</h4>
+
+<p>ルートとモジュールで <code>default</code> の扱いを変える:</p>
+
+<p><strong>モジュール側 (<code>modules/dynamodb/variables.tf</code>) → <code>default</code> を書かない</strong></p>
+
+<ul>
+<li>モジュールは他プロジェクトで再利用する可能性のある<strong>汎用部品</strong></li>
+<li>もし <code>default = "atcoder-review"</code> を書くと、他プロジェクトで使ったときに「何も渡さないと atcoder-review の名前で作られる」バグの温床</li>
+<li>呼び出し側に<strong>明示的に値を渡させる</strong>方が安全（渡し忘れ時に <code>Error: Missing required argument</code> で気づける）</li>
+</ul>
+
+<p><strong>ルート側 (<code>terraform/variables.tf</code>) → <code>default</code> を書く</strong></p>
+
+<ul>
+<li>ルートは<strong>このプロジェクト固有の入り口</strong>。再利用しない</li>
+<li><code>project_name = "atcoder-review"</code> のような値は確定しているので、毎回 <code>-var project_name=...</code> を指定するのは煩雑</li>
+<li>実行時の利便性のために default 提供でOK</li>
+</ul>
+
+<p>値のフロー:</p>
+
+<pre><code>ルート: terraform/variables.tf (default あり)
+  │
+  ↓ var.project_name で参照
+  │
+modules.tf で module "dynamodb" に渡す
+  │
+  ↓ 明示的に project_name = var.project_name と渡す
+  │
+モジュール: modules/dynamodb/variables.tf (default なし)
+</code></pre>
+
+<p>原則: <strong>ルート = アプリ固有の設定、モジュール = 汎用部品</strong>、という役割分担で defaultの扱いを決める。</p>
+
+<h4>最終形</h4>
+
+<pre><code>variable "project_name" {
+  description = "Project name used as prefix for table names"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name (prod, dev, stg)"
+  type        = string
+}
+</code></pre>
+
+<h3>Step 2: <code>main.tf</code> の設計判断</h3>
+
+<h4>共通ルール</h4>
+
+<ul>
+<li><strong><code>attribute</code> ブロックは「キーで使う属性だけ」書く</strong>。非キー属性は書かない（スキーマレス）</li>
+<li><strong><code>type</code> は <code>"S"</code> / <code>"N"</code> / <code>"B"</code> の3種のみ</strong>（DynamoDB 自体の仕様）</li>
+<li><strong><code>billing_mode = "PAY_PER_REQUEST"</code></strong>: 個人開発・小規模、トラフィック予測できない → オンデマンドが適切</li>
+</ul>
+
+<h4>users テーブル（最もシンプル）</h4>
+
+<p>PK のみ。1ユーザー = 1レコードの1対1構造。</p>
+
+<pre><code>resource "aws_dynamodb_table" "users" {
+  name         = "${var.project_name}-users-${var.environment}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "user_id"
+
+  attribute {
+    name = "user_id"
+    type = "S"
+  }
+}
+</code></pre>
+
+<p>PK = Cognito sub（→ <a href="05-user-id-identity.md">05-user-id-identity.md</a> 参照）。</p>
+
+<h4>submissions テーブル（PK + SK）</h4>
+
+<p>1ユーザーが複数 submission を持つ 1対多 構造。複合キー。</p>
+
+<pre><code>resource "aws_dynamodb_table" "submissions" {
+  name         = "${var.project_name}-submissions-${var.environment}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "user_id"
+  range_key    = "submission_id"
+
+  attribute {
+    name = "user_id"
+    type = "S"
+  }
+
+  attribute {
+    name = "submission_id"
+    type = "S"
+  }
+}
+</code></pre>
+
+<ul>
+<li>PK = <code>user_id</code> でユーザー単位にパーティション集約</li>
+<li>SK = <code>submission_id</code> でパーティション内をソート/絞り込み</li>
+<li>今後時系列ソートしたくなったら SK を <code>timestamp#submission_id</code> のような複合値にする選択肢あり（今回は単純化）</li>
+</ul>
+
+<h4>problems テーブル（PK + GSI）</h4>
+
+<p>問題検索のため GSI を追加。</p>
+
+<pre><code>resource "aws_dynamodb_table" "problems" {
+  name         = "${var.project_name}-problems-${var.environment}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "problem_id"
+
+  attribute {
+    name = "problem_id"
+    type = "S"
+  }
+  attribute {
+    name = "tag"
+    type = "S"
+  }
+  attribute {
+    name = "difficulty"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "TagDifficultyIndex"
+    hash_key        = "tag"
+    range_key       = "difficulty"
+    projection_type = "ALL"
+  }
+}
+</code></pre>
+
+<h5>GSI の役割</h5>
+
+<p>「別のキー構成で同じデータを参照できるサブテーブル」。</p>
+
+<ul>
+<li>メインの <code>problem_id</code> によるGet/Queryだけでは、「タグ＋難易度」での検索が全件スキャンになってしまう</li>
+<li>GSI を張ることで DynamoDB が裏で自動同期し、<code>tag=..., difficulty=...</code> での効率的な Query を可能にする</li>
+</ul>
+
+<h5><code>projection_type = "ALL"</code> の判断</h5>
+
+<p>GSI から取れる属性の範囲:</p>
+
+<table>
+<thead>
+<tr><th>値</th><th>意味</th></tr>
+</thead>
+<tbody>
+<tr><td><code>KEYS_ONLY</code></td><td>PK/SK属性のみ</td></tr>
+<tr><td><code>INCLUDE</code></td><td>KEYS_ONLY + 指定属性</td></tr>
+<tr><td><code>ALL</code></td><td>メインテーブルの全属性</td></tr>
+</tbody>
+</table>
+
+<p>今回 <code>ALL</code> を選んだ理由: タグ+難易度で検索したとき、一覧に問題タイトル/URL も表示したい → GSI から全情報取得で実装シンプル。ストレージコストは問題メタデータ規模なら無視できる。</p>
+
+<h5><code>attribute</code> ブロックが3つになる理由</h5>
+
+<p>メインPK + GSI-PK + GSI-SK の3つが「キーとして使われる属性」だから。</p>
+
+<h3>Step 3: <code>outputs.tf</code> の設計判断</h3>
+
+<h4>何を公開するか</h4>
+
+<p>モジュールの消費者は Lambda。Lambda に必要な値は:</p>
+
+<table>
+<thead>
+<tr><th>値</th><th>用途</th></tr>
+</thead>
+<tbody>
+<tr><td>テーブル名 (<code>name</code>)</td><td>Lambda環境変数 → boto3 で <code>Table(name)</code></td></tr>
+<tr><td>テーブルARN (<code>arn</code>)</td><td>IAM ポリシーの <code>Resource</code> 指定</td></tr>
+</tbody>
+</table>
+
+<p>3テーブル × 2値 = 6個の output。</p>
+
+<h4><code>aws_dynamodb_table.users.name</code> の記法</h4>
+
+<pre><code>&lt;リソースタイプ&gt;.&lt;Terraform内の識別子&gt;.&lt;属性&gt;
+</code></pre>
+
+<p>使える属性は Terraform provider のドキュメント "Attributes Reference" を参照。</p>
+
+<h4>ARN と name を両方出す理由</h4>
+
+<ul>
+<li><strong>name</strong>: アプリケーション層で使う（Lambda env → boto3）</li>
+<li><strong>ARN</strong>: IAM 層で使う（Resource指定）</li>
+</ul>
+
+<p>両方必要になることが確定している。<strong>後から追加すると使う側も変更</strong>になるので、先に両方公開しておく。</p>
+
+<h4><code>description</code> を省略している判断</h4>
+
+<ul>
+<li>output名が自己説明的（<code>users_table_arn</code> 等）</li>
+<li>実装計画書に従って省略</li>
+<li>チーム開発なら書く流派もあり。今回は簡素化</li>
+</ul>
+
+<h3>Step 4+5: ルート側への接続</h3>
+
+<h4>modules.tf — モジュール呼び出し</h4>
+
+<pre><code>module "dynamodb" {
+  source = "./modules/dynamodb"
+
+  project_name = var.project_name
+  environment  = var.environment
+}
+</code></pre>
+
+<ul>
+<li><code>source = "./modules/dynamodb"</code> で相対パス指定（ローカルモジュール）</li>
+<li>Terraform Registry 公開モジュールを使う場合は <code>source = "terraform-aws-modules/dynamodb-table/aws"</code> 形式</li>
+<li>依存解決は Terraform が自動で行う（モジュール間参照で自動的に作成順が決まる）</li>
+</ul>
+
+<h4>ルート outputs.tf — 外への公開</h4>
+
+<pre><code>output "dynamodb_users_table_name" {
+  description = "DynamoDB users table name"
+  value       = module.dynamodb.users_table_name
+}
+# ... submissions, problems も同様
+</code></pre>
+
+<h5>なぜ ARN はルートに出さない？</h5>
+
+<p>ルートの output は <strong>「<code>terraform apply</code> 実行者が CLI で見たい値」</strong>。</p>
+
+<ul>
+<li>テーブル名 → 人が Lambda 環境変数に手動設定するとき等に使う</li>
+<li>ARN → モジュール間参照（<code>module.lambda → module.dynamodb.users_table_arn</code>）でしか使わない</li>
+</ul>
+
+<p>モジュール間でしか使わない値はルートまで露出させない。</p>
+
+<h3>Step 6: terraform validate</h3>
+
+<p>構文・参照・必須引数をオフラインでチェック。AWS に繋がず無料・高速。</p>
+
+<pre><code>terraform validate
+# → Success! The configuration is valid.
+</code></pre>
+
+<p>検証<strong>されない</strong>: AWS API の受諾可否、認証情報、実リソースの作成。</p>
+
+<h3>設計判断の裏で働いた原則</h3>
+
+<table>
+<thead>
+<tr><th>原則</th><th>適用例</th></tr>
+</thead>
+<tbody>
+<tr><td>YAGNI</td><td><code>billing_mode</code> を variable化しない、default書かない</td></tr>
+<tr><td>明示性 &gt; 暗黙のデフォルト</td><td>モジュール側で default を書かず呼び出し側に明示させる</td></tr>
+<tr><td>公開は最小に</td><td>ARN はモジュール間参照のみ、ルートには出さない</td></tr>
+<tr><td>将来の変更を予測</td><td>name + ARN の両方を先に output として出す</td></tr>
+<tr><td>コードとコメントで意図を残す</td><td><code>user_id = Cognito sub</code> のコメント、学習ノートへのリンク</td></tr>
+</tbody>
+</table>
+
+<h2>Q&amp;A</h2>
+
+<p><strong>Q: <code>variables.tf</code> / <code>main.tf</code> / <code>outputs.tf</code> に分けるのはなぜ？</strong></p>
+
+<p>Terraform はディレクトリ単位で <code>.tf</code> を全部まとめて読むので、ファイル分割は<strong>人間のための慣習</strong>（構文的には1ファイルでも動く）。関数アナロジーで <code>variables.tf</code> = 引数、<code>main.tf</code> = 関数本体、<code>outputs.tf</code> = 戻り値。分けると変更差分・検索効率・モジュール契約の明確さが向上する。</p>
+
+<p><strong>Q: default とは？なぜモジュール側には書かない？</strong></p>
+
+<p><code>variable</code> に既定値を設定するもの（関数のデフォルト引数に相当）。モジュール側で <code>default</code> を書くと、呼び出し側が渡し忘れてもサイレントに既定値が使われバグの温床になる。モジュールは汎用部品として使うので、呼び出し側に明示させるほうが安全。ルート（呼び出し側）には書いてOK。</p>
+
+<p><strong>Q: <code>type=S</code> は string のこと？ <code>attribute</code> は PK/SK のようなキー属性だけ？</strong></p>
+
+<p>両方合っている。<code>S</code>(String) / <code>N</code>(Number) / <code>B</code>(Binary) の3種のみキーに使える。<code>attribute</code> ブロックはキーで使われている属性だけを宣言し、使用側（<code>hash_key</code> / <code>range_key</code> / GSI key）と一致する必要がある。非キー属性は書かない。</p>
+
+<p><strong>Q: スキーマレスだから Python 等でキーさえ指定すればやりたい放題？</strong></p>
+
+<p>ほぼその通り。キー（PK, SK）は必須で型も宣言通りに渡す必要があるが、非キー属性は何個でも・型も自由・ネストOK・アイテムごとに違ってOK。落とし穴はアプリ側でスキーマ管理する責務が増えること（Pydantic等）、アイテムサイズ400KB上限、予約語注意、等。</p>
+
+<p><strong>Q: ARN って何？</strong></p>
+
+<p>AWS リソースを一意に識別する絶対的なID（URL/物理住所のようなもの）。形式は <code>arn:aws:&lt;service&gt;:&lt;region&gt;:&lt;account&gt;:&lt;path&gt;</code>。IAM ポリシーで対象リソースを指定するときや、サービス間連携で使う。テーブル名は AWS アカウント・リージョン内で一意なだけで、ARN はグローバルに一意。</p>
+
+<h2>関連</h2>
+
+<ul>
+<li><a href="01-dynamodb-keys.md">01-dynamodb-keys.md</a> - DynamoDBのキー設計（PK/SK/GSI）</li>
+<li><a href="03-module-design-patterns.md">03-module-design-patterns.md</a> - モジュール分割の流派</li>
+<li><a href="04-dynamodb-item-design.md">04-dynamodb-item-design.md</a> - スキーマレスとアイテム設計</li>
+<li><a href="05-user-id-identity.md">05-user-id-identity.md</a> - user_id = Cognito sub の区別</li>
+<li><a href="reference/terraform-basics.md">reference/terraform-basics.md</a> - Terraform基礎リファレンス</li>
+<li><a href="reference/iam-overview.md">reference/iam-overview.md</a> - IAM/ARN詳細</li>
+<li><a href="reference/terraform-defaults-vs-python-defaults.md">reference/terraform-defaults-vs-python-defaults.md</a> - <code>default</code> をルートに書きモジュールに書かない理由、Python の default 引数との比較</li>
+</ul>
+
+<hr>
+
+<p><em>Saved at 2026-04-18 via /learning-flow:topic</em></p>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase1</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase1</span></li>
+<li><b>負荷生成</b> — 無認証トラフィックを生成（認証あり負荷は TEST_PASSWORD=... を付ける）<span class="cmd">make sandbox-load-phase1</span></li>
+<li><b>観測</b> — API GW の Count/4XXError/Latency、Lambda、DynamoDB、Cognito メトリクス<span class="cmd">make sandbox-watch-phase1</span><div class="tstamp">⏱ 反映まで 2〜5 分</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase1</span></li>
+</ol>
+<p class="note warn">⚠ phase1 は本番スタックを観測するダッシュボードのみ作成（本番アプリは別途デプロイ済みが前提）。</p>
+</section>
+<div class="foot">← <a href="../index.html">Phase 1 ルーター</a> ／ <a href="../main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main>
+</body>
+</html>

@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 教材</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}
+.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;line-height:1.5;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}
+h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}img{max-width:100%}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}
+.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style>
+</head>
+<body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 教材 · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>05. Lambda 実行ロールとデプロイパッケージ</h1>
+
+<blockquote>
+<p>出典:</p>
+<ul>
+  <li><a href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_function">Terraform aws_lambda_function</a></li>
+  <li><a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-intro-execution-role.html">AWS Lambda - Permissions for AWS Lambda functions</a></li>
+  <li><a href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_permission">aws_lambda_permission - Terraform</a></li>
+  <li><a href="https://docs.aws.amazon.com/lambda/latest/dg/python-package.html">AWS Lambda - Working with .zip file archives for Python</a></li>
+</ul>
+<p>閲覧日 2026-05-09</p>
+</blockquote>
+
+<h2>概要</h2>
+
+<p>Lambda 関数を AWS にデプロイして動かすために必要な要素は大きく 2 つの軸に分かれる:</p>
+
+<ul>
+  <li><strong>権限 (IAM)</strong>: 「誰が呼べるか」「呼ばれた関数は何にアクセスできるか」を定義</li>
+  <li><strong>コード (デプロイパッケージ)</strong>: 関数本体 + 依存ライブラリを 1 つの ZIP として配備</li>
+</ul>
+
+<p>このノートは両方をカバーする。Terraform の <code>aws_lambda_function</code> を 1 つ書くだけでも、裏側にこの 2 軸の知識が必要になる。</p>
+
+<h2>1. IAM 実行ロール (Trust + Permission)</h2>
+
+<p>Lambda 関数には <strong>「誰の権限で動くか」を定義する IAM ロール (Execution Role)</strong> が必須。
+このロールは 2 つの policy を持つ:</p>
+
+<h3>A. Trust Policy (<code>assume_role_policy</code>) — 「誰がこのロールを引き受けられるか」</h3>
+
+<pre><code>resource "aws_iam_role" "lambda_exec" {
+  name = "..."
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+    }]
+  })
+}</code></pre>
+
+<p><code>Principal.Service = "lambda.amazonaws.com"</code> の宣言で「<strong>Lambda サービスがこのロールを名乗れる</strong>」。これがないと Lambda 関数を作っても <code>AccessDenied</code> で起動しない。</p>
+
+<h3>B. Permission Policy — 「このロールが何を出来るか」</h3>
+
+<p>ロールに直接 inline policy を貼るか、独立 policy を attach する。最小権限例:</p>
+
+<pre><code>resource "aws_iam_role_policy" "lambda_dynamodb" {
+  name = "dynamodb-access"
+  role = aws_iam_role.lambda_exec.id
+  policy = jsonencode({
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query"]
+      Resource = [var.users_table_arn, var.submissions_table_arn]
+    }]
+  })
+}</code></pre>
+
+<p>最小権限のコツ:</p>
+<ul>
+  <li><strong>Action は必要なものだけ</strong>（read 系なら <code>GetItem</code>, <code>Query</code> のみ。<code>*</code> は避ける）</li>
+  <li><strong>Resource はテーブル ARN まで絞る</strong>（<code>"*"</code> を避ける）</li>
+  <li>GSI を使うなら <code>&lt;table_arn&gt;/index/*</code> も必要</li>
+</ul>
+
+<h3>C. CloudWatch Logs 用ポリシー (必須)</h3>
+
+<p>Lambda がログを CloudWatch に書くには <code>logs:CreateLogStream</code> / <code>logs:PutLogEvents</code> が必要。AWS マネージドポリシーを attach するのが定石:</p>
+
+<pre><code>resource "aws_iam_role_policy_attachment" "lambda_basic" {
+  role       = aws_iam_role.lambda_exec.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}</code></pre>
+
+<p>これがないと Lambda 自体は動くが<strong>ログが出ない</strong> → デバッグ不能で詰む。必須。</p>
+
+<h2>2. CloudWatch Log Group の事前作成</h2>
+
+<p>Lambda は初回実行時に <code>/aws/lambda/&lt;関数名&gt;</code> という Log Group を<strong>自動作成</strong>する。
+ただし保持期間がデフォルト「無期限」で課金が無限に蓄積するため、<strong>Terraform で事前に作って <code>retention_in_days</code> を指定</strong>するのがベストプラクティス:</p>
+
+<pre><code>resource "aws_cloudwatch_log_group" "lambda_save_user" {
+  name              = "/aws/lambda/${aws_lambda_function.save_user.function_name}"
+  retention_in_days = 14
+}</code></pre>
+
+<h2>3. <code>aws_lambda_function</code> 本体</h2>
+
+<pre><code>resource "aws_lambda_function" "save_user" {
+  function_name    = "${var.project_name}-save-user-${var.environment}"
+  role             = aws_iam_role.lambda_exec.arn
+  runtime          = "python3.12"
+  handler          = "lambdas.save_user.handler.lambda_handler"
+  filename         = var.lambda_zip_path
+  source_code_hash = filebase64sha256(var.lambda_zip_path)
+  timeout          = 30
+  memory_size      = 256
+
+  environment {
+    variables = {
+      USERS_TABLE = var.users_table_name
+    }
+  }
+}</code></pre>
+
+<p>注目ポイント:</p>
+
+<ul>
+  <li><strong><code>handler</code></strong> は <code>&lt;モジュールパス&gt;.&lt;関数名&gt;</code> 形式。Python なら <strong>dotted path</strong>。<code>lambdas.save_user.handler.lambda_handler</code> = ZIP ルートからの <code>lambdas/save_user/handler.py</code> 内の <code>lambda_handler</code> 関数を指す</li>
+  <li><strong><code>source_code_hash</code></strong>: <code>filename</code> の中身が変わったら Terraform が再デプロイを自動でトリガーする。これがないと <strong>同名 ZIP を差し替えても Lambda が更新されない</strong>事故が起きる（次回 apply で「変更なし」とスキップされる）</li>
+  <li><strong><code>environment.variables</code></strong> で実行時の環境変数を注入。ハンドラ側で <code>os.environ["USERS_TABLE"]</code> で読む</li>
+</ul>
+
+<h2>4. <code>aws_lambda_permission</code> — 呼び出し元の招待状</h2>
+
+<p>Lambda は <strong>resource-based policy</strong> で「誰が私を invoke してよいか」を制御する。API Gateway が Lambda を呼ぶには明示的な許可が必要:</p>
+
+<pre><code>resource "aws_lambda_permission" "api_gw_save_user" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.save_user.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${var.api_gateway_execution_arn}/*/*"
+}</code></pre>
+
+<p><code>source_arn</code> のフォーマット: <code>&lt;execution_arn&gt;/&lt;stage&gt;/&lt;method&gt;/&lt;path&gt;</code>。<code>*/*</code> で全 stage / 全メソッドからの invoke を許可（最小化したいならパスまで絞る）。</p>
+
+<p>これがないと API Gateway が 5xx で「Lambda invoke 失敗」と返してくる。<strong>地味だが必須</strong>。
+EventBridge / S3 / SNS など他のサービスから呼ぶ場合もそれぞれの <code>principal</code> で同様の permission が必要。</p>
+
+<h2>5. デプロイパッケージ (ZIP) の構造</h2>
+
+<p>ハンドラ識別子 <code>lambdas.save_user.handler.lambda_handler</code> (<code>.</code> 区切り) は <strong>ZIP ルートからのパス</strong>に対応する。</p>
+
+<p>このプロジェクトの ZIP 構造（複数ハンドラ + 共有コード + 依存ライブラリを 1 ZIP に詰める運用）:</p>
+
+<pre><code>lambda.zip
+├── shared/                         ← 共有コード
+│   ├── __init__.py
+│   ├── response.py
+│   ├── db.py
+│   └── atcoder_client.py
+├── lambdas/
+│   ├── __init__.py
+│   ├── save_user/
+│   │   ├── __init__.py
+│   │   └── handler.py              ← lambdas.save_user.handler.lambda_handler
+│   ├── sync_submissions/
+│   │   └── handler.py
+│   └── get_submissions/
+│       └── handler.py
+├── boto3/                          ← 依存ライブラリ
+├── botocore/
+├── requests/
+├── certifi/
+└── ...</code></pre>
+
+<p>複数ハンドラごとに別 ZIP を作る選択肢もあるが、共有コード (<code>shared/*</code>) を重複させる必要がある。<strong>1 ZIP 共有</strong>の方が運用効率が良い。Terraform では <code>for_each</code> で各関数が同じ ZIP を参照する。</p>
+
+<h2>6. 依存ライブラリの含め方</h2>
+
+<p><code>pip install --target</code> で<strong>指定ディレクトリに平坦に</strong>インストールする:</p>
+
+<pre><code># uv 使用時の流れ (このプロジェクト)
+uv export --no-hashes --no-dev --format requirements-txt &gt; build/requirements.txt
+uv pip install --target ./build -r build/requirements.txt
+# → ./build/{boto3,botocore,requests,...}/  が生まれる</code></pre>
+
+<p>その後アプリコードを <code>cp -r shared lambdas ./build/</code> でコピーして、<code>build/</code> を ZIP 化。
+詳細は <code>Makefile</code> の <code>build</code> ターゲット参照（<a href="practice/terraform-apply-walkthrough.md">practice/terraform-apply-walkthrough.md</a> も）。</p>
+
+<h2>7. Boto3 同梱の判断</h2>
+
+<p>AWS Lambda Python ランタイムには <strong>boto3 が事前インストール済み</strong>。だがバージョンが Lambda runtime 側都合で変わるため、<strong>自前で含めて固定する</strong>のが定石。</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>方針</th>
+      <th>メリット</th>
+      <th>デメリット</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>自前で含める</td>
+      <td>バージョン固定、新機能を即使える、ローカルテスト (moto) との整合</td>
+      <td>ZIP サイズが ~10MB 増える</td>
+    </tr>
+    <tr>
+      <td>同梱版を使う</td>
+      <td>ZIP 軽量</td>
+      <td>バージョン変動の不確実性</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>このプロジェクトは <strong>自前で含める</strong> を採用。</p>
+
+<h2>8. プラットフォーム差の注意</h2>
+
+<p><code>requests</code> のような pure Python なら問題ないが、<strong>C 拡張を含むパッケージ</strong>（<code>numpy</code> 等）は Lambda の実行環境 (Amazon Linux 2023, x86_64) と一致するビルドが必要:</p>
+
+<pre><code>pip install --platform manylinux2014_x86_64 --only-binary=:all: --target ./build numpy</code></pre>
+
+<p>このプロジェクトの依存 (<code>boto3</code>, <code>requests</code>) はいずれも pure Python なので、ローカル (macOS) で普通にビルドして OK。</p>
+
+<h2>重要ポイント</h2>
+
+<ul>
+  <li>IAM 実行ロールは <strong>Trust (誰が引き受けるか) + Permission (何が出来るか)</strong> の 2 段。<code>Principal.Service = "lambda.amazonaws.com"</code> で Lambda サービスを信頼</li>
+  <li>権限は <strong>最小限</strong>: Action / Resource を絞る、<code>"*"</code> を避ける</li>
+  <li><strong>CloudWatch Logs 用ポリシー (<code>AWSLambdaBasicExecutionRole</code>)</strong> を必ず attach。さもなくばログが出ない</li>
+  <li>Log Group を <strong>Terraform で事前作成</strong>して <code>retention_in_days</code> を指定（無期限は課金事故）</li>
+  <li><code>source_code_hash = filebase64sha256(...)</code> で ZIP 差し替え時の再デプロイを担保</li>
+  <li><strong>resource-based policy (<code>aws_lambda_permission</code>)</strong> で API Gateway 等からの invoke を明示許可</li>
+  <li>ハンドラ識別子の <code>.</code> 区切り = ZIP 内のパス区切り</li>
+  <li>依存は <code>pip install --target</code> で平坦インストール → 1 ZIP に全ハンドラ + 全依存を同梱</li>
+  <li>C 拡張なしの依存だけなら macOS でビルドして OK</li>
+</ul>
+
+<h2>関連</h2>
+
+<ul>
+  <li>実装パターン: <a href="practice/lambda-handler-skeleton.md">practice/lambda-handler-skeleton.md</a></li>
+  <li>デプロイ手順: <a href="practice/terraform-apply-walkthrough.md">practice/terraform-apply-walkthrough.md</a></li>
+  <li>関連トピック: <a href="03-boto3-resource-vs-client.md">03-boto3-resource-vs-client.md</a>, <a href="06-api-gateway-rest-api-structure.md">06-api-gateway-rest-api-structure.md</a></li>
+</ul>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase1</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase1</span></li>
+<li><b>負荷生成</b> — 無認証トラフィックを生成（認証あり負荷は TEST_PASSWORD=... を付ける）<span class="cmd">make sandbox-load-phase1</span></li>
+<li><b>観測</b> — API GW の Count/4XXError/Latency、Lambda、DynamoDB、Cognito メトリクス<span class="cmd">make sandbox-watch-phase1</span><div class="tstamp">⏱ 反映まで 2〜5 分</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase1</span></li>
+</ol>
+<p class="note warn">⚠ phase1 は本番スタックを観測するダッシュボードのみ作成（本番アプリは別途デプロイ済みが前提）。</p>
+</section>
+<div class="foot">← <a href="index.html">Phase 1 ルーター</a> ／ <a href="main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main>
+</body>
+</html>

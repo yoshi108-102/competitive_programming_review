@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 教材</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}
+.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;line-height:1.5;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}
+h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}img{max-width:100%}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}
+.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style>
+</head>
+<body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 教材 · <a href="../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Terraform 既存コード解説</h1>
+
+<p>既存の Terraform コードをブロックごとに解説する。
+基礎知識は <a href="reference/terraform-basics.md">Terraform基礎リファレンス</a> を参照。</p>
+
+<hr>
+
+<h2>terraform/main.tf</h2>
+
+<h3>terraform ブロック — Terraform自体の設定</h3>
+
+<pre><code>terraform {
+  required_version = "&gt;= 1.5.0"</code></pre>
+
+<p>Terraform 1.5.0 以上でないと動かない。チームでバージョン違いによる問題を防ぐ。</p>
+
+<pre><code>  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~&gt; 5.0"
+    }
+  }</code></pre>
+
+<p>AWS用プロバイダ（AWSのAPIを呼ぶプラグイン）を使う。<code>~&gt; 5.0</code> は 5.x 系を使い、6.0以上は不可。→ <a href="reference/terraform-basics.md">リファレンス: プロバイダとは</a></p>
+
+<pre><code>  backend "s3" {
+    bucket         = "atcoder-review-tfstate"
+    key            = "terraform.tfstate"
+    region         = "ap-northeast-1"
+    dynamodb_table = "atcoder-review-tflock"
+    encrypt        = true
+  }
+}</code></pre>
+
+<p>Terraformの状態ファイルをS3に保存する設定。<code>dynamodb_table</code> は同時実行を防ぐロック。→ <a href="reference/terraform-basics.md">リファレンス: backend "s3" の詳細</a></p>
+
+<h3>provider ブロック — AWS接続設定</h3>
+
+<pre><code>provider "aws" {
+  region = var.aws_region</code></pre>
+
+<p>どのAWSリージョンにリソースを作るか。<code>var.aws_region</code> = <code>"ap-northeast-1"</code>（東京）。→ <a href="reference/terraform-basics.md">リファレンス: variableの参照</a></p>
+
+<pre><code>  default_tags {
+    tags = {
+      Project     = "atcoder-review"
+      ManagedBy   = "terraform"
+      Environment = var.environment
+    }
+  }
+}</code></pre>
+
+<p>このproviderで作る全リソースに自動でタグを付与する。AWSコンソールやコスト管理で「何のリソースか」を識別するためのラベル。→ <a href="reference/terraform-basics.md">リファレンス: タグとは</a></p>
+
+<hr>
+
+<h2>terraform/variables.tf</h2>
+
+<pre><code>variable "aws_region" {
+  description = "AWS region"
+  type        = string
+  default     = "ap-northeast-1"
+}</code></pre>
+
+<p>東京リージョン。<code>main.tf</code> で <code>var.aws_region</code> として参照。→ <a href="reference/terraform-basics.md">リファレンス: variableブロック</a></p>
+
+<pre><code>variable "environment" {
+  description = "Environment name"
+  type        = string
+  default     = "prod"
+}</code></pre>
+
+<p>環境名。リソース名やタグに使われる。dev/stagingを作る場合はここを変える。</p>
+
+<pre><code>variable "project_name" {
+  description = "Project name used for resource naming"
+  type        = string
+  default     = "atcoder-review"
+}</code></pre>
+
+<p>リソース名のプレフィックス。<code>"${var.project_name}-users-${var.environment}"</code> → <code>"atcoder-review-users-prod"</code> になる。</p>
+
+<hr>
+
+<h2>terraform/modules.tf</h2>
+
+<pre><code>module "cognito" {
+  source = "./modules/cognito"
+
+  project_name = var.project_name
+  environment  = var.environment
+}</code></pre>
+
+<p>cognitoモジュールを呼び出し、変数を渡す。→ <a href="reference/terraform-basics.md">リファレンス: モジュール間の連携</a></p>
+
+<pre><code>module "api_gateway" {
+  source = "./modules/api_gateway"
+
+  project_name          = var.project_name
+  environment           = var.environment
+  cognito_user_pool_arn = module.cognito.user_pool_arn
+}</code></pre>
+
+<p>api_gatewayモジュールを呼び出し。<code>module.cognito.user_pool_arn</code> でcognitoモジュールの出力を参照し、API GatewayのCognito認証に使う。</p>
+
+<hr>
+
+<h2>terraform/outputs.tf</h2>
+
+<pre><code>output "cognito_user_pool_id" {
+  description = "Cognito User Pool ID"
+  value       = module.cognito.user_pool_id
+}
+
+output "cognito_user_pool_client_id" {
+  description = "Cognito User Pool Client ID"
+  value       = module.cognito.user_pool_client_id
+}
+
+output "api_gateway_url" {
+  description = "API Gateway invoke URL"
+  value       = module.api_gateway.api_url
+}</code></pre>
+
+<p><code>terraform apply</code> 後にターミナルに表示される値。フロントの <code>.env.local</code> に設定するCognito IDやAPI URLをここから取得する。<code>terraform output api_gateway_url</code> でコマンドからも取得可能。</p>
+
+<hr>
+
+<h2>質疑応答</h2>
+
+<h3>Q1: providerの認証情報はどこにあるのか？どうするのが良いのか？</h3>
+
+<p><code>provider "aws"</code> にアクセスキーは書かれていない。Terraformは環境変数 → <code>~/.aws/credentials</code> → IAMロール の順で自動検索する。コードに認証情報をハードコードしないのがベストプラクティス。</p>
+
+<p>2026年現在のAWS認証推奨度:</p>
+
+<table>
+<thead>
+<tr><th>方法</th><th>推奨度</th><th>認証情報の寿命</th></tr>
+</thead>
+<tbody>
+<tr><td>IAM Identity Center (SSO)</td><td>最推奨</td><td>一時的（自動期限切れ）</td></tr>
+<tr><td>IAM ロール</td><td>推奨（EC2/Lambda等）</td><td>一時的（自動ローテーション）</td></tr>
+<tr><td>IAM ユーザー + アクセスキー</td><td>非推奨</td><td>永続的（漏洩リスク）</td></tr>
+</tbody>
+</table>
+
+<p>シナリオ別:</p>
+<ul>
+<li><strong>ローカル開発</strong>: IAM Identity Center（ブラウザでSSOログイン → 一時認証情報取得）</li>
+<li><strong>EC2/Lambda</strong>: IAMロールをアタッチ（コードにキーを書かない）</li>
+<li><strong>CI/CD</strong>: OIDC連携（GitHub Actionsが一時トークンを発行）</li>
+</ul>
+
+<p>「IAMロールが非推奨」ではなく、「IAMユーザーの長期アクセスキーが非推奨」。IAMロール（一時認証情報）は今も推奨。</p>
+
+<p>→ 詳細は <a href="reference/aws-authentication.md">リファレンス: AWS認証のベストプラクティス</a> 参照<br>
+→ IAMの基礎（ユーザー/ロール/ポリシーの違い等）は <a href="reference/iam-overview.md">リファレンス: IAM概要</a> 参照</p>
+
+<h3>Q2: IAM Identity Center vs IAMロールの違いは？</h3>
+
+<p>Identity Center = 「誰がAWSにアクセスできるか」の管理（ログインの仕組み）。IAMロール = 「何ができるか」の定義（権限セット）。この2つは競合せず組み合わせて使う。</p>
+
+<p>→ <a href="reference/aws-authentication.md">リファレンス: IAM Identity Center vs IAMロール</a></p>
+
+<h3>Q3: IAMユーザーのキーを短期にすればIdentity Centerは不要では？</h3>
+
+<p>IAMユーザーのアクセスキーは仕組み上、永続でしか発行できない（AWS初期設計、後方互換性のため変更不可）。STS AssumeRoleで一時キーは作れるが、それを呼ぶために永続キーが必要（鶏と卵）。Identity Centerは「永続キーを一切使わずにログインする方法」。</p>
+
+<h3>Q4: Identity Centerの役割が結局わからない</h3>
+
+<p><strong>AWSにアクセスするための認証サーバー。</strong> 「永続キーを発行せずに、ブラウザログインで一時キーを渡す仕組み」。IAMユーザー方式は「鍵を渡す」、Identity Center方式は「毎回本人確認して一時的な鍵を作る」。</p>
+
+<p>→ <a href="reference/aws-authentication.md">リファレンス: Identity Centerの役割</a></p>
+
+<h3>Q5: ~/.aws/credentials が諸悪の根源か？</h3>
+
+<p>ファイル自体が悪いのではなく「永続キーしか発行できないIAMユーザーの設計」が根本原因。Identity Centerでも <code>~/.aws/sso/cache/</code> に一時トークンがキャッシュされるが、数時間で無効になるため漏洩リスクが限定的。</p>
+
+<p>→ <a href="reference/aws-authentication.md">リファレンス: なぜIAMユーザーキーの短期化ではダメなのか</a></p>
+
+<h2>関連</h2>
+
+<ul>
+<li><a href="03-module-design-patterns.md">03-module-design-patterns.md</a> - モジュール分割の流派（AWSサービス単位 vs 機能単位 vs 階層ハイブリッド）</li>
+<li><a href="06-dynamodb-module-implementation.md">06-dynamodb-module-implementation.md</a> - Task 1 DynamoDBモジュール実装時の設計判断</li>
+<li><a href="reference/terraform-basics.md">reference/terraform-basics.md</a> - Terraform 基礎リファレンス（HCL構文、variable/output/resource）</li>
+<li><a href="reference/aws-authentication.md">reference/aws-authentication.md</a> - AWS認証のベストプラクティス</li>
+<li><a href="reference/iam-overview.md">reference/iam-overview.md</a> - IAM概要（ユーザー/ロール/ポリシー/ARN）</li>
+</ul>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase1</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase1</span></li>
+<li><b>負荷生成</b> — 無認証トラフィックを生成（認証あり負荷は TEST_PASSWORD=... を付ける）<span class="cmd">make sandbox-load-phase1</span></li>
+<li><b>観測</b> — API GW の Count/4XXError/Latency、Lambda、DynamoDB、Cognito メトリクス<span class="cmd">make sandbox-watch-phase1</span><div class="tstamp">⏱ 反映まで 2〜5 分</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase1</span></li>
+</ol>
+<p class="note warn">⚠ phase1 は本番スタックを観測するダッシュボードのみ作成（本番アプリは別途デプロイ済みが前提）。</p>
+</section>
+<div class="foot">← <a href="../index.html">Phase 1 ルーター</a> ／ <a href="../main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main>
+</body>
+</html>

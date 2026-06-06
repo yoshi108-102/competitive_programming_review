@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 教材</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}
+.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;line-height:1.5;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}
+h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}img{max-width:100%}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}
+.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style>
+</head>
+<body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 教材 · <a href="../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>DynamoDBのアイテム設計（スキーマレスの制約と自由度）</h1>
+
+<h2>概要</h2>
+
+<p>DynamoDBは「スキーマレス」と呼ばれるが、完全に自由ではなく<strong>キー属性には厳格なルール</strong>がある。Terraformの <code>attribute</code> ブロックと、実行時のアイテム挿入の関係、およびスキーマレスゆえの落とし穴をまとめる。</p>
+
+<h2>解説</h2>
+
+<h3>キー属性の型（3種類のみ）</h3>
+
+<p>DynamoDB がキー（PK/SK/GSI/LSI の key）として認める型:</p>
+
+<table>
+  <thead>
+    <tr><th>値</th><th>意味</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>"S"</code></td><td>String</td></tr>
+    <tr><td><code>"N"</code></td><td>Number</td></tr>
+    <tr><td><code>"B"</code></td><td>Binary</td></tr>
+  </tbody>
+</table>
+
+<p>キー以外の属性（メール、日時、配列、オブジェクト等）は実行時に自由に入れられる。キーとしては使えない型（<code>SS</code>(String Set), <code>L</code>(List), <code>M</code>(Map), <code>BOOL</code> など）は、<strong>ソート・比較ができないため</strong>キーにできない。</p>
+
+<h3><code>attribute</code> ブロックの役割</h3>
+
+<p>Terraform の <code>aws_dynamodb_table</code> における <code>attribute</code> ブロックは、<strong>「このテーブルの hash_key / range_key / GSI / LSI のどこかで使われている属性」を宣言する</strong>もの。</p>
+
+<ul>
+  <li>使われている属性を書き忘れる → <code>terraform plan</code> でエラー</li>
+  <li>使われていない属性を書く → <code>terraform plan</code> でエラー</li>
+</ul>
+
+<p>つまり <code>attribute</code> = キー定義の <strong>"宣言"</strong> パート、<code>hash_key</code> / <code>range_key</code> / <code>global_secondary_index.*</code> = <strong>"使用"</strong> パート。両者が一致しないと成立しない。</p>
+
+<h4>例: submissions テーブル</h4>
+
+<pre><code>hash_key  = &quot;user_id&quot;         # ← 使用
+range_key = &quot;submission_id&quot;   # ← 使用
+
+attribute {                    # ← 宣言（使用している属性だけ）
+  name = &quot;user_id&quot;
+  type = &quot;S&quot;
+}
+
+attribute {
+  name = &quot;submission_id&quot;
+  type = &quot;S&quot;
+}</code></pre>
+
+<p><code>contest_id</code>, <code>submitted_at</code> などの非キー属性は書かない。スキーマレスなので、挿入時に自由に追加できる。</p>
+
+<h3>スキーマレスの制約と自由度</h3>
+
+<h4>制約（必須）</h4>
+
+<table>
+  <thead>
+    <tr><th>ルール</th><th>内容</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>キーは必須</td><td>PutItem時、PK（あればSKも）は必ず指定</td></tr>
+    <tr><td>キーの型は宣言通り</td><td><code>type = "S"</code> で宣言 → 必ずstringで渡す。数値で渡すとエラー</td></tr>
+  </tbody>
+</table>
+
+<h4>自由（やりたい放題）</h4>
+
+<table>
+  <thead>
+    <tr><th>自由にできること</th><th>例</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>非キー属性を何個でも追加</td><td><code>handle</code>, <code>email</code>, <code>created_at</code> ...</td></tr>
+    <tr><td>アイテムごとに属性が違ってもOK</td><td>アイテム1は <code>email</code> あり、アイテム2は <code>email</code> なし</td></tr>
+    <tr><td>ネストしたオブジェクト/配列もOK</td><td><code>preferences: {theme: "dark", lang: "ja"}</code></td></tr>
+    <tr><td>属性の型は豊富</td><td><code>S</code>, <code>N</code>, <code>B</code>, <code>BOOL</code>, <code>L</code>(リスト), <code>M</code>(マップ), <code>SS</code>/<code>NS</code>/<code>BS</code>(Set), <code>NULL</code></td></tr>
+  </tbody>
+</table>
+
+<h3>Python (boto3) でのイメージ</h3>
+
+<pre><code>import boto3
+table = boto3.resource(&quot;dynamodb&quot;).Table(&quot;atcoder-review-users-prod&quot;)
+
+# 最小: キーだけ
+table.put_item(Item={&quot;user_id&quot;: &quot;abc123&quot;})
+
+# 好き放題属性を追加
+table.put_item(Item={
+    &quot;user_id&quot;: &quot;abc123&quot;,
+    &quot;handle&quot;: &quot;tourist&quot;,
+    &quot;email&quot;: &quot;t@example.com&quot;,
+    &quot;created_at&quot;: &quot;2026-04-18T10:00:00Z&quot;,
+    &quot;preferences&quot;: {&quot;theme&quot;: &quot;dark&quot;, &quot;notify&quot;: True},  # ネストOK
+    &quot;recent_contests&quot;: [&quot;abc300&quot;, &quot;abc301&quot;, &quot;abc302&quot;],  # リストOK
+})
+
+# 別ユーザーは全然違う構造でもOK
+table.put_item(Item={
+    &quot;user_id&quot;: &quot;xyz789&quot;,
+    &quot;display_name&quot;: &quot;田中&quot;,  # handleじゃなくdisplay_name
+    &quot;tags&quot;: {&quot;pro&quot;, &quot;ACM&quot;},   # Set型（boto3なら自動変換）
+    # created_at なし、email なし
+})</code></pre>
+
+<p>RDB でこれをやると「テーブル定義変更しないと」となるが、DynamoDB はいらない。</p>
+
+<h3>スキーマレスの落とし穴</h3>
+
+<table>
+  <thead>
+    <tr><th>注意点</th><th>内容</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>アプリ側のスキーマ管理が必須</td><td>DBが守ってくれない分、<strong>アプリ側でスキーマを明示管理する責務</strong>が増える（Pydanticモデル等で）</td></tr>
+    <tr><td>アイテムサイズ上限 400KB</td><td>JSONサイズでなく、DynamoDB内部表現サイズ</td></tr>
+    <tr><td>属性名も400KB制限に含まれる</td><td>属性名は短くした方が効率的（<code>created_at</code> より <code>ca</code> 等の極限設計もある）</td></tr>
+    <tr><td>予約語に注意</td><td><code>Name</code>, <code>Size</code>, <code>Status</code> などは予約語。Queryで使う際 <code>ExpressionAttributeNames</code> でエスケープ必要</td></tr>
+    <tr><td>空文字 <code>""</code></td><td>2020年から許可されたが、古い記事では "NG" と書かれていることも</td></tr>
+  </tbody>
+</table>
+
+<h3>Single Table Design（上級パターン）</h3>
+
+<p>DynamoDB の上級パターンとして、<strong>1つのテーブルに異なる "種類" のアイテムを混在させる</strong>手法がある。AWS re:Invent でも語られる有名テク。</p>
+
+<p>例:</p>
+
+<table>
+  <thead>
+    <tr><th>user_id (PK)</th><th>submission_id (SK)</th><th>type</th><th>...</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>abc123</code></td><td><code>PROFILE#</code></td><td>user</td><td>handle: tourist, email: ...</td></tr>
+    <tr><td><code>abc123</code></td><td><code>SUB#v1.1719123456</code></td><td>submission</td><td>problem_id: abc300_a, result: AC</td></tr>
+    <tr><td><code>abc123</code></td><td><code>SUB#v1.1719123789</code></td><td>submission</td><td>problem_id: abc300_b, result: WA</td></tr>
+  </tbody>
+</table>
+
+<p>スキーマレスだからこそできる芸当。本プロジェクトでは採用しないが、知識として。</p>
+
+<h2>Q&amp;A</h2>
+
+<p><strong>Q: <code>type=S</code> というのは確か string のことだったんだっけ？それで attribute が PK or SK のようなキー属性のものだけ使えると</strong></p>
+
+<p>両方合っている。</p>
+
+<ul>
+  <li><code>type = "S"</code> = String。DynamoDB がキーに認める型は <code>S</code>(String) / <code>N</code>(Number) / <code>B</code>(Binary) の3種のみ</li>
+  <li><code>attribute</code> ブロックは<strong>キーで使われている属性</strong>だけ書く。非キー属性（email, created_at 等）は書かない。書き忘れもエラー、書きすぎもエラー</li>
+</ul>
+
+<p><code>attribute</code> = キー定義の "宣言" パート、<code>hash_key</code> / <code>range_key</code> / GSIの key = "使用" パート。両者が一致する必要がある。</p>
+
+<p><strong>Q: スキーマレスだから、Pythonコードとかで追加するときにはキーさえ指定すればあとはやりたい放題ということ？</strong></p>
+
+<p>ほぼその通り。</p>
+
+<ul>
+  <li><strong>必須</strong>: キー（PK、あればSK）は必ず指定、かつ宣言通りの型で渡す</li>
+  <li><strong>自由</strong>: 非キー属性は何個でも、型も何でも、ネストOK、アイテムごとに違ってもOK</li>
+  <li><strong>落とし穴</strong>: DBが守ってくれない分、アプリ側でPydanticなどスキーマ管理する責務が増える。アイテムサイズ400KB上限、予約語注意など</li>
+  <li><strong>上級</strong>: Single Table Design でスキーマレスを極限活用するパターンもあるが今回は採用しない</li>
+</ul>
+
+<h2>関連</h2>
+
+<ul>
+  <li><a href="01-dynamodb-keys.md">01-dynamodb-keys.md</a> - DynamoDBのキー設計（PK/SK/GSI）</li>
+  <li><a href="03-module-design-patterns.md">03-module-design-patterns.md</a> - Terraformモジュール設計の流派</li>
+  <li><a href="reference/dynamodb-keys-vs-rdb.md">reference/dynamodb-keys-vs-rdb.md</a> - DynamoDB vs RDB 詳細比較</li>
+</ul>
+
+<hr>
+
+<p><em>Saved at 2026-04-18 via /learning-flow:topic</em></p>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase1</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase1</span></li>
+<li><b>負荷生成</b> — 無認証トラフィックを生成（認証あり負荷は TEST_PASSWORD=... を付ける）<span class="cmd">make sandbox-load-phase1</span></li>
+<li><b>観測</b> — API GW の Count/4XXError/Latency、Lambda、DynamoDB、Cognito メトリクス<span class="cmd">make sandbox-watch-phase1</span><div class="tstamp">⏱ 反映まで 2〜5 分</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase1</span></li>
+</ol>
+<p class="note warn">⚠ phase1 は本番スタックを観測するダッシュボードのみ作成（本番アプリは別途デプロイ済みが前提）。</p>
+</section>
+<div class="foot">← <a href="../index.html">Phase 1 ルーター</a> ／ <a href="../main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main>
+</body>
+</html>

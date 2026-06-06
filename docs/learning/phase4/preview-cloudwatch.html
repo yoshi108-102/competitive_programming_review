@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 4 教材</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#16a34a;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}
+.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;line-height:1.5;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}
+h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}img{max-width:100%}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}
+.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style>
+</head>
+<body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 4 教材 · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Phase 4 プレビュー教材: CloudWatch — メトリクス・ログ・アラーム</h1>
+
+<blockquote>プレビュー教材: デモ体験のために先行生成しました。正式な lesson / 振り返りクイズ / 採点は Phase 4 到達時に実施します。</blockquote>
+
+<hr>
+
+<h2>このサービスは何か</h2>
+
+<p>Amazon CloudWatch は AWS の統合モニタリングサービスで、次の 3 本柱で構成される。</p>
+
+<table>
+<thead>
+<tr><th>柱</th><th>役割</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Metrics</strong></td><td>AWS サービスやアプリが発行する数値時系列データ</td></tr>
+<tr><td><strong>Logs</strong></td><td>Lambda・EC2 などが出力するテキストログの収集・検索</td></tr>
+<tr><td><strong>Alarms</strong></td><td>メトリクスの状態変化を検知し SNS / Auto Scaling などに通知</td></tr>
+</tbody>
+</table>
+
+<p>CloudWatch はリージョン単位のサービス。各 AWS サービスが自動的にメトリクスを発行するため、追加エージェント不要で即座に可視化できる。</p>
+
+<hr>
+
+<h2>いつ使うか・使わないか</h2>
+
+<h3>使う場面</h3>
+
+<ul>
+<li>Lambda の実行エラー率・Duration が急増したとき即座に検知したい</li>
+<li>本番ログを集中管理して後から障害原因を調査したい</li>
+<li>メトリクスがしきい値を超えたら自動でスケールアウトしたい</li>
+</ul>
+
+<h3>使わない場面 / 代替を検討する場面</h3>
+
+<table>
+<thead>
+<tr><th>状況</th><th>代替候補</th></tr>
+</thead>
+<tbody>
+<tr><td>フルテキスト検索・全文インデックスが必要</td><td>Amazon OpenSearch Service</td></tr>
+<tr><td>複数アカウント横断の大規模ログ分析</td><td>Amazon Athena + S3 Export</td></tr>
+<tr><td>APM (分散トレーシング) が主目的</td><td>AWS X-Ray</td></tr>
+</tbody>
+</table>
+
+<hr>
+
+<h2>コアコンセプト</h2>
+
+<h3>Metrics（メトリクス）</h3>
+
+<pre><code>Namespace / MetricName / Dimensions → 一意な時系列</code></pre>
+
+<ul>
+<li><strong>Namespace</strong>: メトリクスの論理グループ（例: <code>AWS/Lambda</code>、<code>MyApp/API</code>）</li>
+<li><strong>Dimensions</strong>: メトリクスを絞り込む属性の Key-Value ペア（例: <code>FunctionName=sync_submissions</code>）</li>
+<li><strong>Period</strong>: 統計を計算する集計ウィンドウ（秒単位、最小 1 秒、通常 60 秒）</li>
+<li><strong>Statistics</strong>: <code>Average</code> / <code>Sum</code> / <code>Maximum</code> / <code>Minimum</code> / パーセンタイル（<code>p99</code> 等）</li>
+<li><strong>Resolution</strong>: 標準（60 秒以上）と高解像度（1 秒）の 2 種類</li>
+</ul>
+
+<p>メトリクスのデータポイントは発行から <strong>15 ヶ月</strong> 保持される（解像度による粒度はフェードアウトあり）。</p>
+
+<h3>Alarms（アラーム）</h3>
+
+<p>アラームは 3 状態を遷移する。</p>
+
+<pre><code>OK ←──────────────→ ALARM
+       ↑      ↑
+  INSUFFICIENT_DATA（データ不足）</code></pre>
+
+<p>しきい値評価の設定例:</p>
+
+<pre><code>評価期間(Evaluation Periods) = 5
+しきい値超えに必要な期間数(Datapoints to Alarm) = 3
+→「直近 5 期間中 3 期間がしきい値超え」でALARM遷移</code></pre>
+
+<p>アクションとして SNS トピック・EC2 アクション・Auto Scaling ポリシーを紐付けられる。</p>
+
+<h3>Logs（ログ）</h3>
+
+<pre><code>Log Group
+  └─ Log Stream（例: Lambda 関数の実行インスタンス単位）
+       └─ Log Event（タイムスタンプ + メッセージ）</code></pre>
+
+<ul>
+<li><strong>Log Group</strong> にはリテンション期間（1 日〜10 年 or 無期限）を設定できる</li>
+<li>Lambda は自動で <code>/aws/lambda/&lt;FunctionName&gt;</code> ロググループを作成する</li>
+<li><strong>Metric Filter</strong>: ログイベントのパターンにマッチした件数をカスタムメトリクスとして発行できる</li>
+</ul>
+
+<h3>CloudWatch Logs Insights</h3>
+
+<p>Log Group に対してクエリ言語でリアルタイム集計を行う機能。</p>
+
+<pre><code class="language-sql">fields @timestamp, @message, level
+| filter level = "ERROR"
+| sort @timestamp desc
+| limit 50</code></pre>
+
+<p>主なコマンド: <code>fields</code> / <code>filter</code> / <code>stats</code> / <code>sort</code> / <code>limit</code> / <code>parse</code></p>
+
+<hr>
+
+<h2>主要な設定・API・パラメータ</h2>
+
+<h3>カスタムメトリクスの発行（AWS SDK / CLI）</h3>
+
+<pre><code class="language-python">import boto3
+cloudwatch = boto3.client("cloudwatch", region_name="ap-northeast-1")
+
+cloudwatch.put_metric_data(
+    Namespace="AtCoderReview/API",
+    MetricData=[
+        {
+            "MetricName": "SubmissionSyncErrors",
+            "Dimensions": [{"Name": "Stage", "Value": "prod"}],
+            "Value": 1,
+            "Unit": "Count",
+        }
+    ],
+)</code></pre>
+
+<h3>アラームの作成</h3>
+
+<pre><code class="language-python">cloudwatch.put_metric_alarm(
+    AlarmName="LambdaErrorRate-High",
+    Namespace="AWS/Lambda",
+    MetricName="Errors",
+    Dimensions=[{"Name": "FunctionName", "Value": "sync_submissions"}],
+    Statistic="Sum",
+    Period=300,           # 5 分
+    EvaluationPeriods=3,
+    DatapointsToAlarm=2,  # 3 期間中 2 期間超えで ALARM
+    Threshold=5.0,
+    ComparisonOperator="GreaterThanOrEqualToThreshold",
+    AlarmActions=["arn:aws:sns:ap-northeast-1:xxxx:alert-topic"],
+    TreatMissingData="notBreaching",
+)</code></pre>
+
+<h3>主要パラメータ早見表</h3>
+
+<table>
+<thead>
+<tr><th>パラメータ</th><th>説明</th><th>典型値</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Period</code></td><td>統計集計ウィンドウ（秒）</td><td>60 / 300</td></tr>
+<tr><td><code>EvaluationPeriods</code></td><td>評価する期間数</td><td>3〜5</td></tr>
+<tr><td><code>DatapointsToAlarm</code></td><td>ALARM 遷移に必要な超過期間数</td><td>EvaluationPeriods 以下</td></tr>
+<tr><td><code>TreatMissingData</code></td><td>データ欠損時の扱い</td><td><code>notBreaching</code> / <code>breaching</code> / <code>ignore</code> / <code>missing</code></td></tr>
+<tr><td><code>ComparisonOperator</code></td><td>しきい値比較方向</td><td><code>GreaterThanOrEqualToThreshold</code> 等</td></tr>
+</tbody>
+</table>
+
+<hr>
+
+<h2>よくある落とし穴・誤解</h2>
+
+<h3>1. Logs と Metrics は別物</h3>
+
+<p>ログはテキストの羅列、メトリクスは数値時系列。ログから「エラー件数」のメトリクスを取るには <strong>Metric Filter</strong> を設定するか、アプリ側で <code>put_metric_data</code> を呼ぶ必要がある。「ログを見るだけ」ではアラームを張れない。</p>
+
+<h3>2. Period と統計の選択ミス</h3>
+
+<p><code>Average</code> は単純平均のため、短時間のスパイクを見逃しやすい。エラー件数は <code>Sum</code>、レイテンシのテール遅延は <code>p99</code> を使う。</p>
+
+<h3>3. INSUFFICIENT_DATA でアラームが鳴らない</h3>
+
+<p>Lambda が一定時間呼ばれないとメトリクスデータポイントが欠損し、<code>INSUFFICIENT_DATA</code> 状態に留まる。<code>TreatMissingData=breaching</code> にするとデータ欠損もエラーとみなせるが、意図しない誤報になることもある。用途に合わせて設定する。</p>
+
+<h3>4. ログの構造化を怠る</h3>
+
+<p><code>print("error occurred")</code> のような非構造化ログでは Logs Insights の <code>filter</code> やメトリクスフィルタが使いにくい。<code>{"level": "ERROR", "message": "...", "request_id": "..."}</code> の JSON フォーマットを Lambda から出力すると、Logs Insights での集計効率が大幅に上がる。</p>
+
+<h3>5. コスト見落とし</h3>
+
+<p>カスタムメトリクス数・API コール数・Logs Insights クエリはすべて課金対象。高解像度メトリクスや大量ログは予想外のコストになることがある。</p>
+
+<hr>
+
+<h2>このプロジェクト（AtCoder 復習）での使いどころ</h2>
+
+<table>
+<thead>
+<tr><th>監視対象</th><th>メトリクス / ログ</th><th>アラーム例</th></tr>
+</thead>
+<tbody>
+<tr><td><code>sync_submissions</code> Lambda</td><td><code>AWS/Lambda: Errors</code>, <code>Duration</code></td><td>エラー数 &gt; 5 / 5 分</td></tr>
+<tr><td><code>get_submissions</code> Lambda</td><td>カスタム: DynamoDB スキャン件数</td><td>スキャン件数急増</td></tr>
+<tr><td>API Gateway</td><td><code>4XXError</code>, <code>5XXError</code>, <code>Latency</code></td><td>5XX &gt; 10 / 分</td></tr>
+<tr><td>DynamoDB</td><td><code>ConsumedWriteCapacityUnits</code></td><td>WCU 使用率 &gt; 80%</td></tr>
+</tbody>
+</table>
+
+<p>Lambda が出力する JSON ログを <code>/aws/lambda/sync_submissions</code> ロググループに収集し、Logs Insights で <code>filter level = "ERROR"</code> とクエリするだけで障害調査の起点になる。Metric Filter を使えばエラーログ件数を自動的にメトリクスに変換し、アラームで Slack 通知（SNS → Lambda → Slack Webhook）まで繋げられる。</p>
+
+<hr>
+
+<h2>デモで体験したこと</h2>
+
+<p>デモページ（<code>docs/learning/phase4/demo/index.html</code>）では Lambda Errors / Duration を模したメトリクスが <code>setInterval</code> で時系列にプロットされる折れ線グラフを操作した。スライダーでしきい値と評価期間 N を動かすと、メトリクスが N 期間連続でしきい値を超えた瞬間に状態バッジが <code>OK</code> → <code>ALARM</code> に切り替わり、シミュレートされた SNS 通知行がログパネルに流れることで「DatapointsToAlarm の仕組み」が視覚的に掴めた。下の CloudWatch Logs パネルではレベル / キーワードフィルタで行を絞り込み、<code>avg</code> / <code>p99</code> 切替により統計の選択が結果に与える影響を体感した。</p>
+
+<hr>
+
+<h2>公式ドキュメント（出典）</h2>
+
+<ul>
+<li><a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/WhatIsCloudWatch.html">https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/WhatIsCloudWatch.html</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/cloudwatch_concepts.html">https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/cloudwatch_concepts.html</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/AlarmThatSendsEmail.html">https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/AlarmThatSendsEmail.html</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/AnalyzingLogData.html">https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/AnalyzingLogData.html</a>（閲覧日 2026-05-31）</li>
+</ul>
+
+<hr>
+
+<h2>関連・発展サービス</h2>
+
+<h3>CloudWatch Logs Insights — SQL ライクなログ分析</h3>
+
+<p><code>filter</code> / <code>stats</code> / <code>sort</code> / <code>limit</code> / <code>parse</code> の 5 コマンドで大半の分析が完結する。よく使うパターンを覚えておくと障害調査が劇的に速くなる。</p>
+
+<pre><code># p99 Duration を関数ごとに計算
+fields @requestId, @duration, @functionName
+| stats pct(@duration, 99) as p99 by @functionName
+| sort p99 desc
+
+# Cold Start だけ抽出して平均・最大を計測
+filter @message like /Init Duration/
+| parse @message "Init Duration: * ms" as initMs
+| stats avg(initMs), max(initMs) by bin(5m)
+
+# エラーメッセージの種類をランキング
+filter @message like /ERROR/
+| parse @message "[ERROR] *" as errMsg
+| stats count(*) as cnt by errMsg
+| sort cnt desc
+| limit 10</code></pre>
+
+<p><strong>つまずきポイント</strong>: <code>bin()</code> の引数は <code>1m</code> や <code>5m</code> のような duration 文字列。<code>bin(60)</code> のように数値だけを渡すと構文エラーになる。コンソールのクエリエディタは補完が効くので最初はコンソールで試してから CLI に移すと良い。</p>
+
+<h3>EMF(Embedded Metric Format) の真価</h3>
+
+<p>EMF は「ログ出力だけでカスタムメトリクスを生成する」手法。<code>PutMetricData</code> API を直接叩く必要がなく、Lambda / ECS / EC2 問わず同じコードパスで使える。JSON ログに <code>_aws.CloudWatchMetrics</code> キーが含まれると、CloudWatch Logs 側が自動的にメトリクスとして抽出する仕組み。</p>
+
+<pre><code class="language-python"># EMF 形式の最小例(producer.py より)
+import json, time
+
+emf = {
+    "_aws": {
+        "Timestamp": int(time.time() * 1000),
+        "CloudWatchMetrics": [{
+            "Namespace": "Phase4/Lambda",
+            "Dimensions": [["FunctionName"]],
+            "Metrics": [
+                {"Name": "ItemsWritten", "Unit": "Count"},
+                {"Name": "ErrorCount",   "Unit": "Count"},
+            ]
+        }]
+    },
+    "FunctionName": context.function_name,
+    "ItemsWritten": items_written,
+    "ErrorCount": errors,
+}
+print(json.dumps(emf))  # これだけ。API 呼び出し不要</code></pre>
+
+<p>重要な制約:</p>
+<ul>
+<li>1 ログイベントあたりディメンション 9 個まで</li>
+<li><code>StorageResolution: 1</code> にすると高解像度メトリクス(1 秒粒度)になり <strong>追加課金</strong>が発生する(標準の 3 倍)</li>
+<li>EMF ドキュメント自体は CloudWatch Logs に残るためログ保持期間の課金にも影響する</li>
+</ul>
+
+<h3>Contributor Insights — ホットパーティション特定</h3>
+
+<p>「どの pk が DynamoDB を最も叩いているか」をリアルタイムランキングする機能。ルール 1 本で有効化でき、ホットパーティション起因のスロットリングの原因特定が劇的に速くなる。</p>
+
+<p>DynamoDB 側の設定から有効化する(CloudWatch コンソールではなく DynamoDB コンソールの「Contributor Insights」タブ)。ルール例:</p>
+
+<pre><code class="language-json">{
+  "Schema": { "Name": "DynamoDB-schema", "Version": 1 },
+  "AggregateOn": "Count",
+  "Contribution": { "Keys": ["$.dynamodb.keys.pk.S"] },
+  "LogFormat": "JSON",
+  "LogGroupARNs": [
+    "arn:aws:logs:ap-northeast-1:ACCOUNT:log-group:/aws/dynamodb/tables/phase4-events/data-plane:*"
+  ]
+}</code></pre>
+
+<h3>Synthetics Canary — 外形監視</h3>
+
+<p>外部 bot が定期的にエンドポイントを叩き、成功率・レイテンシ・スクリーンショットを CloudWatch に保存する。API Gateway + Lambda を Phase 5 以降で作ったら即 Canary を追加すると本番品質の可観測性になる。</p>
+
+<pre><code class="language-hcl">resource "aws_synthetics_canary" "api_health" {
+  name                 = "phase5-api-health"
+  artifact_s3_location = "s3://${aws_s3_bucket.canary.id}/canary/"
+  execution_role_arn   = aws_iam_role.canary.arn
+  runtime_version      = "syn-nodejs-puppeteer-6.2"
+  handler              = "apiCanary.handler"
+  zip_file             = data.archive_file.canary.output_path
+  schedule { expression = "rate(5 minutes)" }
+  start_canary = true
+}</code></pre>
+
+<p><strong>つまずきポイント</strong>: S3 バケットに Block Public Access を有効化した上で、Canary IAM ロールに <code>s3:PutObject</code> と <code>cloudwatch:PutMetricData</code> を付与する必要がある。ここが抜けると Canary が "Error" 状態で起動し、スクリーンショットも保存されない。</p>
+
+<h3>RUM(Real User Monitoring) — 実ユーザーのブラウザ計測</h3>
+
+<p>Synthetics が合成(bot)モニタリングであるのに対し、RUM は実ユーザーのブラウザ/アプリのメトリクスを収集する。JavaScript スニペット 1 行を HTML に埋め込むだけで Core Web Vitals(LCP / FID / CLS)が CloudWatch に流れ込む。Phase 7 以降で CloudFront + S3 の静的サイトを作る際に追加すると観測レイヤーが一気に厚くなる。</p>
+
+<h3>CloudWatch Application Signals — SLO 管理統合(2024 GA)</h3>
+
+<p>Lambda や ECS の分散トレースを SLO/SLI と紐付けて管理する APM 機能。<code>aws-distro-for-opentelemetry</code>(ADOT)レイヤーを Lambda に追加するだけで自動計装される。X-Ray との統合が前提で、サービスマップ上で依存関係ごとのエラー率・レイテンシを可視化できる。まだコストが高めなので Sandbox では短時間の確認に留めるのが無難。</p>
+
+<hr>
+
+<h2>セキュリティ課題と対策</h2>
+
+<h3>CloudWatch Logs の PII マスキング — Data Protection Policy</h3>
+
+<p>2022 年末 GA。ロググループにデータ保護ポリシーを付けると、クレカ番号・メールアドレス・日本のマイナンバー等を自動で <code>****</code> にマスキングする。Lambda が意図せず個人情報をログに出力してしまうシナリオを検知・隠蔽できる。</p>
+
+<pre><code class="language-hcl">resource "aws_cloudwatch_log_data_protection_policy" "pii_mask" {
+  log_group_name = aws_cloudwatch_log_group.producer_logs.name
+  policy_document = jsonencode({
+    Name    = "phase4-pii-mask"
+    Version = "2021-06-01"
+    Statement = [
+      {
+        Sid = "audit-policy"
+        DataIdentifier = [
+          "arn:aws:dataprotection::aws:data-identifier/EmailAddress",
+          "arn:aws:dataprotection::aws:data-identifier/CreditCardNumber",
+          "arn:aws:dataprotection::aws:data-identifier/JapaneseMyNumber",
+        ]
+        Operation = {
+          Audit = {
+            FindingsDestination = {
+              CloudWatchLogs = { LogGroup = aws_cloudwatch_log_group.producer_logs.name }
+            }
+          }
+        }
+      },
+      {
+        Sid = "redact-policy"
+        DataIdentifier = [
+          "arn:aws:dataprotection::aws:data-identifier/EmailAddress",
+          "arn:aws:dataprotection::aws:data-identifier/CreditCardNumber",
+        ]
+        Operation = { Deidentify = { MaskConfig = {} } }
+      }
+    ]
+  })
+}</code></pre>
+
+<p><strong>つまずきポイント</strong>: マスキングされたログは <code>GetLogEvents</code> でもマスク済みの文字列が返る。元データを見るには <code>logs:Unmask</code> 権限が必要で、意図的に分離した IAM ロール(セキュリティ調査専用)にのみ付与する設計が鉄則。開発者ロールに <code>logs:Unmask</code> を付けてしまうと運用上の意味が薄れる。</p>
+
+<h3>ログ暗号化(KMS)の落とし穴</h3>
+
+<p>KMS で CloudWatch Logs を暗号化する際、KMS キーポリシーに <code>logs.{region}.amazonaws.com</code> サービスプリンシパルを許可しないと Lambda がログを書き込めなくなる。よくある失敗の連鎖:</p>
+
+<ol>
+<li>KMS キーを作成し、ルートアカウントのみ許可するキーポリシーを設定した</li>
+<li>CloudWatch Logs が <code>GenerateDataKey</code> を呼べずにログ書き込みが全滅した</li>
+<li>Lambda のエラーログ自体も CloudWatch に書けないため、何が起きているか追跡できなくなった</li>
+</ol>
+
+<p>対策は KMS キーポリシーで <code>EncryptionContext</code> を <code>kms:EncryptionContext:aws:logs:arn</code> で絞り込んだ上で CloudWatch Logs サービスプリンシパルを許可すること(Sandbox の <code>main.tf</code> に実装済み)。</p>
+
+<pre><code class="language-json">{
+  "Sid": "AllowCWLogs",
+  "Effect": "Allow",
+  "Principal": { "Service": "logs.ap-northeast-1.amazonaws.com" },
+  "Action": ["kms:Encrypt*", "kms:Decrypt*", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:Describe*"],
+  "Resource": "*",
+  "Condition": {
+    "ArnLike": {
+      "kms:EncryptionContext:aws:logs:arn":
+        "arn:aws:logs:ap-northeast-1:ACCOUNT_ID:*"
+    }
+  }
+}</code></pre>
+
+<p><code>EncryptionContext</code> の条件を付けないと、同リージョンのすべての CloudWatch Logs(他サービスのロググループも含む)がこのキーを使えてしまう。最小権限原則に反する。</p>
+
+<h3>IAM でログアクセスを絞り込む</h3>
+
+<p>CloudWatch Logs へのアクセスは <code>logs:GetLogEvents</code> / <code>logs:FilterLogEvents</code> / <code>logs:StartQuery</code> で制御する。よくある過剰設定:</p>
+
+<ul>
+<li><code>logs:*</code> を全開発者ロールに付与</li>
+<li><code>Resource: "*"</code> でロググループ横断アクセスを許可</li>
+</ul>
+
+<p>最小権限設計では特定のロググループ ARN パターンのみ許可する:</p>
+
+<pre><code class="language-json">{
+  "Effect": "Allow",
+  "Action": ["logs:FilterLogEvents", "logs:GetLogEvents"],
+  "Resource": "arn:aws:logs:ap-northeast-1:ACCOUNT_ID:log-group:/aws/lambda/phase4-*:*"
+}</code></pre>
+
+<p><code>/aws/lambda/phase4-*</code> のワイルドカードにより、phase4 専用の Lambda ログのみアクセス可。他 Phase・他サービスのログには届かない。</p>
+
+<h3>CloudWatch Logs vs CloudTrail の使い分け</h3>
+
+<p>よく混同される 2 つのサービス:</p>
+
+<table>
+<thead>
+<tr><th>比較軸</th><th>CloudWatch Logs</th><th>CloudTrail</th></tr>
+</thead>
+<tbody>
+<tr><td>対象</td><td>アプリケーションログ・AWS サービスログ</td><td>AWS API コール(誰が何の API を叩いたか)</td></tr>
+<tr><td>主な用途</td><td>デバッグ・メトリクス抽出・アラーム</td><td>監査・セキュリティ調査・コンプライアンス</td></tr>
+<tr><td>コスト</td><td>保存 GB + クエリ GB</td><td>証跡作成は無料 + S3 保存コスト</td></tr>
+<tr><td>保持設定</td><td><code>retention_in_days</code></td><td>S3 ライフサイクルで管理</td></tr>
+</tbody>
+</table>
+
+<p>CloudTrail は Management Events(API コール)を自動記録するが、デフォルトでは CloudWatch Logs に転送されない。転送する場合は <code>aws_cloudtrail</code> リソースで <code>cloud_watch_logs_group_arn</code> を設定する。セキュリティインシデントの調査では「誰がいつどの API を叩いたか」は CloudTrail を、「その API が何を引き起こしたか」は CloudWatch Logs を見る、という役割分担が基本。</p>
+
+<h3>SNS トピックへの CloudWatch アラームのアクセス制御</h3>
+
+<p>SNS + CloudWatch Alarms の構成でよく漏れるのが SNS トピックへのリソースポリシー。CloudWatch が <code>SNS:Publish</code> を呼べるようにするポリシーが必要で、かつ <code>aws:SourceArn</code> で条件を絞る:</p>
+
+<pre><code class="language-json">{
+  "Effect": "Allow",
+  "Principal": { "Service": "cloudwatch.amazonaws.com" },
+  "Action": "SNS:Publish",
+  "Resource": "arn:aws:sns:ap-northeast-1:ACCOUNT_ID:phase4-alerts",
+  "Condition": {
+    "ArnLike": {
+      "aws:SourceArn": "arn:aws:cloudwatch:ap-northeast-1:ACCOUNT_ID:alarm:phase4-*"
+    }
+  }
+}</code></pre>
+
+<p><code>aws:SourceArn</code> の条件を省くと、同アカウントの任意の CloudWatch アラームがこのトピックに通知を送れてしまう。テナント分離が崩れるリスクがある。</p>
+
+<hr>
+
+<h2>インフラ応用パターン</h2>
+
+<h3>SLO/SLI ダッシュボードの設計</h3>
+
+<p>本番では「Error Rate &lt; 1% for 99.9% of the time in 30 days」のような SLO を定義して CloudWatch で計測する。Dashboard に Metric Math で直接書ける:</p>
+
+<pre><code class="language-hcl"># dashboard.tf に追加するウィジェット例
+{
+  type = "metric"
+  properties = {
+    title  = "Error Budget (30d rolling)"
+    period = 60
+    metrics = [
+      ["AWS/Lambda", "Errors",      "FunctionName", "phase4-producer",
+        {"id": "e1", "visible": false}],
+      ["AWS/Lambda", "Invocations", "FunctionName", "phase4-producer",
+        {"id": "i1", "visible": false}],
+      [{"expression": "1-(e1/i1)", "label": "Availability", "id": "avail"}],
+      [{"expression": "IF(avail &gt; 0.999, 1, 0)", "label": "SLO Met (&gt;99.9%)", "id": "slo"}],
+    ]
+  }
+}</code></pre>
+
+<p>Metric Math では <code>FILL</code> / <code>IF</code> / <code>RATE</code> / <code>SEARCH</code> 等の関数が使える。エラーバジェット残量を可視化しておくと、「まだ余裕がある」「今月あと何件エラーが許されるか」が一目で分かり、リリース判断の材料になる。</p>
+
+<h3>Anomaly Detection(異常検知アラーム)</h3>
+
+<p>過去の時系列パターンを機械学習で学習し、「いつもと違う」値で自動アラームを出す。固定閾値を決めにくいメトリクス(例: 曜日・時間帯で大きく変動する Invocations)に有効。</p>
+
+<pre><code class="language-hcl">resource "aws_cloudwatch_metric_alarm" "duration_anomaly" {
+  alarm_name          = "phase4-duration-anomaly"
+  comparison_operator = "GreaterThanUpperThreshold"
+  evaluation_periods  = 2
+  threshold_metric_id = "ad1"
+
+  metric_query {
+    id          = "m1"
+    return_data = false
+    metric {
+      metric_name = "Duration"
+      namespace   = "AWS/Lambda"
+      period      = 60
+      stat        = "p99"
+      dimensions  = { FunctionName = "phase4-producer" }
+    }
+  }
+
+  metric_query {
+    id          = "ad1"
+    expression  = "ANOMALY_DETECTION_BAND(m1, 2)"
+    return_data = true
+    label       = "Duration (expected band)"
+  }
+}</code></pre>
+
+<p><code>ANOMALY_DETECTION_BAND(m1, 2)</code> の <code>2</code> はバンド幅(標準偏差の倍数)。小さくすると敏感になり誤報が増える。</p>
+
+<p><strong>つまずきポイント</strong>: 学習データが 2 週間分以上ないとバンドが広すぎてアラームが鳴らない。新規 Sandbox では即座に有効活用できないため、まず固定閾値アラームで慣れてから導入すると良い。</p>
+
+<h3>Composite Alarm による通知疲れ(Alarm Fatigue)防止</h3>
+
+<p>アラーム 30 本が全部 SNS に飛んでくると、オンコール担当が通知を無視するようになる「通知疲れ」が起きる。Composite Alarm で絞り込みと集約を行い、PagerDuty や OpsGenie へのブリッジは SNS Subscription で繋ぐのが定石。</p>
+
+<pre><code class="language-hcl"># AND/OR/NOT が使える
+resource "aws_cloudwatch_composite_alarm" "critical_only" {
+  alarm_name = "phase4-critical"
+  # 「エラーが出ているかつ高負荷時のみ通知」
+  # → 低負荷時の散発エラーは無視するという SLO 設計
+  alarm_rule = "ALARM(\"phase4-producer-errors\") AND ALARM(\"phase4-producer-duration-high\")"
+  alarm_actions = [aws_sns_topic.alerts.arn]
+}</code></pre>
+
+<p>本番の設計指針:</p>
+<ol>
+<li>個別アラームは <code>alarm_actions</code> を空にしてサイレントにする</li>
+<li>Composite Alarm だけが SNS に通知する</li>
+<li>SNS → PagerDuty / OpsGenie でインシデント管理ツールに連携</li>
+<li>夜間のオンコールは Critical のみ、営業時間は Warning も含める、のような時間帯別設定は EventBridge Scheduler + Lambda で制御する</li>
+</ol>
+
+<h3>高解像度メトリクスのコスト試算</h3>
+
+<table>
+<thead>
+<tr><th>解像度</th><th>StorageResolution</th><th>費用(追加分)</th></tr>
+</thead>
+<tbody>
+<tr><td>標準(60 秒)</td><td>60 または省略</td><td>無料枠内</td></tr>
+<tr><td>高解像度(1 秒)</td><td>1</td><td>標準の約 3 倍(メトリクス保存・アラーム評価)</td></tr>
+</tbody>
+</table>
+
+<p>1 つのカスタムメトリクスの月額は $0.30(最初の 10,000 メトリクス)。高解像度にすると約 $0.90。10 メトリクスを高解像度にすると月 $6 の差。マイクロサービスで 1,000 メトリクスを全て高解像度にすると月 $600 超の差になる。「1 秒粒度でないと困るか」を設計時に検証することが重要。</p>
+
+<h3>Lambda Insights の深掘りと Power Tuning</h3>
+
+<p>Lambda Insights(<code>LambdaInsightsExtension</code> レイヤー)は CloudWatch エージェント相当の機能を Lambda に付加し、以下のメトリクスを <code>LambdaInsights</code> Namespace に自動投入する:</p>
+
+<table>
+<thead>
+<tr><th>メトリクス</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>memory_utilization</code></td><td>設定メモリに対する実使用率(%)</td></tr>
+<tr><td><code>used_memory_max</code></td><td>実行中の最大メモリ使用量(MB)</td></tr>
+<tr><td><code>init_duration</code></td><td>Cold Start 時間(ms)</td></tr>
+<tr><td><code>cpu_total_time</code></td><td>CPU 使用時間(ms)</td></tr>
+<tr><td><code>rx_bytes</code> / <code>tx_bytes</code></td><td>ネットワーク I/O</td></tr>
+</tbody>
+</table>
+
+<p>特に <code>memory_utilization</code> は Lambda の <strong>Power Tuning</strong> に欠かせない。メモリを増やすと CPU も増えて実行が速くなるため、コストと速度のスイートスポットが必ずしも最小メモリではない。<a href="https://github.com/alexcasalboni/aws-lambda-power-tuning">AWS Lambda Power Tuning</a> ツール(Step Functions で動く OSS)を使って実測値ベースで判断するのが本番手順。</p>
+
+<p>また、<code>architecture = "arm64"</code> にするだけで Graviton2 になり、同じメモリで約 20% コスト削減・10〜15% 高速化が期待できる。ただし依存ライブラリのアーキテクチャ互換性(特にネイティブ拡張)を確認してから切り替える。</p>
+
+<h3>CloudWatch Logs → S3 → Athena のログアーカイブパターン</h3>
+
+<p>本番でよく見るアーキテクチャ:</p>
+
+<pre><code>Lambda ログ
+  → CloudWatch Logs
+    → Subscription Filter
+      → Kinesis Data Firehose
+        → S3(GZIP 圧縮)
+          → Athena でアドホック SQL 分析</code></pre>
+
+<p>Terraform での実装:</p>
+
+<pre><code class="language-hcl">resource "aws_kinesis_firehose_delivery_stream" "log_archive" {
+  name        = "phase4-log-archive"
+  destination = "extended_s3"
+
+  extended_s3_configuration {
+    role_arn           = aws_iam_role.firehose.arn
+    bucket_arn         = aws_s3_bucket.log_archive.arn
+    buffering_size     = 5      # MB。5 MB 溜まったら S3 に書き出す
+    buffering_interval = 300    # 秒。5 分経ったら溜まっていなくても書き出す
+    compression_format = "GZIP"
+  }
+}
+
+resource "aws_cloudwatch_log_subscription_filter" "to_firehose" {
+  name            = "phase4-to-firehose"
+  log_group_name  = aws_cloudwatch_log_group.producer_logs.name
+  filter_pattern  = ""           # 空 = 全ログ転送
+  destination_arn = aws_kinesis_firehose_delivery_stream.log_archive.arn
+  distribution    = "Random"     # シャード間でランダム分散
+}</code></pre>
+
+<p>CloudWatch Logs Insights は直近 30 日程度の高速クエリに向いており、それ以前のログやクロスアカウント分析は Athena が適している。保持期間 1 日で削除される前に S3 に退避しておけば、監査要件(例: 1 年保存)にも対応できる。</p>
+
+<h3>ダッシュボード as Code のスケール問題と選択肢</h3>
+
+<p>Terraform で Dashboard JSON を管理すると、ウィジェット追加のたびに <code>terraform apply</code> が必要になる。規模が大きくなったときの選択肢:</p>
+
+<ol>
+<li><strong>CDK(CloudWatch Dashboard Construct)</strong> — TypeScript で型安全に記述。L2 Construct が充実しており、ウィジェットの追加が関数呼び出しで済む。Terraform との共存は <code>--hotswap</code> デプロイで速くなる。</li>
+<li><strong>Amazon Managed Grafana</strong> — CloudWatch を DataSource として接続し、ダッシュボードを GUI で編集・JSON Export できる。複数 AWS アカウント横断の統合ビューに向いている。Phase 8 以降の発展として検討価値あり。</li>
+<li><strong>cw-dashboard-generator</strong> — Python スクリプトで JSON テンプレートを生成するパターン。小規模チームでよく見かける折衷案。</li>
+</ol>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase4</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase4</span></li>
+<li><b>負荷生成</b> — Lambda を呼びカスタムメトリクスを発行<span class="cmd">make sandbox-load-phase4</span></li>
+<li><b>観測</b> — カスタム指標・アラーム状態（OK/ALARM）・ダッシュボード<span class="cmd">make sandbox-watch-phase4</span><div class="tstamp">⏱ 反映 1〜3 分</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase4</span></li>
+</ol>
+<p class="note warn">⚠ SNS メール購読は apply 後に確認メールの承認が必要。</p>
+</section>
+<div class="foot">← <a href="index.html">Phase 4 ルーター</a> ／ <a href="main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main>
+</body>
+</html>

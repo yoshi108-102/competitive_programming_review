@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 教材</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}
+.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;line-height:1.5;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}
+h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}img{max-width:100%}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}
+.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style>
+</head>
+<body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 教材 · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Lambda の HTTP レスポンス形式と CORS / SOP の関係</h1>
+
+<h2>概要</h2>
+
+<p><code>shared/response.py</code> に成功・エラーのレスポンスヘルパーを作る前段として、<strong>なぜ Lambda が <code>{statusCode, headers, body}</code> という形で返すのか</strong>、<strong>なぜ CORS ヘッダを毎回含める必要があるのか</strong> を、Web セキュリティの基礎（SOP、iframe、Clickjacking）まで遡って整理する。</p>
+
+<p>キーポイント:</p>
+
+<ul>
+  <li>Lambda Proxy Integration の返り値は <strong>ただの HTTP レスポンスを dict で表現しただけ</strong></li>
+  <li>CORS は <strong>ブラウザのデフォルト防御 (SOP) をサーバの許可宣言で緩める仕組み</strong></li>
+  <li>SOP は iframe 越しの DOM アクセスにも適用される、徳丸本の主戦場</li>
+  <li>今回の JWT + Authorization ヘッダ方式は CSRF リスクが低いため、CORS さえ正しく設定すればセキュリティ的に守られる</li>
+</ul>
+
+<h2>解説</h2>
+
+<h3>A. Lambda Proxy Integration の返り値形</h3>
+
+<h4>問題意識</h4>
+
+<p>Lambda ハンドラは Python の関数だから、素直に書けばこう書きたくなる:</p>
+
+<pre><code class="language-python">def handler(event, context):
+    submissions = [{"id": "SUB001", "result": "AC"}]
+    return submissions   # ← Pythonリストを返すだけ</code></pre>
+
+<p>しかし実装予定の Lambda はこう書く:</p>
+
+<pre><code class="language-python">def handler(event, context):
+    submissions = [{"id": "SUB001", "result": "AC"}]
+    return {
+        "statusCode": 200,
+        "headers": {"Content-Type": "application/json"},
+        "body": json.dumps({"data": submissions})
+    }</code></pre>
+
+<p>この特殊な形を要求しているのが <strong>API Gateway の統合方式</strong>。</p>
+
+<h4>API Gateway の3つの統合方式</h4>
+
+<table>
+  <thead>
+    <tr>
+      <th>統合方式</th>
+      <th>Lambda の返り値</th>
+      <th>使われ方</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Lambda Proxy Integration</strong></td>
+      <td><code>{statusCode, headers, body}</code> の決まった形</td>
+      <td><strong>現代の主流</strong>（今回採用）</td>
+    </tr>
+    <tr>
+      <td>Lambda Integration (Non-Proxy)</td>
+      <td>任意の形 + API Gateway 側で変換マッピング記述</td>
+      <td>レガシー、複雑</td>
+    </tr>
+    <tr>
+      <td>HTTP Integration</td>
+      <td>Lambda を介さず外部 HTTP に直接プロキシ</td>
+      <td>Lambda 不使用</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Lambda Proxy Integration の利点:</p>
+
+<ol>
+  <li>API Gateway 側の設定が超シンプル（変換マッピング不要）</li>
+  <li>Lambda 側で HTTP セマンティクス（statusCode / headers / body）を完全制御できる</li>
+  <li>Terraform / CDK での設定が1行で済む</li>
+</ol>
+
+<p>代償: Lambda が「HTTP レスポンスの形」を自分で組み立てる必要がある。</p>
+
+<h4>正確な返り値スキーマ</h4>
+
+<pre><code class="language-python">{
+    "statusCode": 200,                    # int、必須
+    "headers": {                           # dict[str, str]、省略可
+        "Content-Type": "application/json"
+    },
+    "multiValueHeaders": {                 # dict[str, list[str]]、省略可
+        "Set-Cookie": ["a=1", "b=2"]       # 同名ヘッダを複数送りたいとき
+    },
+    "body": "...",                         # str（文字列、dict ではない）、省略可
+    "isBase64Encoded": False               # バイナリ返したいとき True
+}</code></pre>
+
+<h4>ハマりがちな罠3つ</h4>
+
+<p><strong>罠1: <code>body</code> は文字列でなくてはならない</strong></p>
+
+<pre><code class="language-python"># ❌ dict を直接入れる
+return {"statusCode": 200, "body": {"data": [...]}}
+
+# ✅ json.dumps で文字列化
+return {"statusCode": 200, "body": json.dumps({"data": [...]})}</code></pre>
+
+<p><strong>罠2: <code>statusCode</code> が無いと 500 エラー</strong></p>
+
+<pre><code class="language-python"># ❌ 普通の dict（API Gateway が statusCode を探して見つからず 500 を返す）
+return {"submissions": [...]}</code></pre>
+
+<p><strong>罠3: <code>headers</code> の値は文字列限定</strong></p>
+
+<pre><code class="language-python"># ❌ 数値やリストを入れる
+return {"headers": {"X-Count": 42, "X-Tags": ["a", "b"]}}</code></pre>
+
+<p>数値は <code>str(42)</code>、複数値は <code>multiValueHeaders</code> に入れる。</p>
+
+<h4>実体: HTTP レスポンスそのもの</h4>
+
+<pre><code>HTTP/1.1 200 OK                                       ← statusCode
+Content-Type: application/json                        ← headers
+Access-Control-Allow-Origin: *                        ← headers
+Set-Cookie: a=1                                       ← multiValueHeaders
+Set-Cookie: b=2                                       ← multiValueHeaders
+
+{"data": [...]}                                       ← body</code></pre>
+
+<p>生の HTTP レスポンスを「1行目 / ヘッダー / ボディ」の3要素に分解して dict にしただけ。</p>
+
+<p>Lambda は <strong>シリアライズの手間を省いた簡易 HTTP サーバ</strong>。生のソケットや Flask/FastAPI 不要で、関数1つで HTTP エンドポイントが立つのが売り。</p>
+
+<h4>他のサーバレスプラットフォームも同じ発想</h4>
+
+<table>
+  <thead>
+    <tr>
+      <th>プラットフォーム</th>
+      <th>レスポンスの形</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>AWS Lambda + API Gateway</td>
+      <td><code>{statusCode, headers, body}</code> dict</td>
+    </tr>
+    <tr>
+      <td>Cloudflare Workers</td>
+      <td><code>Response(body, {status, headers})</code> オブジェクト</td>
+    </tr>
+    <tr>
+      <td>Vercel Edge Functions</td>
+      <td><code>new Response(body, {status, headers})</code></td>
+    </tr>
+    <tr>
+      <td>Google Cloud Functions (HTTP)</td>
+      <td>Express 風の <code>res.status(200).send(...)</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>発想は全部同じ: 「HTTPサーバの裏側を隠して、レスポンスを表現するオブジェクトだけ返させる」。</p>
+
+<h4>なぜ response.py にヘルパーを作るのか</h4>
+
+<p>Lambda ハンドラを複数書くと、毎回同じボイラープレート（CORS ヘッダ、Content-Type、<code>{data}</code> でラップ）を書くハメになる。ヘルパーに統一することで:</p>
+
+<pre><code class="language-python"># get_submissions.py
+return response.success(data=submissions)
+
+# save_user.py
+return response.success(data={"ok": True})</code></pre>
+
+<p>と業務ロジックに集中できる。</p>
+
+<h3>B. CORS ヘッダ</h3>
+
+<h4>CORS とは</h4>
+
+<p><strong>CORS = Cross-Origin Resource Sharing</strong>。ブラウザのデフォルト防御である <strong>同一オリジンポリシー (SOP)</strong> を緩めるための仕組み。</p>
+
+<ul>
+  <li><strong>オリジン (Origin)</strong>: <code>scheme://host:port</code> の3点セット</li>
+  <li><strong>SOP</strong>: あるオリジンの JS が別のオリジンに fetch/XHR でリクエストを送ってその結果を読むことを、<strong>デフォルトで禁止</strong>する</li>
+</ul>
+
+<h4>なぜ SOP があるのか</h4>
+
+<p>クロスオリジンが自由だと、悪意あるサイトによる攻撃が成立:</p>
+
+<pre><code>あなたが evil.com を開く
+    ↓
+evil.com の JS が裏で bank.com にリクエスト
+    ↓
+あなたは bank.com にログイン中 → Cookie が自動で送られる
+    ↓
+evil.com が bank.com からあなたの口座情報を取得</code></pre>
+
+<p>これを防ぐため、ブラウザは「<strong>同じオリジンから来たスクリプトしか、そのオリジンのリソースを読めない</strong>」というガードを入れている。</p>
+
+<h4>正当なクロスオリジン通信もしたい</h4>
+
+<p>今回のプロジェクト:</p>
+
+<pre><code>フロント: http://localhost:3000    (ローカル開発時)
+         https://atcoder-review.xxx.amplifyapp.com  (本番)
+
+API:     https://xxxxxxxxx.execute-api.ap-northeast-1.amazonaws.com  (API Gateway)</code></pre>
+
+<p>フロントと API のオリジンが完全に別 → SOP でデフォルト禁止。これを「<strong>正当なクロスオリジン通信を許可する</strong>」のが CORS。</p>
+
+<h4>CORS の仕組み</h4>
+
+<p><strong>CORS はブラウザ側で実施される防御、サーバは「許可リスト」を HTTP ヘッダで宣言するだけ</strong>。</p>
+
+<pre><code>ブラウザの fetch:
+  evil.com の JS が api.example.com に fetch
+    ↓
+ブラウザはリクエストを送る
+    ↓
+api.example.com がレスポンスを返す
+    ↓
+レスポンスに Access-Control-Allow-Origin: https://app.example.com と書かれている
+    ↓
+ブラウザが Origin ヘッダ（evil.com）と照合
+    ↓
+許可されていない → JS にレスポンスを渡さずエラーにする</code></pre>
+
+<p>CORS の本質: <strong>サーバ側のセキュリティではなく、ブラウザが「サーバの許可宣言」を信用して JS からの読み取りを制御する仕組み</strong>。</p>
+
+<h4>response.py が返す各ヘッダ</h4>
+
+<pre><code class="language-python">"headers": {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type,Authorization",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+},</code></pre>
+
+<table>
+  <thead>
+    <tr>
+      <th>ヘッダ</th>
+      <th>意味</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>Access-Control-Allow-Origin</code></td>
+      <td>どのオリジンからのアクセスを許可するか。<code>*</code> は全許可（開発OK、本番では限定推奨）</td>
+    </tr>
+    <tr>
+      <td><code>Access-Control-Allow-Headers</code></td>
+      <td>どの HTTP ヘッダを使って良いか。Cognito の JWT を <code>Authorization</code> で送るため必須</td>
+    </tr>
+    <tr>
+      <td><code>Access-Control-Allow-Methods</code></td>
+      <td>どの HTTP メソッドを許可するか。<code>OPTIONS</code> を入れるのが重要</td>
+    </tr>
+  </tbody>
+</table>
+
+<h4>Preflight リクエスト</h4>
+
+<p><strong>シンプルリクエスト以外は、ブラウザが事前に OPTIONS で許可確認を送る</strong>。</p>
+
+<p>シンプルリクエスト（preflight 不要）の条件:</p>
+<ul>
+  <li>メソッドが <code>GET</code> / <code>HEAD</code> / <code>POST</code> のみ</li>
+  <li>カスタムヘッダなし（<code>Content-Type</code> が <code>application/x-www-form-urlencoded</code>, <code>multipart/form-data</code>, <code>text/plain</code> のみ）</li>
+</ul>
+
+<p><code>Authorization: Bearer xxx</code> を付けると即「シンプル」ではなくなるので preflight 確定:</p>
+
+<pre><code>ブラウザ → サーバ: OPTIONS /submissions
+                  Origin: http://localhost:3000
+                  Access-Control-Request-Method: GET
+                  Access-Control-Request-Headers: Authorization
+
+サーバ → ブラウザ: 200 OK
+                  Access-Control-Allow-Origin: *
+                  Access-Control-Allow-Methods: GET,POST,...
+                  Access-Control-Allow-Headers: Content-Type,Authorization
+
+ブラウザ: 「OK、許可されてる」
+ブラウザ → サーバ: GET /submissions
+                  Authorization: Bearer xxx
+                  Origin: http://localhost:3000</code></pre>
+
+<p>2回通信が発生する。<code>Access-Control-Allow-Methods</code> に <code>OPTIONS</code> を入れないと preflight が通らない。</p>
+
+<h4>本番で <code>*</code> はNG</h4>
+
+<p>開発中は <code>*</code> でもよいが、本番では具体的なオリジンを指定:</p>
+
+<pre><code class="language-python"># ❌ 本番で使うとリスク大
+"Access-Control-Allow-Origin": "*"
+
+# ✅ 本番: 自分のフロントのオリジンに限定
+"Access-Control-Allow-Origin": "https://atcoder-review.example.com"</code></pre>
+
+<p>理由:</p>
+<ul>
+  <li>Cookie ベース認証では <code>*</code> + <code>Allow-Credentials: true</code> が仕様上禁止</li>
+  <li>意図せず「誰でも使える API」として晒すことになる</li>
+</ul>
+
+<p>JWT（<code>Authorization</code> ヘッダ）方式なら Cookie 問題は回避できるが、「許可オリジン明示」は原則守るべき。今回の学習プロジェクトでは <code>*</code> で進めて、Phase 5（CloudFront, WAF）で見直す。</p>
+
+<h4>CORS にまつわる誤解</h4>
+
+<table>
+  <thead>
+    <tr>
+      <th>誤解</th>
+      <th>実際</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>「CORS はサーバのセキュリティ機能」</td>
+      <td>❌ <strong>ブラウザのセキュリティ機能</strong>。curl やサーバ間通信には適用されない</td>
+    </tr>
+    <tr>
+      <td>「CORS エラーが出るのはサーバが落ちてるから」</td>
+      <td>❌ サーバは正常動作、<strong>ブラウザがレスポンスを JS に渡さない</strong>だけ</td>
+    </tr>
+    <tr>
+      <td>「<code>*</code> は一番甘い設定だから安全」</td>
+      <td>⚠️ 「許可オリジンの明示」の方が安全、<code>*</code> は Cookie 認証と併用不可</td>
+    </tr>
+    <tr>
+      <td>「API Gateway で CORS 有効化すれば Lambda 側で何もしなくていい」</td>
+      <td>⚠️ OPTIONS は Gateway 側で返るが、本番レスポンスに CORS ヘッダを<strong>毎回含める必要</strong>あり</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>SOP と CORS の関係（整理）</h3>
+
+<pre><code>SOP (同一オリジンポリシー)
+  └─ デフォルトで別オリジンアクセスを禁止する防御
+
+CORS (Cross-Origin Resource Sharing)
+  └─ SOP を「サーバの許可宣言」で緩める仕組み</code></pre>
+
+<ul>
+  <li><strong>SOP は壁</strong>（ブラウザが建てる）</li>
+  <li><strong>CORS は壁の扉</strong>（サーバが「このオリジンなら通していい」と鍵を渡す）</li>
+  <li><strong>Preflight (OPTIONS) は鍵の確認</strong>（扉を開ける前にブラウザが「この鍵で本当に通していい?」と確認する）</li>
+</ul>
+
+<h3>同一オリジンの正確な定義</h3>
+
+<p><strong><code>(scheme, host, port)</code> の 3-tuple が完全一致</strong>したときのみ同一オリジン。</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>URL A</th>
+      <th>URL B</th>
+      <th>判定</th>
+      <th>理由</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>https://example.com/page1</code></td>
+      <td><code>https://example.com/page2</code></td>
+      <td>同一</td>
+      <td>パスは関係ない</td>
+    </tr>
+    <tr>
+      <td><code>https://example.com</code></td>
+      <td><code>http://example.com</code></td>
+      <td>別</td>
+      <td>scheme 違い</td>
+    </tr>
+    <tr>
+      <td><code>https://example.com</code></td>
+      <td><code>https://api.example.com</code></td>
+      <td>別</td>
+      <td><strong>サブドメイン違いは別オリジン</strong></td>
+    </tr>
+    <tr>
+      <td><code>https://example.com</code></td>
+      <td><code>https://example.com:8443</code></td>
+      <td>別</td>
+      <td>port 違い</td>
+    </tr>
+    <tr>
+      <td><code>https://example.com</code></td>
+      <td><code>https://example.com:443</code></td>
+      <td>同一</td>
+      <td><code>:443</code> は https のデフォルト</td>
+    </tr>
+    <tr>
+      <td><code>http://localhost</code></td>
+      <td><code>http://127.0.0.1</code></td>
+      <td>別</td>
+      <td>文字列一致、名前解決後の IP が同じでも別</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>iframe と DOM の詳細</h3>
+
+<h4>iframe の本質</h4>
+
+<p><code>&lt;iframe&gt;</code> は<strong>ページの中に別の独立したブラウザウィンドウを埋め込む</strong>タグ:</p>
+
+<pre><code class="language-html">&lt;!-- parent.html: https://app.example.com --&gt;
+&lt;iframe src="https://video.example.com/player"&gt;&lt;/iframe&gt;</code></pre>
+
+<p>iframe の中には別の <code>window</code>・<code>document</code> が独立して存在する。<strong>「ページ内ページ」ではなく「ページ内ブラウザ」</strong>。</p>
+
+<h4>ウィンドウ階層</h4>
+
+<pre><code class="language-js">// iframe 内の JS から見た場合
+window          // ← iframe 自身
+window.parent   // ← 親ページの window
+window.top      // ← 最上位の window（ネストしてたら一番外）
+
+// 親ページの JS から見た場合
+const iframe = document.querySelector("iframe");
+iframe.contentWindow   // ← iframe の window
+iframe.contentDocument // ← iframe の document</code></pre>
+
+<h4>SOP が iframe に適用される形</h4>
+
+<p><strong>同一オリジン</strong>:</p>
+
+<pre><code class="language-html">&lt;!-- https://app.example.com/parent.html --&gt;
+&lt;iframe src="https://app.example.com/inner.html"&gt;&lt;/iframe&gt;
+
+&lt;script&gt;
+  const iframe = document.querySelector('iframe');
+
+  // ✅ 全部できる
+  iframe.contentDocument.body.innerHTML;
+  iframe.contentWindow.someFunction();
+&lt;/script&gt;</code></pre>
+
+<p><strong>別オリジン</strong>:</p>
+
+<pre><code class="language-html">&lt;!-- https://app.example.com/parent.html --&gt;
+&lt;iframe src="https://other.com/inner.html"&gt;&lt;/iframe&gt;
+
+&lt;script&gt;
+  const iframe = document.querySelector('iframe');
+
+  // ❌ ブロックされる
+  iframe.contentDocument;        // SecurityError or null
+  iframe.contentWindow.someFunc(); // 関数が見えても呼べない
+&lt;/script&gt;</code></pre>
+
+<p>iframe 内部は完全にブラックボックス。</p>
+
+<h4>別オリジンでも許される数少ない操作</h4>
+
+<table>
+  <thead>
+    <tr>
+      <th>操作</th>
+      <th>可否</th>
+      <th>備考</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>iframe.contentWindow.location.href = "..."</code></td>
+      <td>✅ <strong>書き込みのみ可</strong></td>
+      <td>iframe を別 URL に飛ばせる</td>
+    </tr>
+    <tr>
+      <td><code>iframe.contentWindow.location.href</code> 読み取り</td>
+      <td>❌</td>
+      <td>値は読めない</td>
+    </tr>
+    <tr>
+      <td><code>iframe.contentWindow.postMessage(...)</code></td>
+      <td>✅</td>
+      <td>メッセージ送信</td>
+    </tr>
+    <tr>
+      <td><code>iframe.contentWindow.length</code></td>
+      <td>✅</td>
+      <td>内部の iframe 数だけは読める</td>
+    </tr>
+    <tr>
+      <td><code>iframe.contentWindow.focus() / blur() / close()</code></td>
+      <td>✅</td>
+      <td>一部メソッド呼び出し</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>「書き込みは通るが読み取りは通らない」という非対称性。例えば <code>location.href = ...</code> で飛ばすのは攻撃に使われかねないが、遷移後のURLや中身を読めないので漏洩は起きない、という設計。</p>
+
+<h4>postMessage — 唯一の正当なクロスオリジン通信手段</h4>
+
+<pre><code class="language-js">// 親ページ (https://app.example.com)
+iframe.contentWindow.postMessage(
+  { type: "GREETING", text: "hello" },
+  "https://other.com"   // 送り先オリジンを明示
+);
+
+// iframe 内 (https://other.com)
+window.addEventListener("message", (event) =&gt; {
+  // ⚠️ 送信元検証は必須
+  if (event.origin !== "https://app.example.com") {
+    return;
+  }
+
+  console.log(event.data);  // { type: "GREETING", text: "hello" }
+  event.source.postMessage({type: "REPLY", ok: true}, event.origin);
+});</code></pre>
+
+<p>必須ルール:</p>
+
+<ol>
+  <li>送信時は <code>targetOrigin</code> を必ず明示（<code>"*"</code> は使わない）</li>
+  <li>受信時は <code>event.origin</code> を必ず検証</li>
+  <li>受信データはユーザー入力と同等に扱う（XSS対策）</li>
+</ol>
+
+<h4>歴史: <code>document.domain</code> (非推奨)</h4>
+
+<pre><code class="language-js">// 両方のページで同じ値を設定
+document.domain = "example.com";</code></pre>
+
+<p>→ サブドメイン間で SOP を緩めて DOM アクセス可能に。Chrome 109+ でデフォルト無効化。代替は <code>postMessage</code> + CSP。</p>
+
+<h4><code>sandbox</code> 属性</h4>
+
+<p>信用できない iframe に追加制限をかける:</p>
+
+<pre><code class="language-html">&lt;iframe src="https://untrusted.com" sandbox&gt;&lt;/iframe&gt;</code></pre>
+
+<p><code>sandbox</code> 単独だと JS 実行不可・フォーム送信不可・ポップアップ不可・トップレベルナビゲーション不可。必要な機能だけ個別許可:</p>
+
+<pre><code class="language-html">&lt;iframe src="..." sandbox="allow-scripts allow-same-origin"&gt;&lt;/iframe&gt;</code></pre>
+
+<h4>実用例: 身近なクロスオリジンiframe</h4>
+
+<table>
+  <thead>
+    <tr>
+      <th>サービス</th>
+      <th>使い方</th>
+      <th>理由</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>YouTube 埋め込み</td>
+      <td><code>&lt;iframe src="youtube.com/embed/..."&gt;&lt;/iframe&gt;</code></td>
+      <td>YouTube のプレイヤーを自サイトに</td>
+    </tr>
+    <tr>
+      <td>Stripe Elements</td>
+      <td>クレジットカード入力フォームを iframe で提供</td>
+      <td><strong>カード番号が自サイトのJSに触れない</strong> = PCI DSS 準拠が楽</td>
+    </tr>
+    <tr>
+      <td>Disqus / コメント欄</td>
+      <td>外部コメントシステムを iframe で埋め込み</td>
+      <td>ユーザー管理を外部化</td>
+    </tr>
+    <tr>
+      <td>Google reCAPTCHA</td>
+      <td>Bot 検証UIを iframe で提供</td>
+      <td>チェックロジックが外部で守られる</td>
+    </tr>
+    <tr>
+      <td>OAuth ログイン</td>
+      <td>Google/GitHub ログインがポップアップや iframe で開く</td>
+      <td><strong>ログイン情報が依頼元サイトのJSから見えない</strong></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Stripe が iframe を使うのが典型例: カード番号が自サイトの JS から読めないので、万一自サイトに XSS があってもカード番号の窃取は成立しない。SOP が防壁として機能している。</p>
+
+<h4>Clickjacking — SOP で防げない攻撃</h4>
+
+<pre><code class="language-html">&lt;!-- 攻撃サイト evil.com --&gt;
+&lt;style&gt;
+  iframe { opacity: 0; position: absolute; top: 0; left: 0; }
+&lt;/style&gt;
+&lt;div&gt;景品を受け取る&lt;/div&gt;
+&lt;iframe src="https://bank.com/transfer?amount=100&amp;to=attacker"&gt;&lt;/iframe&gt;</code></pre>
+
+<p>SOP は iframe 内の DOM にアクセスしているわけではなく、<strong>見えない iframe のボタンをクリックさせているだけ</strong>なので止められない。</p>
+
+<p><strong>サーバ側で防御する2つの方法</strong>:</p>
+
+<pre><code># 古典
+X-Frame-Options: DENY
+X-Frame-Options: SAMEORIGIN
+
+# 現代（CSP）
+Content-Security-Policy: frame-ancestors 'none'
+Content-Security-Policy: frame-ancestors 'self'
+Content-Security-Policy: frame-ancestors 'self' https://trusted.com</code></pre>
+
+<p>CSP の方が柔軟で複数オリジン指定可。最新ブラウザは両方サポートだが CSP 推奨。</p>
+
+<h4>CSRF — SOP で防げないもう一つの攻撃</h4>
+
+<pre><code>あなたが bank.com にログイン中（Cookie が設定されている）
+    ↓
+evil.com を開く
+    ↓
+evil.com の &lt;form action="https://bank.com/transfer" method="POST"&gt; が勝手に submit
+    ↓
+Cookie が自動で送られる
+    ↓
+bank.com が「ログイン済みユーザーからの送金」と誤認</code></pre>
+
+<p><strong>SOP は「リクエストの送信」は止めない</strong>、ブラウザによる「レスポンスの読み取り」だけ止める。CSRF はSOPだけでは防げない。</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>認証方式</th>
+      <th>CSRF リスク</th>
+      <th>対策</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Cookie ベース認証</td>
+      <td><strong>あり</strong>（ブラウザが自動で Cookie を送る）</td>
+      <td>CSRF トークン、SameSite Cookie</td>
+    </tr>
+    <tr>
+      <td><strong>JWT in <code>Authorization</code> ヘッダ</strong>（今回の方式）</td>
+      <td><strong>低い</strong>（明示的に JS がヘッダに付けるので evil.com からは付けられない）</td>
+      <td>CORS の正しい設定で十分</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>今回は Cognito の JWT を <code>Authorization: Bearer</code> で送る方式なので、<strong>CORS 設定さえ正しければセキュリティ的に守られる</strong>。</p>
+
+<h3>今回のプロジェクトでの関連度</h3>
+
+<ul>
+  <li><strong>iframe は使わない</strong>（React で SPA を作る）</li>
+  <li>DOM/iframe 越しのセキュリティは直接は関係ない</li>
+  <li>将来 Bedrock や Cognito Hosted UI を iframe で統合する可能性（Phase 6）</li>
+  <li><strong>自サイトが iframe で埋め込まれて Clickjacking される防御</strong>は考慮すべき → <code>X-Frame-Options: DENY</code> か CSP を Amplify Hosting で設定すると安全</li>
+</ul>
+
+<h2>Q&amp;A</h2>
+
+<p><strong>Q: Lambda Proxy Integration の返り値って、要するにただの HTTP レスポンスじゃん?</strong></p>
+
+<p>その通り。<code>{statusCode, headers, body}</code> は HTTP レスポンスを3要素に分解して dict 化しただけ。AWS 独自の謎フォーマットに見えるが、実体は標準 HTTP。</p>
+
+<p>Lambda は API Gateway から見ると「HTTP サーバを装っている」と言える。生のバイト列を書き出す代わりに HTTP レスポンスの構造体を dict で返し、API Gateway が実際のバイト列に変換して送出する。Cloudflare Workers の <code>Response</code> オブジェクトや Vercel Edge の <code>new Response()</code> も発想は同じで、どれも「HTTP サーバの裏側を隠して、レスポンスを表現するオブジェクトだけ返させる」。</p>
+
+<p><strong>Q: SOP とは?</strong></p>
+
+<p><strong>SOP = Same-Origin Policy = 同一オリジンポリシー</strong>。ブラウザのデフォルトセキュリティ機能で、以下を禁止する:</p>
+
+<ol>
+  <li>別オリジンへの fetch/XHR のレスポンスを JS から読む</li>
+  <li>別オリジンの iframe 内の DOM にアクセスする</li>
+  <li>別オリジンのウィンドウのプロパティを読む</li>
+</ol>
+
+<p>CORS は SOP を「サーバの許可宣言」で<strong>緩める</strong>仕組み。SOP は壁、CORS は壁の扉、Preflight (OPTIONS) は鍵の確認、と覚えると整理しやすい。</p>
+
+<p><strong>Q: 同一オリジンは scheme + host + port の3要素全一致だっけ? iframe でよくトラブルになるケースも徳丸本で読んだ気がする</strong></p>
+
+<p>両方正しい。</p>
+
+<ul>
+  <li><strong>同一オリジン</strong> = <code>(scheme, host, port)</code> の 3-tuple が完全一致したときのみ</li>
+  <li><strong>サブドメインは別オリジン</strong> (<code>app.example.com</code> と <code>api.example.com</code> は別)</li>
+  <li><strong>文字列一致が基準</strong> (<code>localhost</code> と <code>127.0.0.1</code> は別、同じIPに解決されても)</li>
+  <li>デフォルトポート（http=80, https=443）は省略と同一</li>
+</ul>
+
+<p>徳丸本が扱う iframe ケースは主に「Clickjacking」「CSRF」「postMessage のセキュリティ」「document.domain の危険性」等。SOP + iframe + Cookie + CSRF の絡み合いが Web 攻撃の基礎で、ここを押さえれば徳丸本で扱うほぼ全てに対応できる。</p>
+
+<p><strong>Q: iframe と DOM について詳しく</strong></p>
+
+<p>iframe は「ページ内ブラウザ」で、独立した <code>window</code> / <code>document</code> を持つ。</p>
+
+<p><strong>同一オリジンの iframe</strong>:</p>
+<ul>
+  <li>親から <code>iframe.contentDocument.body.innerHTML</code> で中身を読み書き可能</li>
+  <li>親の JS が iframe 内の関数を直接呼べる</li>
+</ul>
+
+<p><strong>別オリジンの iframe</strong>:</p>
+<ul>
+  <li><code>contentDocument</code> は <code>SecurityError</code> か <code>null</code></li>
+  <li>ほぼ全ての相互アクセスがブロック</li>
+  <li>例外的に許される操作: <code>location.href</code> への書き込み、<code>postMessage</code>、<code>length</code>、<code>focus()</code></li>
+</ul>
+
+<p><strong>正当な通信手段は <code>postMessage</code> のみ</strong>。送信時は <code>targetOrigin</code> を明示、受信時は <code>event.origin</code> を検証する。</p>
+
+<p><strong>実用例</strong>: YouTube 埋め込み、Stripe Elements（クレジットカード入力を iframe で隔離 → 自サイトの XSS から守る）、OAuth ログイン、reCAPTCHA。</p>
+
+<p><strong>Clickjacking</strong> は SOP で防げない（DOM アクセスしていないため）。<code>X-Frame-Options: DENY</code> か <code>Content-Security-Policy: frame-ancestors</code> で明示的に iframe 埋め込みを拒否する。</p>
+
+<p><strong>CSRF</strong> も SOP で防げない（リクエストは送られるため）。JWT in <code>Authorization</code> ヘッダ方式（今回採用）ならリスクが低く、CORS の正しい設定で守られる。</p>
+
+<h2>関連</h2>
+
+<ul>
+  <li>前のトピック: <a href="practice/pytest-fixtures-for-aws.md">practice/pytest-fixtures-for-aws.md</a> — Lambda テスト基盤</li>
+  <li>議論・Q&amp;A: <a href="practice/reference/cors-error-server-side-visibility.md">practice/reference/cors-error-server-side-visibility.md</a> — CORS エラー時にサーバ（CloudWatch）に届いているのか</li>
+  <li>議論・Q&amp;A: <a href="practice/reference/cors-only-blocks-reads-not-writes.md">practice/reference/cors-only-blocks-reads-not-writes.md</a> — CORS は「読み取り」しか防がない / CSRF は別の層</li>
+  <li>議論・Q&amp;A: <a href="practice/reference/samesite-cookie-and-csrf-defense.md">practice/reference/samesite-cookie-and-csrf-defense.md</a> — SameSite Cookie の Lax デフォルト化 / Site vs Origin / JWT 方式との比較</li>
+  <li>議論・Q&amp;A: <a href="practice/reference/why-cors-exists-three-actors.md">practice/reference/why-cors-exists-three-actors.md</a> — 「自分で許可して自分で防ぐ」ではない / サーバ・ブラウザ・ユーザーの3者構造</li>
+  <li>議論・Q&amp;A: <a href="practice/reference/cors-rules-are-universal-not-per-site.md">practice/reference/cors-rules-are-universal-not-per-site.md</a> — Preflight = ハンドシグナル / ブラウザのCORSルールはサイト独立のホワイトリスト方式</li>
+  <li>議論・Q&amp;A: <a href="practice/reference/preflight-bypass-via-simple-post.md">practice/reference/preflight-bypass-via-simple-post.md</a> — シンプル POST で preflight を回避する設計のトレードオフ / 主防御は別の層</li>
+  <li>次のトピック候補（未作成）: <code>json.dumps(..., default=str)</code> の役割（DynamoDB の Decimal / datetime 対応）、<code>{ data, meta }</code> 統一形式の設計思想</li>
+  <li>関連する将来 Task: Task 9 (Lambda モジュール) で API Gateway 統合設定、Phase 5 (CloudFront/WAF) でオリジン限定と CSP</li>
+</ul>
+
+<hr>
+
+<p><em>Saved at 2026-04-20 via /learning-flow:topic</em></p>
+
+<h2>振り返りクイズ</h2>
+
+<p>回答は各問の <code>**回答**:</code> 行の下に記入してください。<br>
+全問記入後に <code>/learning-flow:grade</code> を実行すると、Claude が採点して進捗を更新します。</p>
+
+<hr>
+
+<h3>Q1. Lambda Proxy Integration の body に dict を渡すとどうなるか</h3>
+
+<p>Lambda ハンドラで以下のように返した場合、クライアントにはどう見えるか。なぜそうなるか理由も述べよ。</p>
+
+<pre><code class="language-python">return {
+    "statusCode": 200,
+    "body": {"data": [{"id": "SUB001"}]}
+}</code></pre>
+
+<p><strong>参考</strong>:</p>
+<ul>
+  <li><a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html">Lambda Proxy Integration - AWS Docs</a></li>
+</ul>
+
+<p><strong>回答</strong>:</p>
+
+<hr>
+
+<p>Lambda内部で加工されるため、HTTPレスポンスの形に加工されて見える。</p>
+
+<h3>Q2. CORS エラー時のサーバ側可視性</h3>
+
+<p>フロントエンドで CORS エラーが発生した。バックエンド開発者が CloudWatch を見ると Lambda は 200 OK で正常終了、DynamoDB にもデータが書き込まれていた。この状況は矛盾しているか？ なぜこのようなことが起きるのか、仕組みから説明せよ。</p>
+
+<p>また、本リクエストが<strong>サーバに到達しない</strong>ケースもある。それはどのような場合か。</p>
+
+<p><strong>参考</strong>:</p>
+<ul>
+  <li><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS">Cross-Origin Resource Sharing (CORS) - MDN Web Docs</a></li>
+</ul>
+
+<p><strong>関連ノート</strong>: <a href="practice/reference/cors-error-server-side-visibility.md">practice/reference/cors-error-server-side-visibility.md</a></p>
+
+<p><strong>回答</strong>:<br>
+矛盾していない、CORSエラーはあくまでブラウザ側の読み取り時に発生するエラーにすぎないので、DB側での処理には影響しない。リクエストが正しければ問題なくDBの処理が走る。なお、プリフライトリクエストの時点でシャットアウトされた場合はリクエスト自体が届かない場合もある。</p>
+
+<hr>
+
+<h3>Q3. CORS の防御主体 — サーバが Origin ヘッダで弾けば十分か</h3>
+
+<p>「サーバが <code>Origin</code> ヘッダを見て、許可リストに無いオリジンからのリクエストを拒否すれば、ブラウザに頼らなくても同等の防御になるのでは？」という主張がある。この主張の問題点を説明せよ。</p>
+
+<p><strong>参考</strong>:</p>
+<ul>
+  <li><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Origin">Origin header - MDN Web Docs</a></li>
+</ul>
+
+<p><strong>関連ノート</strong>: <a href="practice/reference/why-cors-exists-three-actors.md">practice/reference/why-cors-exists-three-actors.md</a></p>
+
+<p><strong>回答</strong>:<br>
+curlなどを使う場合にはOriginの値を任意に偽装することが可能であるため、脆弱性が高い構成になってしまうため。</p>
+
+<hr>
+
+<h3>Q4. JWT 方式と CSRF 耐性の構造的な関係</h3>
+
+<p>今回のプロジェクトでは Cognito の JWT を <code>Authorization: Bearer</code> ヘッダで送る方式を採用している。この方式が CSRF に対して構造的に強い理由を、Cookie 認証方式と対比して説明せよ。</p>
+
+<p>また、この方式を採用すると preflight が常に発動する。それはなぜか、セキュリティ上どのような副次的利点があるか。</p>
+
+<p><strong>参考</strong>:</p>
+<ul>
+  <li><a href="https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html">Cross-Site Request Forgery Prevention Cheat Sheet - OWASP</a></li>
+  <li><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite">SameSite cookies - MDN Web Docs</a></li>
+</ul>
+
+<p><strong>関連ノート</strong>: <a href="practice/reference/cors-only-blocks-reads-not-writes.md">practice/reference/cors-only-blocks-reads-not-writes.md</a>, <a href="practice/reference/samesite-cookie-and-csrf-defense.md">practice/reference/samesite-cookie-and-csrf-defense.md</a></p>
+
+<p><strong>回答</strong>:</p>
+
+<hr>
+
+<p>わからない</p>
+
+<h3>Q5. Clickjacking を SOP で防げない理由と正しい防御</h3>
+
+<p>Clickjacking 攻撃は SOP（同一オリジンポリシー）では防げない。なぜ SOP の射程外なのか、SOP が何を守っているかと対比して理由を述べよ。Clickjacking を防ぐ正しい手段を2つ挙げよ。</p>
+
+<p><strong>参考</strong>:</p>
+<ul>
+  <li><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options">X-Frame-Options - MDN Web Docs</a></li>
+  <li><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy/frame-ancestors">CSP: frame-ancestors - MDN Web Docs</a></li>
+</ul>
+
+<p><strong>回答</strong>:</p>
+
+<p>クリックジャッキング攻撃は、iframeなどを用いて透明化された悪意のあるページを正規ページの上に重ねることで悪意ある操作をユーザに行わせる方法であるが、ユーザを物理的に騙すだけでリクエスト自体は正当なので防ぎようがない。防護策としては、iframe自体を禁止するオプションの使用、selfドメインにのみ限定して埋め込みを許可するなど。</p>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase1</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase1</span></li>
+<li><b>負荷生成</b> — 無認証トラフィックを生成（認証あり負荷は TEST_PASSWORD=... を付ける）<span class="cmd">make sandbox-load-phase1</span></li>
+<li><b>観測</b> — API GW の Count/4XXError/Latency、Lambda、DynamoDB、Cognito メトリクス<span class="cmd">make sandbox-watch-phase1</span><div class="tstamp">⏱ 反映まで 2〜5 分</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase1</span></li>
+</ol>
+<p class="note warn">⚠ phase1 は本番スタックを観測するダッシュボードのみ作成（本番アプリは別途デプロイ済みが前提）。</p>
+</section>
+<div class="foot">← <a href="index.html">Phase 1 ルーター</a> ／ <a href="main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main>
+</body>
+</html>

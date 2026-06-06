@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 10 教材</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#ea580c;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}
+.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;line-height:1.5;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}
+h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}img{max-width:100%}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}
+.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style>
+</head>
+<body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 10 教材 · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Phase 10 プレビュー教材: SNS — Pub/Sub ファンアウト通知</h1>
+
+<blockquote>
+<p>プレビュー教材: デモ体験のために先行生成しました。正式な lesson / 振り返りクイズ / 採点は Phase 10 到達時に実施します。</p>
+</blockquote>
+
+<hr>
+
+<h2>このサービスは何か</h2>
+
+<p>Amazon Simple Notification Service (SNS) は <strong>フルマネージドな Pub/Sub メッセージングサービス</strong>。メッセージを送る側（Publisher）はトピックに 1 回 Publish するだけで、そのトピックを購読しているすべての Subscriber に同時配信（ファンアウト）される。</p>
+
+<table>
+<thead>
+<tr><th>項目</th><th>内容</th></tr>
+</thead>
+<tbody>
+<tr><td>配信モデル</td><td>Push 型（SNS がエンドポイントへ能動的に送る）</td></tr>
+<tr><td>対応プロトコル</td><td>Email / SMS / HTTP(S) / SQS / Lambda / Kinesis Data Firehose / Mobile Push</td></tr>
+<tr><td>トピック種別</td><td>Standard（高スループット、ベストエフォート順序） / FIFO（厳密な順序・重複排除）</td></tr>
+<tr><td>メッセージサイズ上限</td><td>256 KB</td></tr>
+</tbody>
+</table>
+
+<p>SQS との根本的な違いは配信の方向性にある。SNS は Publisher → 複数 Subscriber への <strong>扇形一方通行</strong>。SQS はキューにためて Consumer が <strong>取り出しに来る</strong> 。</p>
+
+<hr>
+
+<h2>いつ使うか・使わないか</h2>
+
+<p><strong>使う場面</strong></p>
+
+<ul>
+<li>1 つのイベントを複数のシステムへ同時に伝えたい（例: 注文完了 → メール通知 &amp; 在庫更新 &amp; ログ記録）</li>
+<li>アプリケーション間を疎結合にしたい（Pub/Sub でインタフェースを統一）</li>
+<li>モバイルプッシュ通知を大量配信したい（APNs / FCM を束ねられる）</li>
+<li>SQS と組み合わせたファンアウトで各サービスに独立したキューを持たせたい</li>
+</ul>
+
+<p><strong>使わない場面</strong></p>
+
+<ul>
+<li>メッセージを一定期間保持して後から処理したい → <strong>SQS</strong> を使う</li>
+<li>ストリーム的に大量データを処理したい → <strong>Kinesis</strong> を使う</li>
+<li>特定の 1 対 1 通信で十分な場合（SNS は 1 対多が前提）</li>
+<li>応答（Response）が必要な RPC 的な処理 → SNS は Fire-and-Forget</li>
+</ul>
+
+<hr>
+
+<h2>コアコンセプト</h2>
+
+<h3>Topic</h3>
+
+<p>Publisher がメッセージを送り込む論理チャネル。ARN で識別される。</p>
+
+<pre><code>arn:aws:sns:ap-northeast-1:123456789012:MyTopic</code></pre>
+
+<p>Standard Topic と FIFO Topic の 2 種類がある。FIFO は <code>.fifo</code> サフィックスが必須。</p>
+
+<h3>Subscription</h3>
+
+<p>Topic と配信先エンドポイントを結びつける設定。1 つの Topic に複数の Subscription を持てる。</p>
+
+<table>
+<thead>
+<tr><th>プロトコル</th><th>用途例</th></tr>
+</thead>
+<tbody>
+<tr><td><code>email</code></td><td>運用アラートを担当者メールへ</td></tr>
+<tr><td><code>sqs</code></td><td>非同期バッファ経由でマイクロサービスへ</td></tr>
+<tr><td><code>lambda</code></td><td>イベント駆動でサーバーレス処理</td></tr>
+<tr><td><code>https</code></td><td>外部 Webhook エンドポイントへ</td></tr>
+<tr><td><code>sms</code></td><td>緊急通知を SMS で</td></tr>
+</tbody>
+</table>
+
+<p>Subscription 作成後、<code>email</code> / <code>http</code> / <code>https</code> プロトコルは <strong>確認（confirm）</strong> が必要。SQS / Lambda は自動で確認される。</p>
+
+<h3>メッセージ構造</h3>
+
+<pre><code class="language-json">{
+  "Message": "本文テキスト",
+  "MessageAttributes": {
+    "type": {
+      "DataType": "String",
+      "StringValue": "order"
+    },
+    "priority": {
+      "DataType": "Number",
+      "StringValue": "1"
+    }
+  }
+}</code></pre>
+
+<p><code>MessageAttributes</code> はフィルタリングに使用する。</p>
+
+<h3>ファンアウトパターン</h3>
+
+<pre><code>          ┌─────────────┐
+          │  SNS Topic  │
+          └──────┬──────┘
+     ┌───────────┼───────────┐
+     ▼           ▼           ▼
+  SQS Queue  SQS Queue   Lambda
+ (在庫更新)  (メール配信) (監査ログ)</code></pre>
+
+<p>Publisher は Topic に Publish するだけ。各サービスが独立したキューを持つことで、一方の障害が他方に影響しない疎結合アーキテクチャを実現する。</p>
+
+<hr>
+
+<h2>主要な設定・API・パラメータ</h2>
+
+<h3>Publish API</h3>
+
+<pre><code class="language-python">import boto3
+
+sns = boto3.client("sns", region_name="ap-northeast-1")
+
+response = sns.publish(
+    TopicArn="arn:aws:sns:ap-northeast-1:123456789012:MyTopic",
+    Message="新しい提出が追加されました",
+    Subject="AtCoder 提出通知",          # Email の件名（任意）
+    MessageAttributes={
+        "type": {
+            "DataType": "String",
+            "StringValue": "submission"
+        }
+    }
+)
+# response["MessageId"] で配信 ID を確認</code></pre>
+
+<h3>CreateTopic</h3>
+
+<pre><code class="language-python">sns.create_topic(
+    Name="AtCoderSubmissions",           # FIFO の場合は "AtCoderSubmissions.fifo"
+    Attributes={
+        "FifoTopic": "false",            # FIFO にする場合は "true"
+        "ContentBasedDeduplication": "false"
+    }
+)</code></pre>
+
+<h3>Subscribe</h3>
+
+<pre><code class="language-python">sns.subscribe(
+    TopicArn="arn:aws:sns:...",
+    Protocol="sqs",
+    Endpoint="arn:aws:sqs:ap-northeast-1:123456789012:MyQueue",
+    Attributes={
+        "FilterPolicy": '{"type": ["submission", "order"]}'
+    }
+)</code></pre>
+
+<h3>フィルタポリシー (FilterPolicy)</h3>
+
+<p>Subscription 属性として JSON 文字列で設定する。</p>
+
+<pre><code class="language-json">{
+  "type": ["order"],
+  "priority": [{"numeric": ["&gt;=", 1]}]
+}</code></pre>
+
+<ul>
+<li>配列値はいずれかに一致すれば OK（OR 条件）</li>
+<li>複数キーはすべてが一致する必要がある（AND 条件）</li>
+<li>フィルタにマッチしないメッセージはその Subscription には配信されない（課金もされない）</li>
+</ul>
+
+<h3>FIFO トピック固有パラメータ</h3>
+
+<table>
+<thead>
+<tr><th>パラメータ</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>MessageGroupId</code></td><td>同じグループ内の順序を保証するキー</td></tr>
+<tr><td><code>MessageDeduplicationId</code></td><td>重複排除 ID（ContentBasedDeduplication が false の場合必須）</td></tr>
+</tbody>
+</table>
+
+<p>FIFO Topic に Subscribe できるのは <strong>FIFO SQS キューのみ</strong>。Email / SMS / Lambda などは FIFO Topic には使えない。</p>
+
+<hr>
+
+<h2>よくある落とし穴・誤解</h2>
+
+<p><strong>1. SNS で「メッセージを保持できる」と思い込む</strong><br>
+SNS はメッセージを保持しない。配信失敗時のリトライはあるが、永続化は SQS の役割。確実に処理させたい場合は SNS → SQS → Consumer の構成にする。</p>
+
+<p><strong>2. Email / HTTP Subscription の確認を忘れる</strong><br>
+Subscribe 直後は <code>PendingConfirmation</code> 状態。確認メールのリンクをクリックしないと配信されない。IaC で自動化しにくい点に注意。</p>
+
+<p><strong>3. フィルタポリシーが "Message" 本文に効かないと気づかない</strong><br>
+FilterPolicy は <code>MessageAttributes</code> に対して機能する。メッセージ本文（JSON でも）のフィールドに対してはデフォルトではフィルタできない。<code>FilterPolicyScope: "MessageBody"</code> を設定すれば本文ベースにできる（2023年〜）。</p>
+
+<p><strong>4. FIFO Topic + Lambda の組み合わせは不可</strong><br>
+FIFO Topic は SQS FIFO キューのみ Subscription 可能。Lambda を使いたい場合は SNS(Standard) → SQS FIFO → Lambda のチェーンにする必要がある。</p>
+
+<p><strong>5. クロスアカウント配信時のポリシー漏れ</strong><br>
+別アカウントの SQS に配信する場合、SQS 側のアクセスポリシーで SNS からの <code>SendMessage</code> を明示的に許可しないと失敗する。</p>
+
+<p><strong>6. メッセージサイズの 256 KB 制限</strong><br>
+大きなペイロードを送りたい場合は S3 に保存して S3 オブジェクトの参照（URL/ARN）だけを SNS で配信するパターン（SNS Extended Client Library）を使う。</p>
+
+<hr>
+
+<h2>このプロジェクト（AtCoder 復習）での使いどころ</h2>
+
+<p>現在の Phase 1 MVP は Lambda が直接処理を完結させているが、Phase 10 では非同期通知とファンアウトを導入する場面として SNS が活きる。</p>
+
+<table>
+<thead>
+<tr><th>ユースケース</th><th>構成案</th></tr>
+</thead>
+<tbody>
+<tr><td>提出データ取得完了の通知</td><td><code>sync_submissions</code> Lambda が SNS Publish → Email で管理者通知 &amp; SQS で後続処理</td></tr>
+<tr><td>学習達成アラート</td><td>正解率閾値を超えたら SNS → Email / SMS でユーザーへ通知</td></tr>
+<tr><td>バックエンド間ファンアウト</td><td>採点完了イベントを SNS → SQS(分析用) + SQS(ランキング更新用) に同時配信</td></tr>
+</tbody>
+</table>
+
+<p>具体的には <code>sync_submissions/handler.py</code> の完了後に <code>sns.publish()</code> を 1 行追加するだけで、Email 通知と SQS バッファへの同時配信が実現できる。Publisher 側のコードは 1 箇所のまま、Subscriber を増やすだけでスケールする点が SNS の最大の利点。</p>
+
+<hr>
+
+<h2>デモで体験したこと</h2>
+
+<p><code>docs/learning/phase10/demo/index.html</code> では、中央の SNS Topic から Email / SMS / SQS / Lambda / HTTP の各 Subscription ノードへメッセージがファンアウトするアニメーションを確認した。「発行 (Publish)」を押すと <code>.flow-node.active → ok</code> の状態遷移で全 Subscriber への配信が可視化され、Pub/Sub が Push 型であることが直感的に理解できる。</p>
+
+<p>各 Subscription に付属するフィルタポリシーエディタで <code>{"type": ["order"]}</code> のように属性条件を設定すると、属性が一致する Subscriber にのみ配信アニメーションが流れる。これにより「Publisher 側は何も変えなくても Subscriber 側のフィルタ設定で受信を制御できる」という非対称な責務分担が体験できた。SNS → 複数 SQS のファンアウト構成では各キューノードが独立して <code>.ok</code> になる様子から、一方のキューが詰まっても他方に影響しない疎結合の実感が得られた。</p>
+
+<hr>
+
+<h2>公式ドキュメント（出典）</h2>
+
+<ul>
+<li>Amazon SNS とは何ですか — <a href="https://docs.aws.amazon.com/sns/latest/dg/welcome.html">https://docs.aws.amazon.com/sns/latest/dg/welcome.html</a>（閲覧日 2026-05-31）</li>
+<li>Amazon SNS の一般的なシナリオ — <a href="https://docs.aws.amazon.com/sns/latest/dg/sns-common-scenarios.html">https://docs.aws.amazon.com/sns/latest/dg/sns-common-scenarios.html</a>（閲覧日 2026-05-31）</li>
+<li>Amazon SNS メッセージフィルタリング — <a href="https://docs.aws.amazon.com/sns/latest/dg/sns-message-filtering.html">https://docs.aws.amazon.com/sns/latest/dg/sns-message-filtering.html</a>（閲覧日 2026-05-31）</li>
+<li>Amazon SNS FIFO トピック — <a href="https://docs.aws.amazon.com/sns/latest/dg/sns-fifo-topics.html">https://docs.aws.amazon.com/sns/latest/dg/sns-fifo-topics.html</a>（閲覧日 2026-05-31）</li>
+</ul>
+
+<hr>
+
+<h2>関連・発展サービス</h2>
+
+<h3>SNS → SQS ファンアウトの本質</h3>
+
+<p>SNS の最大価値は「1 回の <code>Publish</code> で N 個のエンドポイントに同時配信できる」点にある。SQS 単体ではコンシューマが 1 本のポーリングを占有するため、同じメッセージを複数サービスが並列処理できない。SNS をハブにすることでキュー数を増やし、コンシューマを独立してスケールさせられる。</p>
+
+<pre><code>                ┌── SQS(fulfillment) ── Lambda/EC2 Worker
+SNS Topic ──── ┼── SQS(analytics)   ── Kinesis Firehose Consumer
+                ├── SQS(wholesale)   ── B2B 連携 Worker
+                └── Lambda(express)  ── 即時通知(Push)</code></pre>
+
+<p><strong>設計の勘所</strong>:</p>
+<ul>
+<li>SQS の <code>visibility_timeout</code> は Lambda の <code>timeout</code> の <strong>6 倍以上</strong>に設定するのが AWS 推奨。Lambda が処理中にタイムアウトするとメッセージが再表示され二重処理になる。</li>
+<li>各キューが独立しているため、analytics キューが詰まっても fulfillment キューには影響しない。障害が局所化されることが疎結合の最大のメリット。</li>
+</ul>
+
+<h3>SNS → Kinesis Data Firehose</h3>
+
+<p><code>protocol = "firehose"</code> で購読できる(2022 年 GA)。大量イベントを S3 に直送しつつ Athena で分析するパターン。Lambda 変換を噛ませなくてよいため運用コストが低い。</p>
+
+<pre><code>SNS Topic
+  └── Firehose Delivery Stream
+        ├── S3 (Parquet 変換 / Glue Data Catalog 統合)
+        └── (オプション) OpenSearch / Redshift Serverless</code></pre>
+
+<p>Terraform では <code>protocol = "firehose"</code> + <code>subscription_role_arn</code> を指定する。SNS が Firehose へ書き込む際のプリンシパルは <code>sns.amazonaws.com</code> になるので、Firehose の信頼ポリシーに <code>sns.amazonaws.com</code> を追加し忘れると <code>InvalidParameter: Invalid parameter: RoleArn</code> が出て詰まる。</p>
+
+<pre><code class="language-hcl">resource "aws_sns_topic_subscription" "to_firehose" {
+  topic_arn            = aws_sns_topic.orders.arn
+  protocol             = "firehose"
+  endpoint             = aws_kinesis_firehose_delivery_stream.s3.arn
+  subscription_role_arn = aws_iam_role.sns_to_firehose.arn
+}</code></pre>
+
+<h3>FIFO トピック ― いつ使うか・何が変わるか</h3>
+
+<p><strong>いつ使うか</strong>: 「在庫引き当て → 出荷指示」のように、後続の処理順序が業務的に意味を持つ場合。標準トピックは順序を保証しない。</p>
+
+<p><strong>制約と注意</strong>:</p>
+
+<table>
+<thead>
+<tr><th>項目</th><th>標準トピック</th><th>FIFO トピック</th></tr>
+</thead>
+<tbody>
+<tr><td>スループット</td><td>実質無制限</td><td>300 msg/sec(バッチで 3,000 msg/sec)</td></tr>
+<tr><td>購読可能プロトコル</td><td>全プロトコル</td><td>FIFO SQS / Lambda のみ</td></tr>
+<tr><td>重複排除</td><td>なし</td><td>コンテンツベース or <code>MessageDeduplicationId</code></td></tr>
+<tr><td>順序保証</td><td>なし</td><td><code>MessageGroupId</code> 単位で保証</td></tr>
+</tbody>
+</table>
+
+<p>FIFO + SSE-KMS を組み合わせると KMS API 呼び出しがスループット制限に影響するため、KMS のリクエストレートクォータ(<code>GenerateDataKey</code> / <code>Decrypt</code>)をあらかじめ Service Quotas で確認しておくこと。</p>
+
+<h3>EventBridge との使い分け</h3>
+
+<p>SNS と EventBridge はどちらも Pub/Sub 的に使えるが、適切な使い所が異なる。</p>
+
+<table>
+<thead>
+<tr><th>観点</th><th>SNS</th><th>EventBridge</th></tr>
+</thead>
+<tbody>
+<tr><td>ルーティング粒度</td><td>MessageAttributes ベース</td><td>JSON 全フィールド(ネスト可)</td></tr>
+<tr><td>ターゲット上限</td><td>購読数に比例(実質無制限)</td><td>ルールごとに最大 5 ターゲット</td></tr>
+<tr><td>スキーマレジストリ</td><td>なし</td><td>あり(コード生成も可)</td></tr>
+<tr><td>クロスアカウント</td><td>トピックポリシーで可</td><td>バス間フォワード</td></tr>
+<tr><td>SaaS 統合</td><td>なし</td><td>Shopify / Zendesk 等の Partner Event Source</td></tr>
+<tr><td>遅延</td><td>低(ミリ秒)</td><td>低〜中(ミリ秒〜数百 ms)</td></tr>
+</tbody>
+</table>
+
+<p><strong>実務の判断基準</strong>: アプリ内部の単純なファンアウト(SQS/Lambda へ配信)なら SNS が軽量で最適。SaaS イベントの取り込み・CloudWatch/Config/CodePipeline のイベント処理・複雑なルーティングなら EventBridge。両者を組み合わせた「EventBridge → SNS → SQS」の multi-hop も実在する。</p>
+
+<h3>モバイルプッシュ / SMS / Email の落とし穴</h3>
+
+<p>SNS はモバイル通知(APNs/FCM)・SMS・Email も購読プロトコルとして持つ。本格利用前に知っておくべき落とし穴:</p>
+
+<ul>
+<li><strong>SMS sandbox</strong>: デフォルトでは sandbox モードで、事前登録した電話番号へしか送れない。本番昇格(Production Access リクエスト)が必要。</li>
+<li><strong>SMS コスト爆発リスク</strong>: 東京リージョン向け SMS は $0.07〜/通。ループバグで数万通送ると数十万円の請求が来る。<code>SMSMonthToDateSpentUSD</code> に月次アラームを必ず設定する。</li>
+<li><strong>Email の IaC 問題</strong>: <code>protocol = "email"</code> は確認メールのリンクをクリックしないと有効にならないため、完全自動化が崩れる。本番では Email を Lambda 経由の Slack Webhook に置き換えるのがベストプラクティス。</li>
+</ul>
+
+<hr>
+
+<h2>セキュリティ課題と対策</h2>
+
+<h3>トピックポリシーの設計 ― デフォルトは過剰権限</h3>
+
+<p>SNS トピックのデフォルトポリシーは <code>Principal: "*"</code> + <code>Condition: {AWS:SourceOwner: "&lt;account_id&gt;"}</code> で同一アカウント内の全 IAM エンティティに Publish/Subscribe を許可する。これは過剰。推奨設定は Publish 許可プリンシパルを明示列挙し、それ以外はデフォルト拒否。</p>
+
+<pre><code class="language-json">{
+  "Statement": [
+    {
+      "Sid": "DenyPublicPublish",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "sns:Publish",
+      "Resource": "*",
+      "Condition": {
+        "StringNotEquals": {
+          "aws:PrincipalArn": [
+            "arn:aws:iam::123456789012:role/phase10-publisher"
+          ]
+        }
+      }
+    }
+  ]
+}</code></pre>
+
+<p>Terraform では <code>aws_iam_policy_document</code> + <code>data.json</code> を <code>aws_sns_topic</code> の <code>policy</code> に渡す。</p>
+
+<h3>SSE-KMS の二重壁 ― つまずきポイント</h3>
+
+<p>SNS の SSE-KMS は「SNS インフラ内に静止している間」のみ暗号化する。SNS → SQS の転送時は SQS 側のキーで再暗号化される。このとき <strong>SNS サービスプリンシパル</strong> が SQS キーに対して <code>GenerateDataKey</code> を呼ぶため、KMS キーポリシーには <code>sns.amazonaws.com</code> と <code>sqs.amazonaws.com</code> の両方を許可しなければならない。片方だけだと <code>KMS.KMSDisabledException</code> で購読が無音に失敗する。</p>
+
+<pre><code class="language-hcl"># キーポリシーに両プリンシパルを列挙する(phase10/main.tf の実装例)
+{
+  Sid    = "SNSEncrypt"
+  Effect = "Allow"
+  Principal = { Service = "sns.amazonaws.com" }
+  Action   = ["kms:GenerateDataKey*", "kms:Decrypt"]
+  Resource = "*"
+},
+{
+  Sid    = "SQSEncrypt"
+  Effect = "Allow"
+  Principal = { Service = "sqs.amazonaws.com" }
+  Action   = ["kms:GenerateDataKey*", "kms:Decrypt"]
+  Resource = "*"
+}</code></pre>
+
+<p>症状が <code>NumberOfNotificationsFailed</code> の増加として現れるため、このメトリクスの監視は必須。</p>
+
+<h3>フィルタポリシーはアクセス制御ではない</h3>
+
+<p>よくある誤解: 「フィルタにかからないメッセージはあのキューに届かないから安全」。</p>
+
+<p>フィルタポリシーは <strong>配信最適化</strong> の機能であり、アクセス制御ではない。本当にアクセスを制限したいなら、SQS キューポリシーの <code>Condition</code> で <code>aws:SourceArn</code> を特定の SNS トピックに限定する。</p>
+
+<pre><code class="language-json">{
+  "Condition": {
+    "ArnEquals": {
+      "aws:SourceArn": "arn:aws:sns:ap-northeast-1:123456789012:phase10-orders"
+    }
+  }
+}</code></pre>
+
+<h3>購読 DLQ ― 「無音の失敗」問題</h3>
+
+<p>SNS が SQS/Lambda への配信を 3 回リトライして失敗すると、デフォルトではメッセージが<strong>完全に消える</strong>。これを「無音の失敗(silent failure)」と呼ぶ。</p>
+
+<p>DLQ は購読(サブスクリプション)ごとに独立して設定する(トピックレベルではなく)。Terraform では <code>redrive_policy</code> を <code>aws_sns_topic_subscription</code> に付ける。</p>
+
+<pre><code class="language-hcl">resource "aws_sns_topic_subscription" "fulfillment" {
+  ...
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.dlq["fulfillment"].arn
+  })
+}</code></pre>
+
+<p>本番では <code>ApproximateNumberOfMessagesVisible &gt; 0</code> で DLQ アラームを仕掛け、PagerDuty/Slack に通知する運用が必須。</p>
+
+<h3>クロスアカウント購読のリスク</h3>
+
+<p>別アカウントの SNS トピックを購読する場合、トピックポリシーに他アカウントの ARN を追加する必要がある。ソースアカウントを <code>Condition</code> で固定しないと、そのアカウントの任意ロールが Publish できてしまう。</p>
+
+<pre><code class="language-json">"Condition": {
+  "StringEquals": { "aws:SourceAccount": "999999999999" },
+  "ArnLike":      { "aws:SourceArn": "arn:aws:sns:*:999999999999:trusted-topic" }
+}</code></pre>
+
+<p>必ずアカウント ID と ARN パターンの両方を指定して二重に縛ること。</p>
+
+<h3>VPC エンドポイントでプライベート通信</h3>
+
+<p>VPC 内の Lambda/EC2 から SNS に Publish するとき、デフォルトではインターネット経由(NAT Gateway)が必要になる。VPC エンドポイント(Interface 型)を使えば AWS バックボーンネットワーク内に閉じた通信になり、NAT Gateway コストを削減しつつセキュリティも向上する。</p>
+
+<pre><code class="language-hcl">resource "aws_vpc_endpoint" "sns" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.aws_region}.sns"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = aws_subnet.private[*].id
+  security_group_ids  = [aws_security_group.endpoints.id]
+  private_dns_enabled = true
+}</code></pre>
+
+<p>VPC エンドポイントポリシーで <code>sns:Publish</code> の対象トピック ARN を絞ることで、エンドポイントを経由できるアクションをさらに限定できる。</p>
+
+<hr>
+
+<h2>インフラ応用パターン</h2>
+
+<h3>パターン A: 通知基盤(Operational Alerting)</h3>
+
+<p>CloudWatch Alarm → SNS → 複数出口のパターンは AWS 監視の定番構成。</p>
+
+<pre><code>CloudWatch Alarm
+  └── SNS Topic (alert-hub)
+        ├── Email 購読    ─ on-call エンジニア
+        ├── SQS 購読      ─ ITSM チケット自動起票 Lambda
+        └── Lambda 購読   ─ Slack Webhook 通知</code></pre>
+
+<p><strong>実装の勘所</strong>:</p>
+<ul>
+<li>CloudWatch Alarm が SNS に Publish するには <code>cloudwatch.amazonaws.com</code> を Publish 許可するトピックポリシーが必要。IaC で書く際に忘れやすい。</li>
+<li>Slack 通知に使う Webhook URL は Lambda 環境変数に直書きせず、SSM Parameter Store(SecureString)から起動時に取得する設計にする。</li>
+</ul>
+
+<pre><code class="language-python">import boto3
+ssm = boto3.client("ssm")
+WEBHOOK_URL = ssm.get_parameter(
+    Name="/phase10/slack_webhook", WithDecryption=True
+)["Parameter"]["Value"]</code></pre>
+
+<h3>パターン B: イベントドリブン マイクロサービス</h3>
+
+<pre><code>Order Service → SNS (orders) → SQS(per-service) → Inventory / Billing / Shipping</code></pre>
+
+<p>各サービスは自分のキューだけをポーリングする。サービス間の直接呼び出しを排除することで、Billing が落ちても Order Service に影響しない。</p>
+
+<p><strong>スケール設計の注意点</strong>:</p>
+<ul>
+<li>SQS + Lambda のオートスケーリングは <code>ReservedConcurrentExecutions</code> で上限を設け、バースト時のコスト爆発と下流 DB への過負荷を防ぐ。</li>
+<li>Lambda Event Source Mapping の <code>MaximumConcurrency</code> をキューのポーリング concurrency に合わせること。</li>
+</ul>
+
+<h3>パターン C: マルチリージョン DR</h3>
+
+<p>SNS はリージョナルサービスのため、リージョン障害に備えて冗長化するにはアプリ側のフェイルオーバーロジックが必要になる。実践的なアプローチは EventBridge Global Endpoints(2022 GA)と組み合わせて CloudWatch がリージョン間フェイルオーバーを自動化する形。SNS 単独でマルチリージョン HA を組む場合は Publisher 側で複数リージョンへ二重送信するのが現実的。</p>
+
+<h3>パターン D: SNS Message Archiving (2024 GA)</h3>
+
+<p><code>archive_policy</code> を設定すると、過去最大 365 日間のメッセージを再送(replay)できる。Kinesis Data Streams の「シャード巻き戻し」と同様の概念。障害後に SQS コンシューマを再起動したとき、すでに削除された SQS メッセージを SNS 側から再配信して補完できる。</p>
+
+<pre><code class="language-hcl">resource "aws_sns_topic" "orders_archived" {
+  name              = "phase10-orders-archived"
+  kms_master_key_id = aws_kms_key.phase10.arn
+  archive_policy    = jsonencode({ MessageRetentionPeriod = 30 })
+  # sandbox では 1 日に短縮して試すと destroy 前の課金を最小化できる
+}</code></pre>
+
+<h3>パターン E: Large Message Payloads(Extended Client Library)</h3>
+
+<p>SNS のメッセージサイズ上限は <strong>256 KB</strong>。超える場合は本体を S3 に格納し、メッセージには S3 ポインタだけを入れる透過的な回避策がある。</p>
+
+<pre><code class="language-bash">pip install amazon-sns-extended-client</code></pre>
+
+<pre><code class="language-python">import boto3
+from sns_extended_client import SNSExtendedClientSession
+
+session = SNSExtendedClientSession()
+sns = session.client("sns", region_name="ap-northeast-1")
+sns.meta.config = {
+    "large_payload_support": "my-bucket",
+    "always_through_s3": False,   # 256 KB 超えた場合のみ S3 に退避
+}
+sns.publish(TopicArn="...", Message=large_json_string)</code></pre>
+
+<p><strong>注意</strong>: 購読側(SQS コンシューマ)も同ライブラリでポーリングしないと、S3 ポインタが含まれる JSON をそのまま処理してしまう。Publisher と Subscriber でライブラリのバージョンを揃えること。</p>
+
+<h3>パターン F: E2E 死活監視(CloudWatch Synthetics Canary)</h3>
+
+<p>Canary を定期実行して「SNS Publish → SQS Receive → メッセージ一致」をエンドツーエンドで検証する高度な監視パターン。</p>
+
+<pre><code>Canary (rate: 5 min)
+  1. SNS に test メッセージを Publish
+  2. SQS をポーリングして受信確認
+  3. 到達遅延を CloudWatch カスタムメトリクスに記録
+  4. タイムアウトなら ALARM → PagerDuty</code></pre>
+
+<p>単なるメトリクス監視では「SNS が Publish を受け付けた」は分かっても「エンドポイントまで届いた」は確認できない。Canary で確認することで購読経路の断線を能動的に検出できる。</p>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase10</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase10</span></li>
+<li><b>負荷生成</b> — topic に publish（属性付きでフィルタを試す）<span class="cmd">make sandbox-load-phase10</span></li>
+<li><b>観測</b> — 発行/配信/失敗数、フィルタポリシーの効き<span class="cmd">make sandbox-watch-phase10</span><div class="tstamp">⏱ 反映 数分</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase10</span></li>
+</ol>
+<p class="note warn">⚠ KMS を使う Phase は destroy 後も 7 日間の削除保留期間がある（ごく僅かな残コスト）。</p>
+</section>
+<div class="foot">← <a href="index.html">Phase 10 ルーター</a> ／ <a href="main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main>
+</body>
+</html>

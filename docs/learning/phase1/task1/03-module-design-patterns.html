@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 教材</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}
+.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;line-height:1.5;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}
+h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}img{max-width:100%}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}
+.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style>
+</head>
+<body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 教材 · <a href="../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Terraformモジュール分割の設計パターン</h1>
+
+<h2>概要</h2>
+
+<p><code>terraform/modules/</code> をどういう単位で切るかの設計論。現在このプロジェクトは「AWSサービス単位」（<code>modules/cognito/</code>, <code>modules/dynamodb/</code> ...）で切っているが、これは唯一の正解ではなく、複数ある流派の1つ。プロジェクト規模・目的に応じて選ぶべき。</p>
+
+<h2>解説</h2>
+
+<h3>主な流派</h3>
+
+<h4>流派1: AWSサービス単位で切る（現在このプロジェクト）</h4>
+
+<pre><code>modules/
+├── cognito/
+├── api_gateway/
+├── lambda/
+├── dynamodb/
+└── s3/</code></pre>
+
+<p><strong>特徴</strong>:</p>
+<ul>
+  <li>直感的、初学者に優しい</li>
+  <li>チュートリアルや AWS公式ブログ に多いパターン</li>
+  <li>HashiCorp のコミュニティモジュール (<code>terraform-aws-modules</code>) もこの形</li>
+</ul>
+
+<p><strong>向いてる場面</strong>:</p>
+<ul>
+  <li>汎用モジュールとして公開・再利用する場合</li>
+  <li>学習プロジェクト</li>
+</ul>
+
+<p><strong>弱点</strong>:</p>
+<ul>
+  <li>プロジェクトが大きくなると、<code>lambda/</code> に複数のLambda関数が混在</li>
+  <li>「この機能を使うのに必要なリソースは？」が分散（1機能理解に複数モジュールを見る必要）</li>
+</ul>
+
+<h4>流派2: 機能/ドメイン単位で切る（logical component方式）</h4>
+
+<pre><code>modules/
+├── auth/              # Cognito + IAM Role
+├── user_api/          # API Gateway route + Lambda + IAM
+├── submission_sync/   # EventBridge + Lambda + DynamoDB access policy
+└── storage/           # DynamoDB + S3 + バックアップ設定</code></pre>
+
+<p><strong>特徴</strong>:</p>
+<ul>
+  <li>1つのビジネス機能 = 1モジュール</li>
+  <li>関連リソースを1箇所にまとめる → 認知負荷低減</li>
+  <li>DDD やマイクロサービス設計の発想に近い</li>
+  <li>Gruntwork や大規模エンタープライズでよく見られる</li>
+</ul>
+
+<p><strong>向いてる場面</strong>:</p>
+<ul>
+  <li>プロダクション運用の本格的IaC</li>
+  <li>複数人チームで責任分界したい場合</li>
+</ul>
+
+<p><strong>弱点</strong>:</p>
+<ul>
+  <li>モジュール境界の設計が難しい（「このIAMロールはどのモジュールに入れる？」論争）</li>
+  <li>同じAWSサービスの設定が複数モジュールに散らばる</li>
+</ul>
+
+<h4>流派3: 階層的ハイブリッド（primitives + services）</h4>
+
+<pre><code>modules/
+├── primitives/              ← 低レベル: AWSサービス単位
+│   ├── dynamodb_table/
+│   ├── lambda_function/
+│   └── api_route/
+└── services/                ← 高レベル: 機能単位で primitives を組み合わせる
+    ├── user_management/
+    └── submission_pipeline/</code></pre>
+
+<p><strong>特徴</strong>:</p>
+<ul>
+  <li>Gruntwork の推奨パターン</li>
+  <li>再利用性（primitives）+ ドメイン性（services）の両取り</li>
+  <li>業界で "Service Module" と "Infrastructure Module" と呼ばれる</li>
+</ul>
+
+<p><strong>弱点</strong>:</p>
+<ul>
+  <li>設計コストが高い。小さなプロジェクトには過剰</li>
+</ul>
+
+<h3>AWS/Terraform界隈のデファクトは？</h3>
+
+<p>明確なデファクトはなく「場合による」が正直な答え。傾向:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>プロジェクト規模</th>
+      <th>よく見るパターン</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>個人開発 / 学習 / スモール</td>
+      <td>流派1（AWSサービス単位）が多数派</td>
+    </tr>
+    <tr>
+      <td>中規模スタートアップ</td>
+      <td>流派1+2のハイブリッド（読みやすさ重視）</td>
+    </tr>
+    <tr>
+      <td>大規模エンタープライズ</td>
+      <td>流派3 に収束していく傾向</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>HashiCorp 公式ドキュメントも「Standard Module Structure」は定めているが、<strong>何でモジュールを切るかの指針は示していない</strong>。設計判断はプロジェクト次第。</p>
+
+<h3>このプロジェクトでの評価</h3>
+
+<p>現在の「AWSサービス単位」分割は学習目的なら最適解に近い:</p>
+
+<ol>
+  <li>Phase ごとに新規AWSサービスを1つずつ学ぶ目的と一致</li>
+  <li>「Cognito を学ぶ = <code>modules/cognito/</code> を読む」がシンプル</li>
+  <li>流派2・3 への変更は、機能が増えてからのリファクタで十分間に合う</li>
+</ol>
+
+<h3>後々問題になりそうな点（先読み）</h3>
+
+<h4>IAMロールをどこに書く？</h4>
+
+<p>Lambda が DynamoDB を読み書きするとき、IAMロールが必要。このロール定義は:</p>
+
+<ul>
+  <li><code>modules/lambda/</code> に書く？（アクセス先情報をモジュール外から注入する必要）</li>
+  <li><code>modules/dynamodb/</code> に書く？（使う側のLambdaを知る必要）</li>
+  <li>別モジュール <code>modules/iam/</code> を作る？</li>
+</ul>
+
+<p>正解はないが、流派1で厳密にやると<strong>循環依存っぽい問題</strong>が発生しやすい。</p>
+
+<h4>Lambda関数が複数になったとき</h4>
+
+<p><code>sync_submissions</code>, <code>get_submissions</code>, <code>get_problems</code> ... と増えると、<code>modules/lambda/</code> をさらに細分化するか、流派2風に機能単位で切り直すかの判断が迫られる。</p>
+
+<h3>今後の方針</h3>
+
+<p>このままの構造で進めつつ、<strong>Lambda が複数関数を持つ Task 3 あたりで設計を見直すタイミングを取る</strong>のがおすすめ。先回りして流派3にするのは過剰設計。</p>
+
+<h2>Q&amp;A</h2>
+
+<p><strong>Q: 今のmodulesってまさにAWSの機能名で切ってるわけだけど、これは適切なディレクトリ分け、名前づけの方法なの？AWS界隈ではそうするの？</strong></p>
+
+<p>「AWS機能名で切る」は唯一の正解ではなく、複数ある流派の1つ。AWS/Terraform界隈に明確なデファクトはなく、プロジェクト規模と目的に応じて選ぶ。</p>
+
+<ul>
+  <li>小規模・学習プロジェクト → 流派1（AWSサービス単位）が多数派</li>
+  <li>中規模 → 流派1+2ハイブリッド</li>
+  <li>大規模エンタープライズ → 流派3（primitives + services）に収束</li>
+</ul>
+
+<p>HashiCorp 公式も「何でモジュールを切るか」の指針は示しておらず、設計はプロジェクト次第。</p>
+
+<p>このプロジェクトの現状（流派1）は学習目的に最適。機能が増えた段階（Lambda が複数関数を持つTask 3頃）で見直すのが現実的。</p>
+
+<h2>関連</h2>
+
+<ul>
+  <li><a href="01-dynamodb-keys.md">01-dynamodb-keys.md</a> - DynamoDBのキー設計</li>
+  <li><a href="02-terraform-code-walkthrough.md">02-terraform-code-walkthrough.md</a> - Terraformコード解説</li>
+  <li><a href="reference/terraform-basics.md">reference/terraform-basics.md</a> - Terraform基礎リファレンス</li>
+</ul>
+
+<hr>
+
+<p><em>Saved at 2026-04-18 via /learning-flow:topic</em></p>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase1</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase1</span></li>
+<li><b>負荷生成</b> — 無認証トラフィックを生成（認証あり負荷は TEST_PASSWORD=... を付ける）<span class="cmd">make sandbox-load-phase1</span></li>
+<li><b>観測</b> — API GW の Count/4XXError/Latency、Lambda、DynamoDB、Cognito メトリクス<span class="cmd">make sandbox-watch-phase1</span><div class="tstamp">⏱ 反映まで 2〜5 分</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase1</span></li>
+</ol>
+<p class="note warn">⚠ phase1 は本番スタックを観測するダッシュボードのみ作成（本番アプリは別途デプロイ済みが前提）。</p>
+</section>
+<div class="foot">← <a href="../index.html">Phase 1 ルーター</a> ／ <a href="../main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main>
+</body>
+</html>

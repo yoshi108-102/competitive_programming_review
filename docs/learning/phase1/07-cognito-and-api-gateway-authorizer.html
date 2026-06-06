@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 教材</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}
+.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;line-height:1.5;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}
+h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}img{max-width:100%}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}
+.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style>
+</head>
+<body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 教材 · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>07. Cognito User Pool と API Gateway Authorizer</h1>
+
+<blockquote>
+<p>出典:</p>
+<ul>
+<li><a href="https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-identity-pools.html">Amazon Cognito User Pools - Developer Guide</a></li>
+<li><a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/apigateway-integrate-with-cognito.html">API Gateway - Control access using Cognito User Pools</a></li>
+<li><a href="https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-using-tokens-with-identity-providers.html">Using tokens with user pools (id token vs access token)</a></li>
+<li><a href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cognito_user_pool">aws_cognito_user_pool - Terraform</a></li>
+</ul>
+<p>閲覧日 2026-05-09</p>
+</blockquote>
+
+<h2>概要</h2>
+
+<p>このプロジェクトは Cognito を「認証の入口」として使う。フロー:</p>
+
+<pre><code>[ブラウザ] → Cognito Hosted UI / Amplify SDK でログイン → JWT 取得
+   ↓ Authorization: Bearer &lt;idToken&gt;
+[API Gateway] ← Cognito Authorizer が JWT を検証 → 通れば Lambda へ
+   ↓
+[Lambda] event.requestContext.authorizer.claims.sub から user_id 取得</code></pre>
+
+<p>ここで押さえる学習トピック:</p>
+
+<ul>
+<li>User Pool / User Pool Client の責務分離</li>
+<li>JWT の 3 種類 (id / access / refresh) と「<strong>どれが API Gateway で検証されるか</strong>」</li>
+<li>API Gateway Cognito Authorizer の動作</li>
+<li>Self-signup / admin-create の運用判断</li>
+</ul>
+
+<h2>1. User Pool と User Pool Client</h2>
+
+<p>Cognito の「アカウント管理」は 2 段構成:</p>
+
+<table>
+<thead>
+<tr><th>リソース</th><th>役割</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>User Pool</strong></td><td>ユーザーアカウントの集合体 (DB 相当)。パスワードポリシー、属性スキーマ、メール設定を持つ</td></tr>
+<tr><td><strong>User Pool Client</strong></td><td>アプリケーション側からの接続点。認証フロー (SRP / PASSWORD)、トークン有効期限、コールバック URL を持つ</td></tr>
+</tbody>
+</table>
+
+<p>1 User Pool に複数 Client がぶら下がる構造（モバイル用 / Web 用 / 管理者用 で別 Client を作るパターン）。</p>
+
+<p>このプロジェクトの設定 (<code>terraform/modules/cognito/main.tf</code>):</p>
+
+<pre><code>resource "aws_cognito_user_pool" "main" {
+  admin_create_user_config {
+    allow_admin_create_user_only = true   # ← セルフサインアップ無効
+  }
+  username_attributes      = ["email"]
+  auto_verified_attributes = ["email"]
+  password_policy { ... }
+}
+
+resource "aws_cognito_user_pool_client" "main" {
+  user_pool_id = aws_cognito_user_pool.main.id
+  generate_secret = false                  # ← SPA 向け (Cookie 不可)
+  explicit_auth_flows = [
+    "ALLOW_USER_SRP_AUTH",                 # ← Secure Remote Password
+    "ALLOW_REFRESH_TOKEN_AUTH",
+  ]
+}</code></pre>
+
+<p>設計上の選択:</p>
+
+<ul>
+<li><strong><code>generate_secret = false</code></strong>: SPA (ブラウザ JS) ではクライアントシークレットを安全に保管できないため、必ず無効化。サーバサイドアプリなら有効化 (false にしない)</li>
+<li><strong><code>ALLOW_USER_SRP_AUTH</code></strong>: パスワードを生で送らない安全な認証フロー。CLI 検証では追加で <code>ALLOW_USER_PASSWORD_AUTH</code> が要るが、本番では SRP のみが望ましい</li>
+<li><strong><code>allow_admin_create_user_only = true</code></strong>: 自己登録を禁止して招待制に。MVP 的には管理者が <code>aws cognito-idp admin-create-user</code> でユーザーを作る運用</li>
+</ul>
+
+<h2>2. JWT トークン 3 種類の使い分け</h2>
+
+<p>Cognito ログイン成功時、Client は <strong>3 種類の JWT</strong> を返す:</p>
+
+<table>
+<thead>
+<tr><th>トークン</th><th>内容</th><th>主な用途</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>ID Token</strong></td><td>ユーザー属性 (<code>sub</code>, <code>email</code>, ...) を含む</td><td>アプリが「誰がログインしているか」を知るため</td></tr>
+<tr><td><strong>Access Token</strong></td><td>スコープ情報 (OAuth リソース API を叩く時)</td><td>主に Cognito 自身の API (<code>/userInfo</code> 等) や OAuth で保護されたリソース</td></tr>
+<tr><td><strong>Refresh Token</strong></td><td>アクセス/ID トークンの再発行用</td><td>期限切れ時の再取得</td></tr>
+</tbody>
+</table>
+
+<h3>API Gateway の Cognito Authorizer は <strong>どちらを検証するか？</strong></h3>
+
+<p>公式の挙動: Cognito Authorizer は <strong>送られたトークンが ID Token か Access Token かを判別して</strong>両方とも検証可能。
+ただし <strong><code>sub</code> クレーム以外のユーザー情報</strong> (<code>email</code>, <code>cognito:groups</code> 等) は <strong>ID Token にしか入っていない</strong>。</p>
+
+<p>このプロジェクトでは <code>event.requestContext.authorizer.claims.sub</code> 等を Lambda で使うので、<strong>ID Token を送る</strong>のが望ましい:</p>
+
+<pre><code>// frontend/app/lib/api.ts
+const session = await fetchAuthSession();
+const token = session.tokens?.idToken?.toString();   // ← idToken を選択</code></pre>
+
+<blockquote>
+<p>補足: Access Token を送って動くケースもあるが、<code>email</code> クレームが取れないなど挙動差が出る。<strong>ID Token に寄せる</strong>のが明確で安全。</p>
+</blockquote>
+
+<h3>トークン有効期限</h3>
+
+<p>このプロジェクトの設定:</p>
+<ul>
+<li>ID / Access Token: 1 時間</li>
+<li>Refresh Token: 30 日</li>
+</ul>
+
+<p>短い ID/Access の理由: <strong>盗まれた時の被害時間を最小化</strong>。Refresh Token は HttpOnly Cookie 等に保管して長めに持つ運用が一般的だが、Amplify は localStorage に保管する (XSS で盗まれるリスクと引き換えにシンプル)。</p>
+
+<h2>3. API Gateway Cognito Authorizer</h2>
+
+<p>API Gateway 側で JWT を検証して、検証 OK なら Lambda にルーティングする仕組み:</p>
+
+<pre><code>resource "aws_api_gateway_authorizer" "cognito" {
+  name            = "cognito-authorizer"
+  rest_api_id     = aws_api_gateway_rest_api.main.id
+  type            = "COGNITO_USER_POOLS"
+  provider_arns   = [var.cognito_user_pool_arn]
+  identity_source = "method.request.header.Authorization"
+}</code></pre>
+
+<p>各 Method で <code>authorization = "COGNITO_USER_POOLS"</code> + <code>authorizer_id = aws_api_gateway_authorizer.cognito.id</code> を指定すると、そのエンドポイントに <strong>JWT 検証ゲート</strong>が掛かる。</p>
+
+<h3>検証フロー</h3>
+
+<ol>
+<li>クライアントが <code>Authorization: Bearer eyJ...</code> でリクエスト</li>
+<li>API Gateway が Authorizer を呼び出す</li>
+<li>Authorizer は <strong>Cognito の JWKS エンドポイント</strong> から公開鍵を取得して JWT 署名を検証</li>
+<li><code>iss</code> (issuer) クレームが期待値 (<code>https://cognito-idp.&lt;region&gt;.amazonaws.com/&lt;user_pool_id&gt;</code>) と一致するか</li>
+<li><code>exp</code> (expiration) クレームが現在時刻より未来か</li>
+<li>すべて OK なら、デコード済みクレームを <code>event.requestContext.authorizer.claims</code> に乗せて Lambda に渡す</li>
+</ol>
+
+<p>検証失敗時:</p>
+<ul>
+<li>トークン署名不正 → <strong>401 Unauthorized</strong></li>
+<li>トークン期限切れ → <strong>401 Unauthorized</strong></li>
+<li><code>Authorization</code> ヘッダ無し → <strong>401 Unauthorized</strong></li>
+</ul>
+
+<h3>Lambda 側からのクレーム参照</h3>
+
+<pre><code>def lambda_handler(event, context):
+    user_id = event["requestContext"]["authorizer"]["claims"]["sub"]
+    email   = event["requestContext"]["authorizer"]["claims"].get("email")
+    # ...</code></pre>
+
+<p><code>sub</code> は <strong>Cognito 内部で一意な UUID 形式の ID</strong>（例: <code>12345678-1234-1234-1234-123456789012</code>）。
+DB の主キーとして使うのに適している（メールアドレスは変更可能だが sub は不変）。</p>
+
+<h2>4. ユーザー作成の運用 (admin-create-user)</h2>
+
+<p><code>allow_admin_create_user_only = true</code> 設定下では、ユーザーを作るには AWS CLI / SDK 経由:</p>
+
+<pre><code>aws cognito-idp admin-create-user \
+  --user-pool-id "$USER_POOL_ID" \
+  --username "test@example.com" \
+  --temporary-password "TempPass123!" \
+  --message-action SUPPRESS
+
+aws cognito-idp admin-set-user-password \
+  --user-pool-id "$USER_POOL_ID" \
+  --username "test@example.com" \
+  --password "RealPass123!" \
+  --permanent</code></pre>
+
+<p><code>SUPPRESS</code> で確認メールを止め、<code>admin-set-user-password --permanent</code> で初回ログイン時のパスワード変更を不要にする（テスト用途）。</p>
+
+<p>本番運用では:</p>
+<ul>
+<li>Phase 1 では admin-create のみ</li>
+<li>後続 Phase でセルフサインアップ + 管理者承認制 や招待コード制 等への切り替えを検討</li>
+</ul>
+
+<h2>重要ポイント</h2>
+
+<ul>
+<li>Cognito は <strong>User Pool (アカウント DB) + User Pool Client (アプリ接続点)</strong> の 2 段</li>
+<li>SPA (ブラウザ JS) では <code>generate_secret = false</code> 必須（ブラウザに secret を置けない）</li>
+<li><strong>JWT は 3 種類 (id/access/refresh)</strong>。API Gateway での認可には <strong>ID Token</strong> を送る (sub 含む全ユーザークレームが乗る)</li>
+<li>API Gateway Cognito Authorizer は JWKS 経由で署名検証 + <code>iss</code>/<code>exp</code> チェック → 失敗で 401</li>
+<li>Lambda 側は <code>event.requestContext.authorizer.claims.sub</code> で内部 user_id を取得</li>
+<li><code>sub</code> は不変 UUID なので DB の主キーに使える（メールアドレスは可変なので不適）</li>
+<li><code>allow_admin_create_user_only = true</code> で招待制運用、<code>admin-create-user</code> + <code>admin-set-user-password --permanent</code> でユーザー作成</li>
+</ul>
+
+<h2>関連</h2>
+
+<ul>
+<li>実装: <a href="practice/frontend-api-client.md">practice/frontend-api-client.md</a> (Amplify v6 で fetchAuthSession から idToken 取得), <a href="practice/terraform-apply-walkthrough.md">practice/terraform-apply-walkthrough.md</a> (admin-create-user の手順)</li>
+<li>関連トピック: <a href="02-lambda-proxy-integration-and-cors.md">02-lambda-proxy-integration-and-cors.md</a> (<code>Authorization: Bearer</code> × CORS preflight の関係), <a href="06-api-gateway-rest-api-structure.md">06-api-gateway-rest-api-structure.md</a> (Authorizer の REST API への組み込み)</li>
+</ul>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase1</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase1</span></li>
+<li><b>負荷生成</b> — 無認証トラフィックを生成（認証あり負荷は TEST_PASSWORD=... を付ける）<span class="cmd">make sandbox-load-phase1</span></li>
+<li><b>観測</b> — API GW の Count/4XXError/Latency、Lambda、DynamoDB、Cognito メトリクス<span class="cmd">make sandbox-watch-phase1</span><div class="tstamp">⏱ 反映まで 2〜5 分</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase1</span></li>
+</ol>
+<p class="note warn">⚠ phase1 は本番スタックを観測するダッシュボードのみ作成（本番アプリは別途デプロイ済みが前提）。</p>
+</section>
+<div class="foot">← <a href="index.html">Phase 1 ルーター</a> ／ <a href="main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main>
+</body>
+</html>
