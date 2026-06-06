@@ -26,70 +26,61 @@ Phase 1 実装計画: `plans/phase1-mvp-implementation.md`
 
 ## 現在の進捗
 
-**Phase 1 / Task 17 + Task 18 (デプロイ実行待ち)**。Task 3〜16 のコード・教材は全て実装完了。
-ユーザー判断により lesson とまとめクイズは MVP 動作確認後に一括解説する方針 (`feedback_lesson_after_implementation.md`)。
+**Phase 1: コード・教材ともに実装完了。実 AWS デプロイ (Tasks 17/18) はユーザー実行待ち。**
 
-### Task 4〜16 実装完了（2026-05-09、lesson と クイズは MVP 動作確認後に一括採点）
+学習ノートは AWS トピック単位に再構成済み (`docs/learning/phase1/`):
 
-#### Backend Python (Tasks 4〜8)
+- `task1/` — DynamoDB / Terraform / IAM の基礎（**完了・採点済み**）
+- `02-lambda-proxy-integration-and-cors.md` — Lambda 戻り値仕様 + CORS
+- `03-boto3-resource-vs-client.md` — Boto3 SDK
+- `04-dynamodb-decimal-and-pagination.md` — Decimal の素性 + 1MB / LastEvaluatedKey
+- `05-lambda-execution-role-and-deployment.md` — IAM 実行ロール + ZIP デプロイ
+- `06-api-gateway-rest-api-structure.md` — REST API + Authorizer + CORS preflight
+- `07-cognito-and-api-gateway-authorizer.md` — Cognito + JWT (idToken vs accessToken)
+- `practice/` — 実装 Q&A、設計ノート、参考メモ
+- `main.md` — 目次 + Task 2+3 まとめクイズ（採点保留）
 
-| Task | 成果物 | テスト |
-|---|---|---|
-| 4 | `shared/db.py` (get_table, query_all) | 6 件 |
-| 5 | `shared/atcoder_client.py` (AtCoderClient) | 7 件 |
-| 6 | `lambdas/save_user/handler.py` | 7 件 |
-| 7 | `lambdas/sync_submissions/handler.py` | 6 件 |
-| 8 | `lambdas/get_submissions/handler.py` (list+detail+pagination) | 12 件 |
+ユーザー方針: lesson とまとめクイズは MVP 動作確認後に一括採点する (`feedback_lesson_after_implementation.md`, `feedback_defer_retrospective.md`)。
 
-合計 50 件 (test_response.py 12 件含む) 全パス。
+### 実装済みコード（2026-05-09）
 
-#### Terraform (Tasks 9, 10)
+#### Backend Python (50 tests pass)
 
-- `terraform/modules/lambda/` — IAM 実行ロール、3 関数を `for_each` で一括定義、CloudWatch Log Group、API Gateway 用 permission
-- `terraform/modules/api_gateway/` — `/users/me`, `/sync`, `/submissions`, `/submissions/{submission_id}` 各エンドポイント + CORS preflight (OPTIONS) + Cognito Authorizer
-- `modules.tf` で全モジュール配線、`terraform validate` 通過
+- `backend/shared/{response,db,atcoder_client}.py`
+- `backend/lambdas/{save_user,sync_submissions,get_submissions}/handler.py`
+- `backend/tests/test_*.py`
 
-#### Frontend (Tasks 11〜15) — Next.js 16 + React 19 + Amplify v6
+#### Terraform (validate pass)
 
-- `frontend/app/lib/types.ts` — Backend `{data, meta}` / `{error}` 形式の型 + ドメイン型
-- `frontend/app/lib/api.ts` — Cognito JWT を `idToken` で取り出して `Authorization: Bearer` 付きで fetch するクライアント
-- `frontend/app/components/AppShell.tsx` — 共通ヘッダ + ナビゲーション
-- `frontend/app/page.tsx` — ホームダッシュボード
-- `frontend/app/settings/page.tsx` — AtCoder ユーザー名登録フォーム
-- `frontend/app/submissions/page.tsx` — 提出一覧 + 同期ボタン + ページネーション
-- `frontend/app/submissions/[submission_id]/page.tsx` — 動的ルートで詳細表示
-- `tsc --noEmit` 通過
+- `terraform/modules/{lambda,api_gateway,cognito,dynamodb}/`
+- `terraform/modules.tf`, `main.tf`, `variables.tf`, `outputs.tf`
 
-#### デプロイスクリプト (Task 16)
+#### Frontend (tsc pass) — Next.js 16 + React 19 + Amplify v6
 
-- `backend/scripts/build_lambda.sh` — uv pip install --target で依存と app コードを ZIP 化（生成成功: ~16MB）
-- `scripts/deploy_phase1.sh` — build / plan / apply / sync-env / destroy のサブコマンド分離
+- `frontend/app/lib/{types,api}.ts`
+- `frontend/app/components/AppShell.tsx`
+- `frontend/app/{page,settings,submissions,submissions/[submission_id]}/page.tsx`
 
-#### 残: Task 17 + 18 (実行待ち)
+#### デプロイ補助
 
-`scripts/deploy_phase1.sh` の各サブコマンドを実行することで完成。
-**実 AWS 課金が発生**するためユーザー実行待ち。手順は `docs/learning/phase1/task17/` と `task18/` に詳細あり。
+- `Makefile` ルートに統合（`make build/plan/apply/sync-env/destroy/test/tf-validate`）
+- `make build` で `backend/dist/lambda.zip` (~16MB) 生成
 
-Task 7 で発覚した実物の知見（教材 02 / Decimal 問題の伏線回収）:
-- Boto3 は `float` を拒否し `Decimal` を要求する → `_floats_to_decimal()` ヘルパで変換
+### 残: Task 17 + 18（ユーザー実行）
 
+```bash
+make plan       # Lambda ZIP build + terraform plan
+make apply      # 実 AWS デプロイ（課金開始）
+make sync-env   # frontend/.env.local 生成
+cd frontend && npm run dev   # ローカル動作確認
+make destroy    # 課金停止
+```
 
+手順詳細: `docs/learning/phase1/practice/terraform-apply-walkthrough.md`、`practice/frontend-integration-test.md`
 
-### Task 3 実装完了（2026-05-09、まとめクイズは MVP 完成後に採点予定）
+### 実物の知見（メモ）
 
-Task 3「Backend — shared/response.py (APIレスポンスヘルパー)」で実装したもの:
-- `backend/shared/response.py` — `success(data, meta, status_code)` / `error(code, message, status_code)`
-- `backend/tests/test_response.py` — 12 件の単体テスト（CORS / Decimal / ステートレス性 など）
-- `backend/lambdas/get_submissions/handler.py` — 最小ハンドラ（end-to-end 動作確認用）
-- `backend/tests/test_get_submissions.py` — moto + DynamoDB 結合テスト 3 件
-
-教材は `docs/learning/phase1/task3/` に 3 枚:
-- `01-lambda-response-format-and-cors.md` — Lambda Proxy Integration / CORS / SOP / Clickjacking / CSRF（採点済み）
-- `02-json-dumps-default-and-decimal.md` — `default=str` 慣用句、Boto3 Decimal、JSONEncoder（クイズ生成済み・未採点 = 1問のみ部分回答）
-- `03-shared-response-helper-design.md` — `shared/response.py` の設計ノート（クイズなし = 実装で代替）
-
-**Task 2 + 3 統合まとめクイズは `phase1/task3/main.md` に生成済み**だが、ユーザー判断により採点は MVP 完成後に先送り。
-理由: API GW / Cognito / フロントが揃っていない段階では横断的論点（環境変数経由でのテーブル名注入、warm start のステートレス性、JWT × CORS preflight 等）が点でしか繋がらず、動くものを見ないとピンと来ないため。
+- **Boto3 は float を拒否し Decimal を要求する**: AtCoder Problems API レスポンスの `point` は float なので `_floats_to_decimal()` ヘルパで変換。教材 `04-dynamodb-decimal-and-pagination.md` の伏線回収。
 
 ### Task 1 完了（2026-04-18 採点済み）
 
@@ -100,70 +91,57 @@ Task 1「Terraform DynamoDBモジュール」で習得:
 - AWS IAM（ユーザー/ロール/ポリシー、Identity Center）、AWS認証のベストプラクティス
 - 設計原則（YAGNI、明示性、最小公開）
 
-振り返り採点結果: Q5(b) default の使い分け（ルート側）、Q6(b) ARN の構成要素 が **要復習** → `docs/learning/review-queue.md` に記録済み。
+振り返り採点結果: Q5(b) default の使い分け、Q6(b) ARN の構成要素 が **要復習** → `docs/learning/review-queue.md` に記録済み（既習得済みに移動）。
 
-### Task 2 完了（2026-04-18、振り返りは Task 3/4 と統合予定）
+### Task 2 完了（2026-04-18、振り返りは Task 3 と統合）
 
 Task 2「Backend — Python 環境セットアップ」で習得:
-- **moto ライブラリ**: AWS を丸ごとローカルでエミュレート、性能計測以外の全機能テストに使える
+- **moto ライブラリ**: AWS を丸ごとローカルでエミュレート
 - **`AWS_ACCESS_KEY_ID="testing"` の正体**: boto3 の認証チェック回避 + 本物AWS 誤叩き事故防止
-- **2段階 fixture 設計**: `aws_env`（monkeypatch で環境変数注入）→ `dynamodb_tables`（`with mock_aws()` + yield でテーブル準備）
-- **環境変数経由でテーブル名を渡す設計**: Lambda 本番では Terraform、ローカルでは monkeypatch
+- **2段階 fixture 設計**: `aws_env`（monkeypatch で環境変数注入）→ `dynamodb_tables`（`with mock_aws()` + yield）
 
-実装内容: `backend/pyproject.toml` (uv ベース、元計画の requirements.txt から変更)、`shared/lambdas/tests/__init__.py`、`conftest.py` (2段階fixture)。
-
-振り返りは **pytest を実際に書く Task (Task 3 or Task 4) とまとめて実施**する方針。
-
-### Task 4 概要
-
-`backend/shared/db.py` を作成。Lambda ハンドラから DynamoDB を操作するための共通ヘルパー。
-
-主な学習ポイント（予定）:
-- Boto3 Resource API vs Client API
-- `Table.query` / `Table.put_item` のラップ方針
-- ページネーション（`LastEvaluatedKey`）の扱い
-- 環境変数経由でテーブル名解決（Task 3 で確立した方針の延長）
-
-## タスクごとの学習フロー
-
-各タスクで以下のサイクルを回す:
-
-1. **解説**: 何をするか、なぜそうするか、AWSの設計思想やベストプラクティスとの関連
-2. **確認**: ユーザーが理解したか確認、質問があれば回答
-3. **実装**: ユーザーの「進めて」を受けてからサブエージェントが実行
-4. **振り返り**: 生成されたコードの解説、注目ポイント、疑問の議論
-5. **次へ**: ユーザーの「次に進む」を受けてから次のタスクへ
-
-**重要: 勝手に進めない。** 各ステップでユーザーの確認を取る。
+詳細メモ: `docs/learning/phase1/practice/{moto-and-aws-test-credentials,pytest-fixtures-for-aws}.md`
+振り返りクイズ: `docs/learning/phase1/main.md` の §振り返り（Task 2+3 統合まとめ）
 
 ## ドキュメント構成ルール
 
-### 学習ノート
+### 学習ノート構成 (Phase 1 採用)
 
 ```
-docs/learning/phase{N}/task{M}/
-├── main.md                     ← 目次 + 振り返り
-├── 01-{トピック名}.md           ← トピック別の解説・Q&A
-├── 02-{トピック名}.md
-└── reference/
-    ├── {テーマ}-{詳細}.md       ← Web検索を含む詳細リファレンス
-    └── ...
+docs/learning/phase{N}/
+├── main.md                          ← Phase 全体目次 + まとめクイズ
+├── task1/                           ← 既存 (Topic 1 ぶんだけサブディレクトリ運用)
+│   ├── 01-...md
+│   ├── ...
+│   └── reference/
+├── 02-{aws-topic}.md                ← AWS 学習トピック (連番付き)
+├── 03-{aws-topic}.md
+├── ...
+└── practice/                        ← 実装 Q&A、設計ノート、参考メモ
+    ├── README.md
+    ├── {topic}.md                   ← トピック単位の md
+    └── reference/                   ← Q&A 議論ログ
 ```
 
 ### ルール
 
-- **大枠ごとにmdを分ける**（1つのmdにすべてを入れない）
-- **referenceは深掘り用**: Web検索のソース付き、詳細な比較表、具体例
-- **トピックmdはQ&A中心**: 解説 + 質疑応答の記録
-- **main.mdは目次**: トピックmdとreferenceへのリンク + 振り返り
-- **tfファイルにもコメント**: 該当コードの上に1行の説明 + docsへのリンク
+- **AWS の中核概念は phase1/ 直下の番号付き md** に書く（02-... 〜）
+- **実装の Q&A・設計判断は `practice/` 配下** に分離（連番なし、kebab-case トピック名）
+- **議論ログ・Web 検索ベースの参照は `practice/reference/`** に置く
+- **コード側コメントから docs を参照**するパスは新構造に合わせる（`# → docs/learning/phase1/{topic}.md`）
 
 ### コード上のコメント例
 
 ```hcl
-# Terraformの状態ファイルをS3に保存。dynamodb_tableは同時apply防止のロック。
+# Terraformの状態ファイルをS3に保存。
 # → docs/learning/phase1/task1/reference/terraform-basics.md
 backend "s3" { ... }
+```
+
+```python
+# default=str は Decimal を文字列化するため
+# → docs/learning/phase1/practice/json-dumps-default-str.md
+return json.dumps(body, default=str)
 ```
 
 ## 関連ドキュメントの場所
@@ -172,5 +150,22 @@ backend "s3" { ... }
 |---|---|
 | Phase設計書 | `plans/aws-learning-phases-design.md` |
 | Phase 1 実装計画 | `plans/phase1-mvp-implementation.md` |
-| Phase 1 / Task 1 学習ノート | `docs/learning/phase1/task1/` |
+| Phase 1 学習ノート目次 | `docs/learning/phase1/main.md` |
+| Phase 1 / Topic 1 (基礎) | `docs/learning/phase1/task1/` |
+| Phase 1 実装 Q&A | `docs/learning/phase1/practice/README.md` |
+| 復習キュー | `docs/learning/review-queue.md` |
 | 既存のMVP計画（参考） | `plans/mvp/` |
+
+## タスクごとの学習フロー
+
+各タスクで以下のサイクルを回す:
+
+1. **解説**: 何をするか、なぜそうするか、AWSの設計思想やベストプラクティスとの関連
+2. **確認**: ユーザーが理解したか確認、質問があれば回答
+3. **実装**: ユーザーの「進めて」を受けてから着手
+4. **振り返り**: 生成されたコードの解説、注目ポイント、疑問の議論
+5. **次へ**: ユーザーの「次に進む」を受けてから次のタスクへ
+
+**重要: 勝手に進めない。** 各ステップでユーザーの確認を取る。
+
+ただし**実装系 Task では lesson を実装後に回す**運用 (`feedback_lesson_after_implementation.md`)。

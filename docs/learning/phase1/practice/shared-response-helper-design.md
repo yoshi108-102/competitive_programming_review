@@ -136,7 +136,7 @@ import json
 from typing import Any
 
 # CORS ヘッダはここに集約。Lambda ハンドラ側で個別指定しない。
-# → 設計理由: docs/learning/phase1/task3/03-shared-response-helper-design.md
+# → 設計理由: docs/learning/phase1/practice/shared-response-helper-design.md
 _CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type,Authorization",
@@ -151,7 +151,7 @@ def success(data: Any, meta: dict | None = None, status_code: int = 200) -> dict
         "statusCode": status_code,
         "headers": _CORS_HEADERS,
         # default=str は Decimal / datetime 等を文字列化するため必須
-        # → 設計理由: docs/learning/phase1/task3/02-json-dumps-default-and-decimal.md
+        # → 設計理由: docs/learning/phase1/practice/json-dumps-default-str.md
         "body": json.dumps(body, default=str),
     }
 

@@ -1,5 +1,5 @@
 # API Gateway REST API + 全エンドポイント定義
-# → docs/learning/phase1/task10/01-api-gateway-resource-method-integration.md
+# → docs/learning/phase1/06-api-gateway-rest-api-structure.md
 
 resource "aws_api_gateway_rest_api" "main" {
   name        = "${var.project_name}-api-${var.environment}"
@@ -184,7 +184,7 @@ resource "aws_api_gateway_integration" "submission_detail_get" {
 # =====================================================================
 # CORS preflight (OPTIONS) - 全 API リソースに必要
 # 共通の MOCK 統合パターン
-# → docs/learning/phase1/task10/01-api-gateway-resource-method-integration.md §D
+# → docs/learning/phase1/06-api-gateway-rest-api-structure.md §D
 # =====================================================================
 
 locals {
@@ -245,7 +245,7 @@ resource "aws_api_gateway_integration_response" "options_200" {
 # =====================================================================
 # Deployment + Stage
 # triggers に全 method/integration の id を含めて、変更時に確実に再デプロイ
-# → docs/learning/phase1/task10/01-api-gateway-resource-method-integration.md §E
+# → docs/learning/phase1/06-api-gateway-rest-api-structure.md §E
 # =====================================================================
 
 resource "aws_api_gateway_deployment" "main" {

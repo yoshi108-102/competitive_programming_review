@@ -1,8 +1,8 @@
 """POST /sync — AtCoder Problems API から submission を取得して DynamoDB に保存。
 
 差分同期: ユーザーごとに last_sync_epoch を保持し、それ以降の提出のみ取得する。
-設計の根拠: docs/learning/phase1/task5/01-atcoder-problems-api.md
-            docs/learning/phase1/task6/01-lambda-handler-skeleton.md
+設計の根拠: docs/learning/phase1/practice/atcoder-problems-api.md
+            docs/learning/phase1/practice/lambda-handler-skeleton.md
 """
 
 from decimal import Decimal
@@ -17,7 +17,7 @@ def _floats_to_decimal(obj):
 
     str 経由で変換することで IEEE 754 の精度欠落を避ける
     (Decimal(0.1) != Decimal("0.1") なので)。
-    → docs/learning/phase1/task3/02-json-dumps-default-and-decimal.md
+    → docs/learning/phase1/practice/json-dumps-default-str.md
     """
     if isinstance(obj, float):
         return Decimal(str(obj))

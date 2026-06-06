@@ -2,14 +2,14 @@
 
 公式 AtCoder には submission 一覧取得 API が無いため、コミュニティ運営の
 AtCoder Problems API (kenkoooo.com) を経由する。
-設計の根拠: docs/learning/phase1/task5/01-atcoder-problems-api.md
-            docs/learning/phase1/task5/02-requests-and-requests-mock.md
+設計の根拠: docs/learning/phase1/practice/atcoder-problems-api.md
+            docs/learning/phase1/practice/python-requests-and-mock.md
 """
 
 import requests
 
 # v3 系。将来 v4 が出たらここを差し替える
-# → docs/learning/phase1/task5/01-atcoder-problems-api.md §D
+# → docs/learning/phase1/practice/atcoder-problems-api.md §D
 ATCODER_PROBLEMS_API = "https://kenkoooo.com/atcoder/atcoder-api/v3"
 
 

@@ -1,7 +1,7 @@
 """API Gateway Lambda Proxy Integration 用のレスポンス整形ヘルパー。
 
 全 Lambda ハンドラはここを経由して戻り値を組み立てる。
-設計の根拠: docs/learning/phase1/task3/03-shared-response-helper-design.md
+設計の根拠: docs/learning/phase1/practice/shared-response-helper-design.md
 """
 
 import json
@@ -10,7 +10,7 @@ from typing import Any
 # CORS ヘッダはここに集約。Lambda ハンドラ側で個別指定しない。
 # MVP段階では Allow-Origin を "*" にしておき、Phase 5 (CloudFront/WAF) で
 # Cognito ドメインへ絞る。
-# → docs/learning/phase1/task3/01-lambda-response-format-and-cors.md
+# → docs/learning/phase1/02-lambda-proxy-integration-and-cors.md
 _CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type,Authorization",
@@ -28,7 +28,7 @@ def success(
 
     body は { "data": <data>, "meta": <meta or null> } の JSON 文字列。
     Decimal / datetime は default=str で文字列化される。
-    → docs/learning/phase1/task3/02-json-dumps-default-and-decimal.md
+    → docs/learning/phase1/practice/json-dumps-default-str.md
     """
     body = {"data": data, "meta": meta}
     return {

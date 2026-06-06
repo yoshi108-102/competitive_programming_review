@@ -1,5 +1,5 @@
 // Backend `shared/response.py::success/error` の戻り値を TypeScript で表現
-// → docs/learning/phase1/task3/03-shared-response-helper-design.md
+// → docs/learning/phase1/practice/shared-response-helper-design.md
 
 export type ApiSuccess<T> = {
   data: T;
@@ -15,7 +15,7 @@ export type ApiError = {
 
 // ドメイン型 (DynamoDB の item 形)
 // score / point は Decimal が default=str で文字列化されているため string
-// → docs/learning/phase1/task3/02-json-dumps-default-and-decimal.md
+// → docs/learning/phase1/practice/json-dumps-default-str.md
 export type Submission = {
   user_id: string;
   submission_id: string;

@@ -1,5 +1,5 @@
 // Backend API クライアント
-// 設計の根拠: docs/learning/phase1/task11/01-frontend-api-client.md
+// 設計の根拠: docs/learning/phase1/practice/frontend-api-client.md
 
 import { fetchAuthSession } from "aws-amplify/auth";
 import type {

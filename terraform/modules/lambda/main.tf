@@ -1,7 +1,7 @@
 # Lambda 関数モジュール
 # 3 つのハンドラ (save_user / sync_submissions / get_submissions) を共通の
 # IAM ロールでデプロイする。
-# → docs/learning/phase1/task9/01-terraform-lambda-module.md
+# → docs/learning/phase1/05-lambda-execution-role-and-deployment.md
 
 # =====================================================================
 # IAM Execution Role
@@ -13,7 +13,7 @@ resource "aws_iam_role" "lambda_exec" {
   name = "${var.project_name}-lambda-exec-${var.environment}"
 
   # Trust policy: Lambda サービスがこのロールを引き受けられる
-  # → docs/learning/phase1/task9/01-terraform-lambda-module.md §A
+  # → docs/learning/phase1/05-lambda-execution-role-and-deployment.md §A
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -89,7 +89,7 @@ resource "aws_lambda_function" "fn" {
   handler       = each.value.handler
 
   # source_code_hash で zip の中身が変わったら Terraform が再デプロイをトリガー
-  # → docs/learning/phase1/task9/01-terraform-lambda-module.md §C
+  # → docs/learning/phase1/05-lambda-execution-role-and-deployment.md §C
   filename         = var.lambda_zip_path
   source_code_hash = filebase64sha256(var.lambda_zip_path)
 
@@ -106,7 +106,7 @@ resource "aws_lambda_function" "fn" {
 
 # =====================================================================
 # CloudWatch Log Group (保持期間制御のため事前作成)
-# → docs/learning/phase1/task9/01-terraform-lambda-module.md §B
+# → docs/learning/phase1/05-lambda-execution-role-and-deployment.md §B
 # =====================================================================
 
 resource "aws_cloudwatch_log_group" "fn" {
@@ -118,7 +118,7 @@ resource "aws_cloudwatch_log_group" "fn" {
 
 # =====================================================================
 # API Gateway からの invoke 許可 (resource-based policy)
-# → docs/learning/phase1/task9/01-terraform-lambda-module.md §D
+# → docs/learning/phase1/05-lambda-execution-role-and-deployment.md §D
 # =====================================================================
 
 resource "aws_lambda_permission" "api_gw" {

@@ -2,7 +2,7 @@
 
 Cognito JWT の sub クレームを内部 user_id として、リクエストボディで指定された
 atcoder_username を DynamoDB の users テーブルに upsert する。
-設計の根拠: docs/learning/phase1/task6/01-lambda-handler-skeleton.md
+設計の根拠: docs/learning/phase1/practice/lambda-handler-skeleton.md
 """
 
 import json

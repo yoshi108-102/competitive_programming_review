@@ -3,7 +3,7 @@
 機能:
 - 一覧取得: query string の limit / nextToken でページング
 - 個別取得: pathParameters の submission_id を使って 1 件取得
-設計の根拠: docs/learning/phase1/task6/01-lambda-handler-skeleton.md
+設計の根拠: docs/learning/phase1/practice/lambda-handler-skeleton.md
 """
 
 import base64

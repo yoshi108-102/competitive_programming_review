@@ -33,7 +33,7 @@
 **参考**:
 - [Lambda Proxy Integration - AWS Docs](https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html)
 
-**関連ノート**: [phase1/task3/01-lambda-response-format-and-cors.md](phase1/task3/01-lambda-response-format-and-cors.md) — A. Lambda Proxy Integration の返り値形
+**関連ノート**: [phase1/02-lambda-proxy-integration-and-cors.md](phase1/02-lambda-proxy-integration-and-cors.md) — A. Lambda Proxy Integration の返り値形
 
 ---
 
@@ -54,7 +54,7 @@
 - [Origin header - MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Origin)
 - [Cross-Origin Resource Sharing (CORS) - MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS)
 
-**関連ノート**: [phase1/task3/reference/why-cors-exists-three-actors.md](phase1/task3/reference/why-cors-exists-three-actors.md)
+**関連ノート**: [phase1/practice/reference/why-cors-exists-three-actors.md](phase1/practice/reference/why-cors-exists-three-actors.md)
 
 ---
 
@@ -74,7 +74,7 @@
 - [Cross-Site Request Forgery Prevention Cheat Sheet - OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)
 - [SameSite cookies - MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite)
 
-**関連ノート**: [phase1/task3/reference/cors-only-blocks-reads-not-writes.md](phase1/task3/reference/cors-only-blocks-reads-not-writes.md), [phase1/task3/reference/samesite-cookie-and-csrf-defense.md](phase1/task3/reference/samesite-cookie-and-csrf-defense.md), [phase1/task3/reference/preflight-bypass-via-simple-post.md](phase1/task3/reference/preflight-bypass-via-simple-post.md)
+**関連ノート**: [phase1/practice/reference/cors-only-blocks-reads-not-writes.md](phase1/practice/reference/cors-only-blocks-reads-not-writes.md), [phase1/practice/reference/samesite-cookie-and-csrf-defense.md](phase1/practice/reference/samesite-cookie-and-csrf-defense.md), [phase1/practice/reference/preflight-bypass-via-simple-post.md](phase1/practice/reference/preflight-bypass-via-simple-post.md)
 
 ---
 

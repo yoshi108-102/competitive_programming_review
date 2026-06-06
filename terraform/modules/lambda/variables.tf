@@ -9,7 +9,7 @@ variable "environment" {
 }
 
 # DynamoDB 接続情報 (handler 内で os.environ から読む)
-# → docs/learning/phase1/task6/01-lambda-handler-skeleton.md
+# → docs/learning/phase1/practice/lambda-handler-skeleton.md
 variable "users_table_name" {
   description = "DynamoDB users table name"
   type        = string
@@ -31,7 +31,7 @@ variable "submissions_table_arn" {
 }
 
 # API Gateway 側からの invoke 許可用
-# → docs/learning/phase1/task9/01-terraform-lambda-module.md §D
+# → docs/learning/phase1/05-lambda-execution-role-and-deployment.md §D
 variable "api_gateway_execution_arn" {
   description = "API Gateway execution ARN for resource-based Lambda permission"
   type        = string

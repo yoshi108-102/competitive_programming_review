@@ -1,6 +1,6 @@
 """shared/response.py の不変条件テスト。
 
-設計教材: docs/learning/phase1/task3/03-shared-response-helper-design.md
+設計教材: docs/learning/phase1/practice/shared-response-helper-design.md
 テスト観点表: 同上 §テスト観点
 """
 

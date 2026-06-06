@@ -14,7 +14,7 @@ variable "cognito_user_pool_arn" {
 }
 
 # Lambda invoke ARN (function key → invoke_arn の map)
-# → docs/learning/phase1/task10/01-api-gateway-resource-method-integration.md §C
+# → docs/learning/phase1/06-api-gateway-rest-api-structure.md §C
 variable "lambda_invoke_arns" {
   description = "Map of lambda function key to its invoke ARN (for AWS_PROXY integration)"
   type        = map(string)

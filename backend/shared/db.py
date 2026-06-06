@@ -1,8 +1,8 @@
 """DynamoDB 操作の共通ヘルパー。
 
 Lambda ハンドラから DynamoDB を操作するボイラープレートを集約する。
-設計の根拠: docs/learning/phase1/task4/01-boto3-resource-vs-client.md,
-            docs/learning/phase1/task4/02-dynamodb-pagination-and-paginators.md
+設計の根拠: docs/learning/phase1/03-boto3-resource-vs-client.md,
+            docs/learning/phase1/04-dynamodb-decimal-and-pagination.md
 """
 
 import os
@@ -29,7 +29,7 @@ def query_all(table, **kwargs) -> list[dict[str, Any]]:
     DynamoDB の Query は 1 リクエストあたり 1MB 上限。それを超える結果がある場合、
     レスポンスに LastEvaluatedKey が含まれる。これを ExclusiveStartKey に渡して
     続きを取得するループをここに集約する。
-    → docs/learning/phase1/task4/02-dynamodb-pagination-and-paginators.md
+    → docs/learning/phase1/04-dynamodb-decimal-and-pagination.md
     """
     items: list[dict[str, Any]] = []
     while True:
