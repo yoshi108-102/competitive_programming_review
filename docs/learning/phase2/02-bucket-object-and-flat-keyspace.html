@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 2 教材 — S3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#3b82f6;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 2 教材 (S3) · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Phase 2 教材: バケット・オブジェクト・フラットなキー空間</h1>
+
+<hr>
+
+<h2>このトピックは何か</h2>
+
+<p>Amazon S3 のデータモデルの土台を理解するトピックです。S3 には「ファイルシステム」や「データベース」のような階層構造は存在しません。代わりに <strong>バケット（Bucket）</strong> と <strong>オブジェクト（Object）</strong> という 2 層のシンプルなモデルだけがあります。この構造を正確に把握することが、S3 を正しく設計・操作するための第一歩です。</p>
+
+<hr>
+
+<h2>コアコンセプト</h2>
+
+<h3>1. バケット — オブジェクトのコンテナ</h3>
+
+<p>バケットはオブジェクトを格納するコンテナです。バケットを作成するとき、<strong>名前</strong> と <strong>AWS リージョン</strong> を指定します。作成後に名前もリージョンも変更できません。</p>
+
+<pre><code>バケット: atcoder-review-artifacts   (ap-northeast-1 に固定)
+  ├── submissions/2026/abc.json
+  ├── submissions/2026/def.json
+  └── exports/report.csv</code></pre>
+
+<p>バケット自体はリージョン単位のリソースですが、バケット名はパーティション内のグローバル名前空間で一意でなければなりません（後述）。バケット内に格納できるオブジェクト数に上限はありません。</p>
+
+<h3>2. オブジェクト — キー＋メタデータ＋本体</h3>
+
+<p>オブジェクトは S3 に保存される基本エンティティです。すべてのオブジェクトは次の 3 要素で構成されます。</p>
+
+<table>
+<thead><tr><th>要素</th><th>内容</th></tr></thead>
+<tbody>
+<tr><td><strong>キー（Key）</strong></td><td>バケット内で一意な文字列（オブジェクトの識別子）</td></tr>
+<tr><td><strong>メタデータ</strong></td><td>name-value ペアの集合。<code>Content-Type</code> / <code>ETag</code> / <code>Last-Modified</code> などシステムメタデータと、ユーザー定義メタデータがある</td></tr>
+<tr><td><strong>本体（データ）</strong></td><td>バイト列。最大 5 TB（単一 PUT は最大 5 GB、それ以上はマルチパート）</td></tr>
+</tbody>
+</table>
+
+<blockquote>公式ドキュメントの定義: <em>"Objects consist of object data and metadata."</em> — <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingObjects.html">Amazon S3 objects overview</a></blockquote>
+
+<p>オブジェクトはバケットとキーで一意に特定されます。バージョニングが有効な場合はさらに Version ID が加わります。</p>
+
+<h3>3. フラットなキー空間</h3>
+
+<p>S3 のデータモデルは <strong>フラット（平坦）</strong> です。サブバケットもサブフォルダも存在しません。すべてのオブジェクトが同一の平坦なキー空間に並んでいます。</p>
+
+<pre><code>【実際の構造 — キーの一覧】
+  submissions/2026/abc.json    ← スラッシュは単なる文字
+  submissions/2026/def.json
+  exports/report.csv
+  README.md
+
+【ファイルシステムのように見えるが、階層は存在しない】</code></pre>
+
+<blockquote>公式ドキュメント: <em>"The Amazon S3 data model is a flat structure: You create a bucket, and the bucket stores objects. There is no hierarchy of subbuckets or subfolders."</em> — <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-keys.html">Naming Amazon S3 objects</a></blockquote>
+
+<h3>4. プリフィックスと擬似フォルダ</h3>
+
+<p>スラッシュ <code>/</code> はキー名の一部の文字であり、ディレクトリ区切り文字としての特別な意味を持ちません。しかし <code>ListObjectsV2</code> API に <code>Prefix</code> と <code>Delimiter</code> パラメータを渡すことで、階層的なブラウズが可能になります。</p>
+
+<pre><code>Prefix='submissions/2026/' かつ Delimiter='/'
+→ CommonPrefixes に submissions/2026/ がまとめられる
+→ その配下のキーだけが Contents に返る</code></pre>
+
+<p><code>Delimiter</code> を使うと、S3 は指定した区切り文字でキーをグループ化し、共通プリフィックスを <code>CommonPrefixes</code> として返します。これがコンソール上の「フォルダ」表示の実体です。</p>
+
+<pre><code>&lt;!-- ListObjectsV2 のレスポンス例 (Delimiter='/', Prefix='') --&gt;
+&lt;ListBucketResult&gt;
+  &lt;Contents&gt;
+    &lt;Key&gt;README.md&lt;/Key&gt;          &lt;!-- ルート直下のオブジェクト --&gt;
+  &lt;/Contents&gt;
+  &lt;CommonPrefixes&gt;
+    &lt;Prefix&gt;exports/&lt;/Prefix&gt;     &lt;!-- 擬似フォルダ --&gt;
+    &lt;Prefix&gt;submissions/&lt;/Prefix&gt;
+  &lt;/CommonPrefixes&gt;
+&lt;/ListBucketResult&gt;</code></pre>
+
+<p>コンソールが「フォルダ作成」を行うとき、S3 は <code>folder-name/</code> というキー名で 0 バイトのオブジェクトを PUT します。このオブジェクトはコンソール上では見えませんが、REST API や CLI からは参照・削除できます。</p>
+
+<h3>5. 丸ごと PUT / GET — 部分更新不可</h3>
+
+<p>S3 のオブジェクト操作は <strong>原子的（atomic）な単位 PUT / GET</strong> が基本です。</p>
+
+<ul>
+<li><strong>PUT</strong>: オブジェクト全体を置き換える。一部分だけを書き換える操作は存在しない</li>
+<li><strong>GET</strong>: デフォルトでオブジェクト全体を取得する</li>
+<li><strong>バイト範囲 GET</strong>: <code>Range: bytes=0-1023</code> ヘッダーを付けることで部分読み込みが可能</li>
+</ul>
+
+<pre><code>import boto3
+s3 = boto3.client("s3")
+
+# バイト範囲 GET — 先頭 1024 バイトだけ取得
+response = s3.get_object(
+    Bucket="atcoder-review-artifacts",
+    Key="submissions/2026/abc.json",
+    Range="bytes=0-1023",
+)
+partial_data = response["Body"].read()</code></pre>
+
+<blockquote>公式ドキュメント: <em>"Updates to a single key are atomic."</em> — <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html#ConsistencyModel">Amazon S3 data consistency model</a></blockquote>
+
+<hr>
+
+<h2>主要な設定・API・パラメータ</h2>
+
+<h3>バケット命名規則（一般用途バケット）</h3>
+
+<table>
+<thead><tr><th>規則</th><th>内容</th></tr></thead>
+<tbody>
+<tr><td>文字数</td><td>3〜63 文字</td></tr>
+<tr><td>使用可能文字</td><td>小文字英字・数字・ハイフン（<code>-</code>）・ピリオド（<code>.</code>）</td></tr>
+<tr><td>先頭・末尾</td><td>英字または数字</td></tr>
+<tr><td>IP アドレス形式</td><td>禁止（例: <code>192.168.5.4</code>）</td></tr>
+<tr><td>連続ピリオド</td><td>禁止（<code>my..bucket</code> は無効）</td></tr>
+<tr><td>禁止プリフィックス</td><td><code>xn--</code> / <code>sthree-</code> / <code>amzn-s3-demo-</code></td></tr>
+<tr><td>禁止サフィックス</td><td><code>-s3alias</code> / <code>--ol-s3</code> / <code>.mrap</code> / <code>--x-s3</code> / <code>--table-s3</code></td></tr>
+<tr><td>一意性スコープ</td><td>AWS パーティション内でグローバル一意</td></tr>
+<tr><td>変更可否</td><td>作成後に名前・リージョンとも変更不可</td></tr>
+</tbody>
+</table>
+
+<p class="note">ピリオドを含むバケット名は HTTPS の仮想ホスト形式アドレッシングで証明書エラーが発生するため、静的ウェブサイトホスティング以外では推奨されません。</p>
+
+<h3>オブジェクトキー命名規則</h3>
+
+<table>
+<thead><tr><th>項目</th><th>内容</th></tr></thead>
+<tbody>
+<tr><td>最大長</td><td>1,024 バイト（UTF-8 エンコード後）</td></tr>
+<tr><td>文字セット</td><td>任意の UTF-8 文字</td></tr>
+<tr><td>大小文字</td><td>区別あり（<code>ABC.json</code> と <code>abc.json</code> は別オブジェクト）</td></tr>
+<tr><td>安全な特殊文字</td><td><code>!</code> <code>-</code> <code>_</code> <code>.</code> <code>*</code> <code>'</code> <code>(</code> <code>)</code></td></tr>
+<tr><td>URL エンコードが必要な文字</td><td><code>&amp;</code> <code>$</code> <code>@</code> <code>=</code> <code>;</code> <code>+</code> <code>:</code> <code>,</code> <code>?</code> スペース など</td></tr>
+<tr><td>避けるべき文字</td><td><code>\</code> <code>{</code> <code>}</code> <code>^</code> <code>%</code> <code>`</code> <code>[</code> <code>]</code> <code>"</code> <code>&gt;</code> <code>&lt;</code> <code>#</code> <code>~</code> <code>|</code></td></tr>
+</tbody>
+</table>
+
+<h3>主要 API（boto3）</h3>
+
+<pre><code>import boto3
+s3 = boto3.client("s3")
+
+# オブジェクトを PUT（丸ごと書き込み）
+s3.put_object(
+    Bucket="atcoder-review-artifacts",
+    Key="submissions/2026/abc.json",
+    Body=b'{"status": "AC", "score": 100}',
+    ContentType="application/json",
+)
+
+# オブジェクトを GET（丸ごと読み込み）
+response = s3.get_object(
+    Bucket="atcoder-review-artifacts",
+    Key="submissions/2026/abc.json",
+)
+data = response["Body"].read()
+
+# バイト範囲 GET（部分読み込み）
+response = s3.get_object(
+    Bucket="atcoder-review-artifacts",
+    Key="exports/report.csv",
+    Range="bytes=0-4095",   # 先頭 4KB のみ
+)
+
+# プリフィックスで一覧（擬似フォルダ内を表示）
+paginator = s3.get_paginator("list_objects_v2")
+for page in paginator.paginate(
+    Bucket="atcoder-review-artifacts",
+    Prefix="submissions/2026/",
+):
+    for obj in page.get("Contents", []):
+        print(obj["Key"], obj["Size"], obj["LastModified"])
+
+# 擬似フォルダ構造を 1 階層だけ表示（Delimiter 利用）
+response = s3.list_objects_v2(
+    Bucket="atcoder-review-artifacts",
+    Prefix="submissions/",
+    Delimiter="/",
+)
+for cp in response.get("CommonPrefixes", []):
+    print(cp["Prefix"])   # → submissions/2026/ など</code></pre>
+
+<h3>オブジェクト URL の形式</h3>
+
+<pre><code># 仮想ホスト形式（推奨）
+https://{bucket}.s3.{region}.amazonaws.com/{key}
+
+# 例
+https://atcoder-review-artifacts.s3.ap-northeast-1.amazonaws.com/submissions/2026/abc.json</code></pre>
+
+<hr>
+
+<h2>よくある落とし穴・誤解</h2>
+
+<h3>1. スラッシュはディレクトリ区切りではない</h3>
+
+<p><code>submissions/2026/abc.json</code> は <strong>1 つのキー</strong> です。<code>submissions/</code> や <code>submissions/2026/</code> というディレクトリは存在しません。コンソールで「フォルダ」に見えても、S3 はキーをプリフィックスでグループ化しているだけです。フォルダを「削除」するとその下のキーを持つオブジェクトがまとめて削除されるように見えますが、実際には個別オブジェクトが 1 件ずつ削除されています。</p>
+
+<h3>2. バケット名はパーティション内でグローバル一意</h3>
+
+<p>自分の AWS アカウントで削除したバケット名は、即座に他アカウントが取得できます。削除後しばらく経つと、別アカウントが同名バケットを作成できるようになります。機密情報や推測しやすい名前をバケット名に含めることは避けてください。バケット名は URL に含まれるため公開情報です。</p>
+
+<blockquote><em>"Don't include sensitive information in the bucket name. The bucket name is visible in the URLs that point to the objects in the bucket."</em> — 公式ドキュメント</blockquote>
+
+<h3>3. 部分更新は存在しない</h3>
+
+<p>S3 には「ファイルの特定バイトを書き換える」操作がありません。既存オブジェクトを更新するには、新しい内容でオブジェクト全体を PUT し直す必要があります。このため DynamoDB の <code>UpdateItem</code>（属性単位の書き込み）と発想が異なります。</p>
+
+<h3>4. バイト範囲 GET は読み込み専用</h3>
+
+<p><code>Range</code> ヘッダーによる部分取得（バイト範囲 GET）は <strong>読み込みのみ</strong> です。書き込み側に相当する「部分 PUT」は S3 には存在しません（マルチパートアップロードは大きなオブジェクトを分割して最終的に 1 つに結合する仕組みであり、既存オブジェクトの部分書き換えではありません）。</p>
+
+<h3>5. リージョンはバケット作成時に確定し、変更不可</h3>
+
+<p>バケットのリージョンは作成後に変更できません。オブジェクトはバケットが存在するリージョンに物理的に保存され、明示的に他リージョンへレプリケーションしない限りリージョンをまたいで移動することはありません。</p>
+
+<h3>6. <code>ListObjects</code>（v1）は非推奨</h3>
+
+<p><code>ListObjects</code> API は非推奨です。常に <code>ListObjectsV2</code> を使用してください。大量のオブジェクトがある場合は Paginator を使い、<code>ContinuationToken</code> の処理を自動化します。</p>
+
+<hr>
+
+<h2>このプロジェクト（AtCoder 復習）での使いどころ</h2>
+
+<h3>キー設計の指針</h3>
+
+<p>S3 のキー空間はフラットなので、プリフィックスを使った設計が重要です。このプロジェクトでは以下のようなキー設計が自然です。</p>
+
+<table>
+<thead><tr><th>ユースケース</th><th>キー設計例</th></tr></thead>
+<tbody>
+<tr><td>AC コードのアーカイブ</td><td><code>codes/{user}/{contest}/{problem}.py</code></td></tr>
+<tr><td>提出履歴 JSON スナップショット</td><td><code>submissions/{user}/{year}/{date}.json</code></td></tr>
+<tr><td>Lambda デプロイパッケージ</td><td><code>lambda-artifacts/{function}/{version}.zip</code></td></tr>
+<tr><td>静的フロントエンド</td><td><code>index.html</code> / <code>_next/static/...</code></td></tr>
+</tbody>
+</table>
+
+<h3>DynamoDB との役割分担</h3>
+
+<p>Phase 1 では提出データを DynamoDB に保存しました。DynamoDB のアイテムサイズ上限は 400 KB です。コードの生文字列（数 KB〜数十 KB）は DynamoDB に保存すると上限に近づくリスクがあります。</p>
+
+<p>推奨パターン: <strong>S3 にコード本体を置き、DynamoDB には S3 キーだけを保存</strong></p>
+
+<pre><code># DynamoDB に保存するアイテム
+{
+    "user_id": "user_123",
+    "contest_id": "abc300",
+    "problem_id": "a",
+    "status": "AC",
+    "code_s3_key": "codes/user_123/abc300/a.py",  # S3 キーへの参照
+    "submitted_at": "2026-06-06T12:00:00Z",
+}</code></pre>
+
+<p>コードを取得するときは DynamoDB からキーを引き、S3 から本体を GET します。これにより DynamoDB はメタデータの高速クエリに専念でき、コード本体の大きなバイト列は S3 が担当します。</p>
+
+<hr>
+
+<h2>公式ドキュメント（出典）</h2>
+
+<ul>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html">What is Amazon S3? — How Amazon S3 works (Buckets / Objects / Keys / Regions)</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingBucket.html">General purpose buckets overview</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html">General purpose bucket naming rules</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-keys.html">Naming Amazon S3 objects (object key naming rules)</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-prefixes.html">Organizing objects using prefixes</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html#ConsistencyModel">Amazon S3 data consistency model</a>（閲覧日 2026-05-31）</li>
+</ul>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase2</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase2</span></li>
+<li><b>負荷生成</b> — オブジェクトを put（ObjectCreated→Lambda が発火）<span class="cmd">make sandbox-load-phase2</span></li>
+<li><b>観測</b> — Lambda Invocations は即時 / S3 ストレージ系は日次<span class="cmd">make sandbox-watch-phase2</span><div class="tstamp">⏱ Lambda は数分、ストレージ系は翌日</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase2</span></li>
+</ol>
+<p class="note warn">⚠ バケットは force_destroy 済みなのでオブジェクトが残っていても destroy できる。</p>
+</section>
+<div class="foot">← <a href="index.html">Phase 2 ルーター</a> ／ <a href="main.md">Markdown 目次</a> ／ 概要は <a href="preview-s3.html">preview-s3</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main></body></html>

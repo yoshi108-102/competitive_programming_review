@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 2 教材 — S3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#3b82f6;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 2 教材 (S3) · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Phase 2 教材: セキュリティ（Block Public Access・暗号化・ポリシー）</h1>
+
+<blockquote>対象範囲: Block Public Access の 4 フラグ、バケットポリシー vs ACL（ACL レガシー化）、SSE-S3 / SSE-KMS / DSSE-KMS の違いと Bucket Key、デフォルト暗号化、アクセスログ、VPC Gateway Endpoint、公開バケット流出インシデントの型と対策。</blockquote>
+
+<hr>
+
+<h2>このトピックは何か</h2>
+
+<p>S3 バケットに保存したデータが意図せず公開されたり、盗み見されたりしないための「防御層」を構成する設定群です。大きく 3 つの軸があります。</p>
+
+<ol>
+  <li><strong>アクセス制御</strong> — 誰がバケットやオブジェクトを読み書きできるかを決める（Block Public Access・バケットポリシー・ACL）</li>
+  <li><strong>暗号化</strong> — データを保存・転送する際に暗号化し、鍵を適切に管理する（SSE-S3 / SSE-KMS / DSSE-KMS）</li>
+  <li><strong>可視性・封じ込め</strong> — アクセスを記録し、VPC 内に通信を閉じる（アクセスログ・CloudTrail・VPC Gateway Endpoint）</li>
+</ol>
+
+<hr>
+
+<h2>コアコンセプト</h2>
+
+<h3>Block Public Access — 4 フラグの役割分担</h3>
+
+<p>Block Public Access（BPA）は、バケットポリシーや ACL が「うっかり公開設定」になっても上書きしてブロックするセーフガードです。アカウントレベルとバケットレベルの両方に設定でき、<strong>より制限の強い方が適用</strong>されます。2023 年以降、新規バケットはデフォルトで全フラグが有効です。</p>
+
+<table>
+  <thead><tr><th>フラグ名</th><th>効果</th></tr></thead>
+  <tbody>
+    <tr><td><code>BlockPublicAcls</code></td><td>新規 PUT リクエストに public ACL が含まれていたらリジェクト（既存 ACL は変更しない）</td></tr>
+    <tr><td><code>IgnorePublicAcls</code></td><td>既存・新規を問わず public ACL を無視して読み込みブロック（PUT 自体は通す）</td></tr>
+    <tr><td><code>BlockPublicPolicy</code></td><td>バケットポリシーの PUT でポリシーが public 判定されるとリジェクト</td></tr>
+    <tr><td><code>RestrictPublicBuckets</code></td><td>public ポリシーを持つバケットへのアクセスを同一アカウントの AWS プリンシパルのみに制限</td></tr>
+  </tbody>
+</table>
+
+<p><code>BlockPublicAcls</code> と <code>IgnorePublicAcls</code> はペアで使うと効果的です。前者は「これ以上 public ACL を付けさせない」、後者は「既に付いている public ACL を無効化する」という補完関係にあります。</p>
+
+<blockquote><strong>「public」の定義</strong>: AWS が定義する <code>AllUsers</code> / <code>AuthenticatedUsers</code> グループへの許可、または Principal <code>"*"</code> にワイルドカード・変数なしの固定条件がないポリシーが public 扱いされます。</blockquote>
+
+<h3>バケットポリシー vs ACL — ACL はレガシー</h3>
+
+<p>2023 年以降、新規バケットのデフォルトは <code>ObjectOwnership=BucketOwnerEnforced</code>（ACL 無効）です。AWS は公式にバケットポリシーへの一元化を推奨しており、ACL は後方互換のためだけに残っています。</p>
+
+<table>
+  <thead><tr><th></th><th>バケットポリシー</th><th>ACL</th></tr></thead>
+  <tbody>
+    <tr><td>記述方式</td><td>JSON（IAM と同じ言語）</td><td>XML（Grantee/Permission）</td></tr>
+    <tr><td>最大サイズ</td><td>20 KB</td><td>—</td></tr>
+    <tr><td>クロスアカウント制御</td><td>Principal に別アカウント ID を指定</td><td>Grant で grantee を指定</td></tr>
+    <tr><td>CloudTrail の監査</td><td>一本化されて追跡しやすい</td><td>ACL 変更は別イベント</td></tr>
+    <tr><td>推奨度</td><td><strong>現在の標準</strong></td><td>レガシー</td></tr>
+  </tbody>
+</table>
+
+<h3>SSE-S3 / SSE-KMS / DSSE-KMS の違い</h3>
+
+<p>2023 年 1 月以降、S3 はすべての新規オブジェクトを <strong>SSE-S3 で自動暗号化</strong>します（追加料金なし）。より強い鍵管理が必要な場合は SSE-KMS か DSSE-KMS を選びます。</p>
+
+<table>
+  <thead><tr><th></th><th>SSE-S3</th><th>SSE-KMS</th><th>DSSE-KMS</th></tr></thead>
+  <tbody>
+    <tr><td>暗号化層数</td><td>1 層（AES-256）</td><td>1 層（AES-256）</td><td>2 層（AES-256 × 2）</td></tr>
+    <tr><td>鍵管理</td><td>AWS が完全管理</td><td>AWS managed key または CMK</td><td>CMK（必須）</td></tr>
+    <tr><td>CloudTrail に復号ログ</td><td>なし</td><td>あり（<code>kms:Decrypt</code>）</td><td>あり</td></tr>
+    <tr><td>KMS API 課金</td><td>なし</td><td>あり（$0.03/10k calls）</td><td>あり</td></tr>
+    <tr><td>Bucket Key 対応</td><td>非対応</td><td>対応（コスト ~99% 削減）</td><td>対応</td></tr>
+    <tr><td>クロスアカウント共有</td><td>可</td><td>CMK のみ可（AWS managed key は不可）</td><td>CMK のみ可</td></tr>
+    <tr><td>主な用途</td><td>標準・汎用</td><td>監査要件・CMK 必要時</td><td>多層暗号化が必要な規制（DoD 等）</td></tr>
+  </tbody>
+</table>
+
+<p><strong>DSSE-KMS</strong> は SSE-KMS と同じ KMS 統合ですが、S3 側が独自の第 2 暗号化層を追加します。FedRAMP HIGH や CNSSI 1253 などコンプライアンスで「2 層暗号化」が明示されている場合に使います。</p>
+
+<h3>Bucket Key — KMS コストを最大 99% 削減</h3>
+
+<p>SSE-KMS は PutObject ごとに KMS API を呼び出します。大量 PUT 環境では KMS のデフォルトクォータ（10,000 req/s/リージョン）に到達してスロットリングが起きます。Bucket Key を有効にすると、バケットレベルの時間限定キーを使ってオブジェクト単位の data key を生成するため、KMS 呼び出し回数が激減します。</p>
+
+<pre><code>resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
+  bucket = aws_s3_bucket.main.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.s3.arn
+    }
+    bucket_key_enabled = true  # KMS API コールを ~99% 削減
+  }
+}</code></pre>
+
+<p>Bucket Key 有効時は暗号化コンテキストがオブジェクト ARN ではなくバケット ARN になります（CloudTrail ログでの確認に影響する点に注意）。</p>
+
+<h3>デフォルト暗号化</h3>
+
+<p>バケットのデフォルト暗号化を変更しても、<strong>既存オブジェクトの暗号化方式は変わりません</strong>。既存オブジェクトを一括で再暗号化するには S3 Batch Operations の CopyObject アクションを使います。</p>
+
+<hr>
+
+<h2>主要な設定・API・パラメータ</h2>
+
+<h3>Block Public Access（Terraform）</h3>
+
+<pre><code>resource "aws_s3_bucket_public_access_block" "main" {
+  bucket = aws_s3_bucket.main.id
+
+  block_public_acls       = true  # 新規 public ACL をリジェクト
+  ignore_public_acls      = true  # 既存 public ACL を無視
+  block_public_policy     = true  # public ポリシーの PUT をリジェクト
+  restrict_public_buckets = true  # public ポリシーバケットのアクセスを制限
+}</code></pre>
+
+<h3>バケットポリシー: SSE-KMS を強制する例</h3>
+
+<pre><code>{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "DenyNonSSEKMS",
+    "Effect": "Deny",
+    "Principal": "*",
+    "Action": "s3:PutObject",
+    "Resource": "arn:aws:s3:::my-bucket/*",
+    "Condition": {
+      "Null": {
+        "s3:x-amz-server-side-encryption-aws-kms-key-id": "true"
+      }
+    }
+  }]
+}</code></pre>
+
+<h3>バケットポリシー: VPC Endpoint 経由のみ許可</h3>
+
+<pre><code>{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "DenyNonVPCE",
+    "Effect": "Deny",
+    "Principal": "*",
+    "Action": "s3:*",
+    "Resource": [
+      "arn:aws:s3:::my-bucket",
+      "arn:aws:s3:::my-bucket/*"
+    ],
+    "Condition": {
+      "StringNotEquals": {
+        "aws:sourceVpce": "vpce-xxxxxxxxxxxxxxxxx"
+      }
+    }
+  }]
+}</code></pre>
+
+<h3>VPC Gateway Endpoint（Terraform）</h3>
+
+<pre><code>resource "aws_vpc_endpoint" "s3" {
+  vpc_id            = aws_vpc.main.id
+  service_name      = "com.amazonaws.${var.aws_region}.s3"
+  vpc_endpoint_type = "Gateway"           # S3 / DynamoDB は Gateway 型（無料）
+
+  route_table_ids = [
+    aws_route_table.private_a.id,
+    aws_route_table.private_b.id,         # 全サブネットのルートテーブルを列挙
+  ]
+}</code></pre>
+
+<h3>S3 アクセスログの有効化（Terraform）</h3>
+
+<pre><code>resource "aws_s3_bucket_logging" "main" {
+  bucket        = aws_s3_bucket.main.id
+  target_bucket = aws_s3_bucket.logs.id   # 配信先は別バケット（SSE-S3 必須）
+  target_prefix = "s3-access-logs/"
+}</code></pre>
+
+<blockquote>アクセスログ配信先バケットが SSE-KMS の場合、S3 がログオブジェクトを書けなくなります。配信先は必ず SSE-S3 を使ってください。</blockquote>
+
+<hr>
+
+<h2>よくある落とし穴・誤解</h2>
+
+<h3>1. BPA を全部 true にしても「クロスアカウント IAM」は防げない</h3>
+
+<p>Block Public Access は「public アクセス」（<code>AllUsers</code> / <code>AuthenticatedUsers</code> グループや無条件 <code>*</code> Principal）をブロックする機能です。別 AWS アカウントの IAM ロールからのアクセスは「認証済みの特定プリンシパル」なので BPA の対象外です。バケットポリシーで明示的に許可していれば通ります。</p>
+
+<h3>2. <code>BlockPublicPolicy</code> はアカウントレベルで設定しないと意味が薄い</h3>
+
+<p>バケットレベルで <code>BlockPublicPolicy=true</code> にしても、バケットポリシーへの変更権限を持つ IAM ユーザーがバケットの BPA 設定ごと外すことができます。アカウントレベルに設定すれば、バケットポリシーで上書きできなくなります。</p>
+
+<h3>3. <code>IgnorePublicAcls</code> と <code>BlockPublicAcls</code> は独立している</h3>
+
+<p><code>BlockPublicAcls=true</code> は新規 PUT の public ACL をリジェクトするだけで、<strong>既存の public ACL は残ります</strong>。過去に付けた public ACL を無効化するには <code>IgnorePublicAcls=true</code> が別途必要です。</p>
+
+<h3>4. AWS managed key（<code>aws/s3</code>）はクロスアカウント共有不可</h3>
+
+<p>SSE-KMS で AWS managed key を使っている場合、別アカウントから復号できません。クロスアカウントで S3 データを共有するには customer managed key（CMK）を作成し、相手アカウントの IAM プリンシパルをキーポリシーに追加します。</p>
+
+<h3>5. VPC Endpoint のルートテーブルはすべて列挙する</h3>
+
+<p>Gateway Endpoint はルートテーブルに静的エントリを追加する方式です。複数のプライベートサブネットがある場合、すべてのサブネットに対応するルートテーブルを <code>route_table_ids</code> に列挙しないと、サブネットごとにアクセスが通ったり通らなかったりします。</p>
+
+<h3>6. デフォルト暗号化変更では既存オブジェクトは再暗号化されない</h3>
+
+<p>バケットのデフォルト暗号化を SSE-KMS に変えても、変更前にアップロードされたオブジェクトは SSE-S3 のままです。一括再暗号化は S3 Batch Operations の CopyObject アクションで行います。</p>
+
+<hr>
+
+<h2>公開バケット流出インシデントの典型パターンと対策</h2>
+
+<h3>インシデントパターン</h3>
+
+<table>
+  <thead><tr><th>パターン</th><th>原因</th><th>対策</th></tr></thead>
+  <tbody>
+    <tr><td>設定ドリフト</td><td>Terraform 管理外の手動変更で BPA が外れる</td><td>Terraform state drift 検知 + Config Rules</td></tr>
+    <tr><td>ワイルドカード Principal の Condition ミス</td><td><code>Principal: "*"</code> に付けた <code>Condition</code> の演算子を誤り全公開</td><td><code>BlockPublicPolicy</code> をアカウントレベルで有効化</td></tr>
+    <tr><td>古い ACL コード</td><td>CI に <code>ACL: public-read</code> が残ったままデプロイ</td><td><code>BucketOwnerEnforced</code>（ACL 無効）+ <code>BlockPublicAcls</code></td></tr>
+    <tr><td>プリサインド URL のログ漏洩</td><td><code>--debug</code> モードで URL が CloudWatch Logs に出力される</td><td>Lambda ログで URL 本体を出力しない設計</td></tr>
+  </tbody>
+</table>
+
+<h3>IAM Access Analyzer for S3</h3>
+
+<p>IAM Access Analyzer for S3 はバケットポリシー・ACL・アクセスポイントポリシーを継続的にスキャンし、外部から公開されているバケットをアラートします。コンソールからワンクリックでパブリックアクセスをブロックする機能もあります。</p>
+
+<hr>
+
+<h2>このプロジェクト（AtCoder 復習）での使いどころ</h2>
+
+<table>
+  <thead><tr><th>設定</th><th>適用箇所</th><th>理由</th></tr></thead>
+  <tbody>
+    <tr><td>BPA 全フラグ有効</td><td>全バケット</td><td>AC コードや提出履歴データを誤公開しない</td></tr>
+    <tr><td>SSE-KMS + Bucket Key</td><td>メインデータバケット</td><td>KMS 監査証跡を残しつつコストを抑える</td></tr>
+    <tr><td>SSE-S3</td><td>アクセスログ配信先バケット</td><td>KMS バケットへのログ配信は S3 側が書けないため</td></tr>
+    <tr><td>VPC Gateway Endpoint</td><td>Lambda → S3 通信</td><td>NAT Gateway コスト（$0.045/GB）を回避</td></tr>
+    <tr><td>バケットポリシーで <code>aws:sourceVpce</code> 条件</td><td>データバケット</td><td>VPC 外からのアクセスをバケット側で二重ブロック</td></tr>
+    <tr><td>バケットポリシーで SSE-KMS 強制</td><td>データバケット</td><td>KMS 暗号化なしの PutObject を拒否</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>公式ドキュメント（出典）</h2>
+
+<ul>
+  <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-block-public-access.html">Amazon S3 のパブリックアクセスのブロック</a>（閲覧日 2026-05-31）</li>
+  <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingKMSEncryption.html">SSE-KMS を使用したサーバー側の暗号化</a>（閲覧日 2026-05-31）</li>
+  <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucket-policies.html">Amazon S3 バケットポリシー</a>（閲覧日 2026-05-31）</li>
+  <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/serv-side-encryption.html">サーバー側の暗号化でデータを保護する</a>（閲覧日 2026-05-31）</li>
+  <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucket-key.html">Amazon S3 Bucket Keys による SSE-KMS のコスト削減</a>（閲覧日 2026-05-31）</li>
+  <li><a href="https://docs.aws.amazon.com/vpc/latest/privatelink/vpc-endpoints-s3.html">VPC エンドポイント — Amazon S3 の Gateway エンドポイント</a>（閲覧日 2026-05-31）</li>
+  <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/enable-server-access-logging.html">Amazon S3 サーバーアクセスログの有効化</a>（閲覧日 2026-05-31）</li>
+</ul>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase2</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase2</span></li>
+<li><b>負荷生成</b> — オブジェクトを put（ObjectCreated→Lambda が発火）<span class="cmd">make sandbox-load-phase2</span></li>
+<li><b>観測</b> — Lambda Invocations は即時 / S3 ストレージ系は日次<span class="cmd">make sandbox-watch-phase2</span><div class="tstamp">⏱ Lambda は数分、ストレージ系は翌日</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase2</span></li>
+</ol>
+<p class="note warn">⚠ バケットは force_destroy 済みなのでオブジェクトが残っていても destroy できる。</p>
+</section>
+<div class="foot">← <a href="index.html">Phase 2 ルーター</a> ／ <a href="main.md">Markdown 目次</a> ／ 概要は <a href="preview-s3.html">preview-s3</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main></body></html>

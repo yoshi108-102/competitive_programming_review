@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 2 教材 — S3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#3b82f6;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 2 教材 (S3) · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Phase 2 教材: プリサインド URL（署名付き一時アクセス）</h1>
+
+<hr>
+
+<h2>このトピックは何か</h2>
+
+<p>プリサインド URL（Presigned URL）は、S3 バケットへの一時的なアクセス権を URL に埋め込む仕組みです。IAM 認証情報を相手に渡さなくても、URL を知っている人だけが指定した期間だけオブジェクトを GET または PUT できます。</p>
+
+<p>典型的なユースケースは次のとおりです。</p>
+
+<ul>
+  <li><strong>ダウンロードリンクの発行</strong>: バックエンドが URL を生成し、フロントエンドに返す。ユーザーは AWS 認証なしでオブジェクトを取得できる。</li>
+  <li><strong>クライアントサイド直接アップロード</strong>: フロントエンドが PUT 用の URL を使って、バックエンド（Lambda）を経由せず S3 に直接ファイルを送る。Lambda の転送コスト・ペイロードサイズ制限を回避できる。</li>
+</ul>
+
+<hr>
+
+<h2>コアコンセプト</h2>
+
+<h3>署名の仕組み</h3>
+
+<p>プリサインド URL は AWS Signature Version 4（SigV4）で署名されます。URL にはクエリパラメータとして署名に必要な情報がすべて含まれており、署名の検証は S3 側が行います。</p>
+
+<pre><code>https://BUCKET.s3.REGION.amazonaws.com/KEY
+  ?X-Amz-Algorithm=AWS4-HMAC-SHA256
+  &amp;X-Amz-Credential=AKID%2FYYYYMMDD%2FREGION%2Fs3%2Faws4_request
+  &amp;X-Amz-Date=20260101T000000Z
+  &amp;X-Amz-Expires=3600
+  &amp;X-Amz-SignedHeaders=host
+  &amp;X-Amz-Signature=&lt;計算済み署名値&gt;</code></pre>
+
+<table>
+  <thead><tr><th>パラメータ</th><th>意味</th></tr></thead>
+  <tbody>
+    <tr><td><code>X-Amz-Algorithm</code></td><td>署名アルゴリズム（常に <code>AWS4-HMAC-SHA256</code>）</td></tr>
+    <tr><td><code>X-Amz-Credential</code></td><td>署名者の IAM エンティティ ID、日付、リージョン、サービス</td></tr>
+    <tr><td><code>X-Amz-Date</code></td><td>URL 生成時刻（ISO 8601 形式）</td></tr>
+    <tr><td><code>X-Amz-Expires</code></td><td>TTL（秒）。生成時刻からの有効期間</td></tr>
+    <tr><td><code>X-Amz-Signature</code></td><td>SigV4 で計算した署名値</td></tr>
+  </tbody>
+</table>
+
+<p>S3 は受信したリクエストの <code>X-Amz-Date</code> + <code>X-Amz-Expires</code> を現在時刻と比較し、期限切れなら 403 を返します。署名値の改ざん（パス・パラメータの変更）も 403 になります。</p>
+
+<h3>誰の権限で署名されるか</h3>
+
+<p>プリサインド URL は<strong>署名した IAM エンティティの権限を借用</strong>します。URL を使う人が IAM ポリシーを持っていなくても、署名者が <code>s3:GetObject</code> を持っていれば GET できます。逆に、署名者が持っていない権限を URL で付与することはできません。</p>
+
+<pre><code>署名者（Lambda 実行ロール）が s3:GetObject を持っている
+  ↓
+generate_presigned_url("get_object") で URL 生成
+  ↓
+URL を受け取ったブラウザが GET リクエスト送信
+  ↓
+S3 が「署名者のロールで s3:GetObject 許可あり」を確認 → 200 OK</code></pre>
+
+<h3>TTL と有効期限の制約</h3>
+
+<p>TTL（<code>ExpiresIn</code>）には署名に使う IAM エンティティの種類によって上限があります。</p>
+
+<table>
+  <thead><tr><th>署名者</th><th>TTL の上限</th></tr></thead>
+  <tbody>
+    <tr><td>IAM ロール（STS 一時認証情報）</td><td><strong>1 時間（3600 秒）</strong></td></tr>
+    <tr><td>IAM ユーザー（長期認証情報）</td><td><strong>7 日（604800 秒）</strong></td></tr>
+  </tbody>
+</table>
+
+<p>Lambda 実行ロールは STS 一時認証情報を使うため、上限は 1 時間です。<code>ExpiresIn=86400</code>（24 時間）を指定しても URL の有効期限はロールの認証情報が失効するまでに切り詰められます。</p>
+
+<h3>GET 用と PUT 用の違い</h3>
+
+<table>
+  <thead><tr><th>操作</th><th>boto3 の <code>ClientMethod</code></th><th>必要な IAM 権限（署名者側）</th><th>用途</th></tr></thead>
+  <tbody>
+    <tr><td>GET（ダウンロード）</td><td><code>"get_object"</code></td><td><code>s3:GetObject</code></td><td>ダウンロードリンクの発行</td></tr>
+    <tr><td>PUT（アップロード）</td><td><code>"put_object"</code></td><td><code>s3:PutObject</code></td><td>クライアント直接アップロード</td></tr>
+  </tbody>
+</table>
+
+<p>PUT 用 URL の場合、クライアントは URL に対して <code>Content-Type</code> などのヘッダーを含めてリクエストします。署名生成時に <code>Params</code> で <code>ContentType</code> を指定すると、URL を使う際にそのヘッダー値と一致しなければ 403 になります。</p>
+
+<hr>
+
+<h2>主要な設定・API・パラメータ（SDK コード例）</h2>
+
+<h3>GET 用 URL の生成</h3>
+
+<pre><code>import boto3
+
+s3 = boto3.client("s3", region_name="ap-northeast-1")
+
+url = s3.generate_presigned_url(
+    ClientMethod="get_object",
+    Params={
+        "Bucket": "atcoder-review-artifacts",
+        "Key": "submissions/2026/abc.json",
+        # ResponseContentDisposition で download ヘッダーを強制することも可能
+        # "ResponseContentDisposition": 'attachment; filename="abc.json"',
+    },
+    ExpiresIn=300,  # TTL: 5 分（秒単位）
+)
+# 返り値は文字列 URL。これをそのままクライアントに渡す。</code></pre>
+
+<h3>PUT 用 URL の生成</h3>
+
+<pre><code>url = s3.generate_presigned_url(
+    ClientMethod="put_object",
+    Params={
+        "Bucket": "atcoder-review-artifacts",
+        "Key": "uploads/user123/solution.py",
+        "ContentType": "text/x-python",  # 署名に ContentType を含める
+    },
+    ExpiresIn=600,  # 10 分
+    HttpMethod="PUT",  # PUT 用には明示的に指定する
+)</code></pre>
+
+<p>クライアント（ブラウザ / curl）からは次のように使います。</p>
+
+<pre><code># GET
+curl -L "$URL" -o output.json
+
+# PUT
+curl -X PUT "$URL" \
+  -H "Content-Type: text/x-python" \
+  --data-binary @solution.py</code></pre>
+
+<h3>presigned_post（フォームアップロード）</h3>
+
+<p>ブラウザの <code>&lt;form&gt;</code> から直接アップロードする場合は <code>generate_presigned_post</code> を使います。</p>
+
+<pre><code>response = s3.generate_presigned_post(
+    Bucket="atcoder-review-artifacts",
+    Key="uploads/${filename}",
+    Fields={"Content-Type": "text/x-python"},
+    Conditions=[
+        ["content-length-range", 1, 1_048_576],  # 1 バイト〜1 MB
+    ],
+    ExpiresIn=600,
+)
+# response = {"url": "https://...", "fields": {"key": ..., "AWSAccessKeyId": ..., ...}}</code></pre>
+
+<p><code>generate_presigned_post</code> では <code>Conditions</code> でファイルサイズ・Content-Type などの制約を URL に埋め込めます。<code>generate_presigned_url(put_object)</code> より細かい制御が可能です。</p>
+
+<hr>
+
+<h2>よくある落とし穴・誤解</h2>
+
+<h3>1. Lambda 実行ロールで署名した URL の TTL 上限</h3>
+
+<p>最も頻繁に踏む落とし穴です。<code>ExpiresIn=86400</code> を指定しても、Lambda の一時認証情報（STS）の有効期限（デフォルト最大 1 時間）が先に来ると、1 時間後に URL は使えなくなります。URL の実効 TTL は <code>min(ExpiresIn, 認証情報残存時間)</code> です。</p>
+
+<p>長い TTL が必要な場合は IAM ユーザーの長期認証情報で署名するか、CloudFront Signed URL に切り替えることを検討してください。</p>
+
+<h3>2. PUT URL の Content-Type ミスマッチ</h3>
+
+<p><code>generate_presigned_url</code> の <code>Params</code> に <code>ContentType</code> を入れると、その値が署名の計算に含まれます。クライアントが送る <code>Content-Type</code> ヘッダーが一致しないと S3 は 403 を返します。<code>Content-Type</code> を署名に含めたくない場合は <code>Params</code> から除外してください（ただし型チェックがなくなる）。</p>
+
+<h3>3. 期限切れ後の挙動（403 vs 401）</h3>
+
+<p>有効期限を過ぎた URL にアクセスすると S3 は <strong>HTTP 403 Forbidden</strong> を返します（401 ではありません）。エラーボディは XML で、<code>&lt;Code&gt;AccessDenied&lt;/Code&gt;</code> と <code>&lt;Message&gt;Request has expired.&lt;/Message&gt;</code> が含まれます。クライアント側で期限切れを判別したい場合はこのレスポンスをパースします。</p>
+
+<h3>4. 漏洩リスクと緩和</h3>
+
+<p>プリサインド URL は「URL を知っているだけで使える」ため、漏洩すると TTL 内は誰でも使えます。</p>
+
+<table>
+  <thead><tr><th>リスク源</th><th>緩和策</th></tr></thead>
+  <tbody>
+    <tr><td>ログへの URL 出力</td><td>Lambda のロガーに URL 本体を渡さない。<code>--debug</code> モード禁止</td></tr>
+    <tr><td>CloudWatch Logs Insights で検索可能</td><td>ログストリームへの IAM アクセス制限</td></tr>
+    <tr><td>TTL が長すぎる</td><td>ダウンロードリンクは 5〜15 分、アップロードは 10〜30 分程度を目安に最短設定</td></tr>
+    <tr><td>IAM ユーザー認証情報の流出</td><td>IAM ロールで署名する（上限 1 時間で自動制限）</td></tr>
+  </tbody>
+</table>
+
+<p>CloudFront Signed URL/Cookies に置き換えると CloudFront ディストリビューション側で即時無効化できます。S3 プリサインド URL は S3 側では無効化できません。</p>
+
+<h3>5. <code>BlockPublicAccess</code> との関係</h3>
+
+<p>バケットに <code>BlockPublicAccess</code> が有効でも、プリサインド URL は IAM ポリシーの認可に基づくため動作します。プリサインド URL はパブリックアクセスではなく IAM 認可のフローを使うからです。混同しないよう注意してください。</p>
+
+<h3>6. URL の改ざんは即座に 403</h3>
+
+<p>キー名・クエリパラメータ・バケット名を 1 文字でも変えると署名が合わなくなり 403 になります。URL を「ベースにして似た URL を作る」ようなことはできません。</p>
+
+<hr>
+
+<h2>このプロジェクト（AtCoder 復習）での使いどころ</h2>
+
+<table>
+  <thead><tr><th>ユースケース</th><th>実装パターン</th></tr></thead>
+  <tbody>
+    <tr><td>AtCoder のコード本体（数 KB〜数十 KB）を S3 に保存し、フロントエンドに一時 URL を返す</td><td><code>get_object</code> URL を Lambda が生成 → API 経由でクライアントへ</td></tr>
+    <tr><td>ユーザーが手元のコードを S3 にアップロード</td><td><code>put_object</code> URL をフロントが受け取り、ブラウザから直接 PUT</td></tr>
+    <tr><td>コードの差分ビュー用にダウンロードリンクを都度発行</td><td>TTL 5〜10 分で GET URL を返すエンドポイント</td></tr>
+  </tbody>
+</table>
+
+<p>Phase 1 で DynamoDB に保存した提出データは最大 400 KB のアイテム制限があります。コード本体が大きい場合は S3 にコードを置き、DynamoDB にはそのキーだけを保持する「参照パターン」が自然です。フロントエンドはそのキーを受け取ってプリサインド URL 経由でコードを取得します。</p>
+
+<hr>
+
+<h2>公式ドキュメント（出典）</h2>
+
+<ul>
+  <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/ShareObjectPreSignedURL.html">プリサインド URL を使用したオブジェクトの共有 — Amazon S3 ユーザーガイド</a>（閲覧日 2026-05-31）</li>
+  <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html">プリサインド URL の使用 — Amazon S3 ユーザーガイド</a>（閲覧日 2026-05-31）</li>
+</ul>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase2</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase2</span></li>
+<li><b>負荷生成</b> — オブジェクトを put（ObjectCreated→Lambda が発火）<span class="cmd">make sandbox-load-phase2</span></li>
+<li><b>観測</b> — Lambda Invocations は即時 / S3 ストレージ系は日次<span class="cmd">make sandbox-watch-phase2</span><div class="tstamp">⏱ Lambda は数分、ストレージ系は翌日</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase2</span></li>
+</ol>
+<p class="note warn">⚠ バケットは force_destroy 済みなのでオブジェクトが残っていても destroy できる。</p>
+</section>
+<div class="foot">← <a href="index.html">Phase 2 ルーター</a> ／ <a href="main.md">Markdown 目次</a> ／ 概要は <a href="preview-s3.html">preview-s3</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main></body></html>

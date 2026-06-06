@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 2 教材 — S3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#3b82f6;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 2 教材 (S3) · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Phase 2 教材: イベント通知（S3 → Lambda / SQS / SNS / EventBridge）</h1>
+
+<hr>
+
+<h2>このトピックは何か</h2>
+
+<p>Amazon S3 のイベント通知（Event Notifications）は、バケット内で特定の操作が起きたとき、その情報を外部のサービスへ自動的に送り出す仕組みです。たとえば「新しいオブジェクトが PUT されたら Lambda を起動する」という連携を、ポーリングなしで実現できます。</p>
+
+<p>この仕組みを使うと、S3 を起点にしたイベント駆動アーキテクチャを組めます。本 sandbox の AtCoder 復習ツールでは「提出 JSON が S3 に置かれたら Lambda で DynamoDB に書き込む」という ObjectCreated → Lambda 構成がそのまま当てはまります。</p>
+
+<hr>
+
+<h2>コアコンセプト</h2>
+
+<h3>通知の流れ</h3>
+
+<pre><code>バケット内で操作（PUT / DELETE / Restore / Tag など）
+       │
+       ▼
+  通知設定（Notification Configuration）を評価
+       │  ← prefix / suffix フィルタでここで絞り込む
+       ▼
+  宛先へ非同期配信
+  ├─ Lambda
+  ├─ SQS Standard Queue
+  ├─ SNS Standard Topic
+  └─ EventBridge（全イベントを一括転送）</code></pre>
+
+<p>通知設定はバケットのサブリソース（<code>NotificationConfiguration</code>）として保存されます。設定の追加・変更は <code>PutBucketNotificationConfiguration</code> API（または Terraform）で行います。</p>
+
+<h3>at-least-once 配信</h3>
+
+<p>S3 のイベント通知は <strong>少なくとも 1 回（at-least-once）</strong> 配信されます。通常は数秒以内に届きますが、稀に 1 分以上かかることがあります。また、S3 の再試行機構により <strong>同じイベントが重複して届く可能性</strong>があります。処理側を冪等（idempotent）に設計する必要があります。</p>
+
+<h3>順序保証なし</h3>
+
+<p>イベントが発生した順序どおりに通知が届く保証はありません。複数のオブジェクト操作が連続して起きた場合、通知の到達順は前後する可能性があります。</p>
+
+<hr>
+
+<h2>主要な設定・API・パラメータ</h2>
+
+<h3>サポートされるイベント種別（SQS / SNS / Lambda 向け）</h3>
+
+<table>
+<thead><tr><th>イベント種別</th><th>概要</th></tr></thead>
+<tbody>
+<tr><td><code>s3:ObjectCreated:*</code></td><td>PUT / POST / COPY / CompleteMultipartUpload のいずれかで作成</td></tr>
+<tr><td><code>s3:ObjectCreated:Put</code></td><td>PutObject による作成のみ</td></tr>
+<tr><td><code>s3:ObjectCreated:Post</code></td><td>HTML フォームの POST による作成</td></tr>
+<tr><td><code>s3:ObjectCreated:Copy</code></td><td>CopyObject による作成</td></tr>
+<tr><td><code>s3:ObjectCreated:CompleteMultipartUpload</code></td><td>マルチパートアップロード完了時</td></tr>
+<tr><td><code>s3:ObjectRemoved:*</code></td><td>Delete / DeleteMarkerCreated のいずれか</td></tr>
+<tr><td><code>s3:ObjectRemoved:Delete</code></td><td>非バージョンオブジェクトの削除、またはバージョンの完全削除</td></tr>
+<tr><td><code>s3:ObjectRemoved:DeleteMarkerCreated</code></td><td>バージョン有効バケットで削除マーカーが作成された</td></tr>
+<tr><td><code>s3:ObjectRestore:Post</code></td><td>Glacier からのリストア開始</td></tr>
+<tr><td><code>s3:ObjectRestore:Completed</code></td><td>リストア完了</td></tr>
+<tr><td><code>s3:ObjectRestore:Delete</code></td><td>リストアされた一時コピーの期限切れ削除</td></tr>
+<tr><td><code>s3:LifecycleExpiration:Delete</code></td><td>ライフサイクルルールによるオブジェクト削除</td></tr>
+<tr><td><code>s3:LifecycleTransition</code></td><td>ライフサイクルによるストレージクラス移行</td></tr>
+<tr><td><code>s3:ObjectTagging:Put</code></td><td>タグの追加・更新</td></tr>
+<tr><td><code>s3:ObjectTagging:Delete</code></td><td>タグの削除</td></tr>
+<tr><td><code>s3:ObjectAcl:Put</code></td><td>ACL の変更</td></tr>
+<tr><td><code>s3:Replication:OperationFailedReplication</code></td><td>レプリケーション失敗</td></tr>
+<tr><td><code>s3:IntelligentTiering</code></td><td>Intelligent-Tiering の Archive 移行</td></tr>
+<tr><td><code>s3:ReducedRedundancyLostObject</code></td><td>RRS オブジェクトが失われた</td></tr>
+</tbody>
+</table>
+
+<blockquote>ワイルドカード（<code>s3:ObjectCreated:*</code> など）を指定すると、そのカテゴリの全サブタイプを受け取れます。</blockquote>
+
+<h3>フィルタ（prefix / suffix）</h3>
+
+<p>通知設定にはキーのプレフィックスとサフィックスによるフィルタを付けられます。1 つの通知設定につきフィルタは 1 つだけ有効です。</p>
+
+<pre><code># Terraform での例
+resource "aws_s3_bucket_notification" "example" {
+  bucket = aws_s3_bucket.main.id
+
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.processor.arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_prefix       = "submissions/"   # このプレフィックスのキーだけ
+    filter_suffix       = ".json"          # このサフィックスのキーだけ
+  }
+}</code></pre>
+
+<h3>4 つの宛先と制約</h3>
+
+<table>
+<thead><tr><th>宛先</th><th>特徴</th><th>制約</th></tr></thead>
+<tbody>
+<tr><td><strong>Lambda</strong></td><td>最速。S3 が直接 Lambda を非同期呼び出し</td><td>同一リージョン必須。Lambda へのリソースポリシー付与が必要</td></tr>
+<tr><td><strong>SQS Standard</strong></td><td>バッファ機能あり。Lambda の DLQ と組み合わせ可能</td><td>同一リージョン必須。FIFO キューは不可</td></tr>
+<tr><td><strong>SNS Standard</strong></td><td>ファンアウト（1 通知 → 複数サブスクライバー）</td><td>同一リージョン必須。FIFO トピックは不可</td></tr>
+<tr><td><strong>EventBridge</strong></td><td>ルール/フィルタ/アーカイブ/リプレイが使える。全イベントを一括転送</td><td>有効/無効の二択（イベント種別の選択不可）</td></tr>
+</tbody>
+</table>
+
+<p>SQS FIFO キューや SNS FIFO トピックへ直接通知することはできません。FIFO が必要な場合は EventBridge 経由で転送します。</p>
+
+<h3>Lambda を宛先にするときのリソースポリシー</h3>
+
+<p>S3 が Lambda を呼び出すには、Lambda 側のリソースポリシーで <code>s3.amazonaws.com</code> からの呼び出しを許可する必要があります。</p>
+
+<pre><code>resource "aws_lambda_permission" "allow_s3" {
+  statement_id  = "AllowS3Invocation"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.processor.function_name
+  principal     = "s3.amazonaws.com"
+  source_arn    = aws_s3_bucket.main.arn
+}</code></pre>
+
+<p><code>source_arn</code> を省略すると、任意のバケットから呼び出せる状態になるため必ず指定します。</p>
+
+<h3>Lambda が受け取るイベント構造</h3>
+
+<pre><code>{
+  "Records": [
+    {
+      "eventVersion": "2.1",
+      "eventSource": "aws:s3",
+      "awsRegion": "ap-northeast-1",
+      "eventTime": "2026-05-31T12:00:00.000Z",
+      "eventName": "ObjectCreated:Put",
+      "s3": {
+        "s3SchemaVersion": "1.0",
+        "bucket": {
+          "name": "atcoder-review-artifacts",
+          "arn": "arn:aws:s3:::atcoder-review-artifacts"
+        },
+        "object": {
+          "key": "submissions%2F2026%2Fabc.json",
+          "size": 1024,
+          "eTag": "d41d8cd98f00b204e9800998ecf8427e",
+          "sequencer": "0A1B2C3D4E5F678901"
+        }
+      }
+    }
+  ]
+}</code></pre>
+
+<p><code>object.key</code> は URL エンコードされています。Python で取り出すときは <code>urllib.parse.unquote_plus(record["s3"]["object"]["key"])</code> を使います。</p>
+
+<h3>EventBridge を有効にする</h3>
+
+<p>EventBridge への通知はバケット単位で有効/無効を切り替えます。有効にすると、そのバケットで発生するすべてのイベントが EventBridge に転送されます。イベント種別の選択はできません（ルール側でフィルタします）。</p>
+
+<pre><code>aws s3api put-bucket-notification-configuration \
+  --bucket my-bucket \
+  --notification-configuration '{"EventBridgeConfiguration": {}}'</code></pre>
+
+<p>Terraform では <code>aws_s3_bucket_notification</code> の <code>eventbridge</code> 引数で設定します。</p>
+
+<pre><code>resource "aws_s3_bucket_notification" "eventbridge" {
+  bucket      = aws_s3_bucket.main.id
+  eventbridge = true
+}</code></pre>
+
+<p>有効化後、変更が反映されるまで約 5 分かかります。</p>
+
+<h3>EventBridge が送るイベント種別</h3>
+
+<p>EventBridge 向けのイベントは SQS/SNS/Lambda 向けとはイベント名の形式が異なります。</p>
+
+<table>
+<thead><tr><th>EventBridge のイベント種別</th><th>対応する操作</th></tr></thead>
+<tbody>
+<tr><td><code>Object Created</code></td><td>PutObject / POST / CopyObject / CompleteMultipartUpload</td></tr>
+<tr><td><code>Object Deleted (DeleteObject)</code></td><td>DeleteObject API</td></tr>
+<tr><td><code>Object Deleted (Lifecycle expiration)</code></td><td>ライフサイクルルールによる削除</td></tr>
+<tr><td><code>Object Restore Initiated</code></td><td>Glacier リストア開始</td></tr>
+<tr><td><code>Object Restore Completed</code></td><td>Glacier リストア完了</td></tr>
+<tr><td><code>Object Restore Expired</code></td><td>リストア一時コピーの期限切れ</td></tr>
+<tr><td><code>Object Storage Class Changed</code></td><td>ストレージクラス変更</td></tr>
+<tr><td><code>Object Access Tier Changed</code></td><td>Intelligent-Tiering の Archive 移行</td></tr>
+<tr><td><code>Object ACL Updated</code></td><td>ACL 変更</td></tr>
+<tr><td><code>Object Tags Added</code></td><td>タグ追加</td></tr>
+<tr><td><code>Object Tags Deleted</code></td><td>タグ削除</td></tr>
+</tbody>
+</table>
+
+<hr>
+
+<h2>よくある落とし穴・誤解</h2>
+
+<h3>1. Lambda が失敗しても S3 は気にしない</h3>
+
+<p>S3 から Lambda への通知は非同期呼び出しです。Lambda 関数がエラーを返しても、S3 はそれを検知せず通知を「成功」として扱います。処理失敗に備えるには Lambda 側で DLQ（Dead-Letter Queue）または非同期呼び出しの宛先設定（<code>EventInvokeConfig</code>）を設定します。</p>
+
+<pre><code>resource "aws_lambda_function_event_invoke_config" "processor" {
+  function_name = aws_lambda_function.processor.function_name
+
+  destination_config {
+    on_failure {
+      destination = aws_sqs_queue.dlq.arn
+    }
+  }
+}</code></pre>
+
+<h3>2. 大量 PUT 時のスロットリング</h3>
+
+<p>短時間に大量のオブジェクトが PUT されると、Lambda の同時実行数が枯渇することがあります。その場合、S3 はイベントをリトライしますが、<strong>最大 6 時間後</strong> に再試行する可能性があります。スループットが高いユースケースでは SQS を間に挟み、Lambda の <code>EventSourceMapping</code> で並列度を制御するのが堅牢な設計です。</p>
+
+<pre><code>S3 → SQS → Lambda（BatchSize / MaximumConcurrency で流量制御）</code></pre>
+
+<h3>3. 同一バケットへの書き戻しによる無限ループ</h3>
+
+<p>Lambda がイベントを受け取って処理した結果を、同じバケットの通知対象プレフィックスに書き戻すと、再度通知が飛んで無限ループになります。書き戻し先のキーは通知のフィルタ範囲外のプレフィックスに設定するか、別バケットを使います。</p>
+
+<h3>4. オブジェクトキーの URL エンコード</h3>
+
+<p>イベントペイロード内の <code>object.key</code> はパーセントエンコードされています。スペースや日本語が含まれるキーを扱う場合は必ずデコードしてから利用します。</p>
+
+<pre><code>import urllib.parse
+
+def handler(event, context):
+    for record in event["Records"]:
+        key = urllib.parse.unquote_plus(record["s3"]["object"]["key"])
+        # key = "submissions/2026/abc.json"</code></pre>
+
+<h3>5. SQS FIFO は直接指定できない</h3>
+
+<p>SQS FIFO キューは S3 イベント通知の宛先として直接指定できません。FIFO の順序保証が必要な場合は、S3 → SQS Standard → Lambda で受けるか、S3 → EventBridge → SQS FIFO のルートを取ります。</p>
+
+<h3>6. 宛先とバケットは同一リージョンが必要</h3>
+
+<p>Lambda / SQS / SNS の宛先は、バケットと同じ AWS リージョンに存在する必要があります。EventBridge はデフォルトでバケットと同一リージョンのイベントバスへ送られます。</p>
+
+<hr>
+
+<h2>このプロジェクト（AtCoder 復習）での使いどころ</h2>
+
+<p>本 sandbox では <code>atcoder-review-artifacts</code> バケットへの ObjectCreated が Lambda をトリガーします。</p>
+
+<table>
+<thead><tr><th>構成要素</th><th>役割</th></tr></thead>
+<tbody>
+<tr><td>S3 バケット</td><td>提出データの着地点（<code>submissions/</code> プレフィックス）</td></tr>
+<tr><td><code>s3:ObjectCreated:*</code> 通知</td><td>PUT 完了を検知して Lambda を起動</td></tr>
+<tr><td>prefix フィルタ <code>submissions/</code></td><td>Lambda 処理対象を提出 JSON に限定</td></tr>
+<tr><td>suffix フィルタ <code>.json</code></td><td>JSON 以外（画像等）を誤ってトリガーしない</td></tr>
+<tr><td>Lambda（<code>sync_submissions</code>）</td><td>S3 から JSON を読み込み DynamoDB に書き込む</td></tr>
+</tbody>
+</table>
+
+<p>将来的にファンアウトが必要になった場合（例: 通知メール送信 + DB 書き込みを並列実行）は SNS をハブにして Lambda と SQS を複数サブスクライバーとして接続できます。より複雑なルーティング（例: コンテストIDでターゲットを分岐）が必要になったら EventBridge ルールへの移行を検討します。</p>
+
+<hr>
+
+<h2>公式ドキュメント（出典）</h2>
+
+<ul>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/NotificationHowTo.html">Amazon S3 イベント通知 — 概要</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/notification-how-to-event-types-and-destinations.html">イベント通知タイプと宛先</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/EventBridge.html">Amazon EventBridge を使用する</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/enable-event-notifications-eventbridge.html">Amazon EventBridge の有効化</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/grant-destinations-permissions-to-s3.html">通知先へのアクセス許可の付与</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/lambda/latest/dg/with-s3.html">AWS Lambda で Amazon S3 を使用する（Lambda デベロッパーガイド）</a>（閲覧日 2026-05-31）</li>
+</ul>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase2</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase2</span></li>
+<li><b>負荷生成</b> — オブジェクトを put（ObjectCreated→Lambda が発火）<span class="cmd">make sandbox-load-phase2</span></li>
+<li><b>観測</b> — Lambda Invocations は即時 / S3 ストレージ系は日次<span class="cmd">make sandbox-watch-phase2</span><div class="tstamp">⏱ Lambda は数分、ストレージ系は翌日</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase2</span></li>
+</ol>
+<p class="note warn">⚠ バケットは force_destroy 済みなのでオブジェクトが残っていても destroy できる。</p>
+</section>
+<div class="foot">← <a href="index.html">Phase 2 ルーター</a> ／ <a href="main.md">Markdown 目次</a> ／ 概要は <a href="preview-s3.html">preview-s3</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main></body></html>

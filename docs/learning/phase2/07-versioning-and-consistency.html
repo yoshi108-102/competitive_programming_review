@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 2 教材 — S3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#3b82f6;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 2 教材 (S3) · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Phase 2 教材: バージョニングと整合性モデル</h1>
+
+<blockquote>対象: S3 バージョニング（有効化・バージョン ID・削除マーカー・MFA Delete）、強整合性モデル（2020 年以降）、レプリケーション（CRR/SRR）との関係、コストへの影響。</blockquote>
+
+<hr>
+
+<h2>このトピックは何か</h2>
+
+<p>S3 のバージョニングは、同一バケット内に同一キーのオブジェクトを複数世代にわたって保持する仕組みです。誤削除や上書きからのリカバリを可能にし、コンプライアンス要件を満たすデータ保持戦略の基盤になります。</p>
+
+<p>整合性モデルは「データを書き込んだ直後に読み取ると何が返るか」を定義します。2020 年 12 月の変更により S3 は完全な強整合性（strong consistency）を保証するようになり、以前のような結果整合モデルの考慮が不要になりました。</p>
+
+<p>両者は独立した機能ですが、<strong>バージョニングが有効なバケットではオブジェクトの一意性がキー + バージョン ID の組み合わせで決まる</strong>という点で整合性保証の適用対象が広がります。また、レプリケーション（CRR/SRR）の前提条件としてバージョニングの有効化が必須です。</p>
+
+<hr>
+
+<h2>コアコンセプト</h2>
+
+<h3>1. バージョニングの 3 状態</h3>
+
+<p>バケットは常に次の 3 つのうちいずれかの状態にあります。</p>
+
+<table>
+<tr><th>状態</th><th>説明</th></tr>
+<tr><td><strong>Unversioned</strong>（既定）</td><td>バージョニング無効。PUT で上書き、DELETE で完全削除</td></tr>
+<tr><td><strong>Versioning-enabled</strong></td><td>バージョニング有効。PUT ごとに新バージョン、DELETE は削除マーカーを挿入</td></tr>
+<tr><td><strong>Versioning-suspended</strong></td><td>バージョニング一時停止。新規 PUT は <code>null</code> バージョンとして書かれ、既存バージョンは保持</td></tr>
+</table>
+
+<p><strong>一度有効化したバケットは Unversioned 状態に戻せません。</strong> Suspended には戻せますが、既存の全バージョンは残り続けます。</p>
+
+<h3>2. バージョン ID</h3>
+
+<p>バージョニングを有効化すると、S3 は PUT されたオブジェクトごとに一意のバージョン ID（URL-safe な不透明文字列）を自動生成します。</p>
+
+<pre><code>キー: submissions/abc.json
+  バージョン: "3sL4kqtJlcpXroDTDmJ+rmSpXd3dIbrHY+MTRCxf3vjVBH40Nr8X8gdRQBpUMLUo" (最新)
+  バージョン: "YkistapxCMFLZhiqxMwWFEnbfnUFzfvQ"
+  バージョン: null  ← バージョニング有効化前に存在していたオブジェクト</code></pre>
+
+<p>バージョニング有効化前から存在するオブジェクトのバージョン ID は <code>null</code> です。有効化後、そのオブジェクトを PUT/CopyObject で変更すると初めて一意な ID が付与されます。</p>
+
+<h3>3. 削除マーカー（Delete Marker）</h3>
+
+<p>バージョニング有効化バケットでバージョン ID を指定せずに DELETE すると、オブジェクトは物理削除されません。代わりに S3 は<strong>削除マーカー</strong>を最新バージョンとして挿入します。</p>
+
+<pre><code>DELETE submissions/abc.json  →  削除マーカー（バージョン ID: "xYz..."）が最新バージョンに
+
+GET submissions/abc.json  →  404 Not Found（最新バージョンが削除マーカーのため）
+GET submissions/abc.json?versionId=YkistapxCMFLZhiqxMwWFEnbfnUFzfvQ  →  旧バージョンを取得可能</code></pre>
+
+<p>完全に削除するには、削除マーカーそのものをバージョン ID 指定で DELETE する必要があります。</p>
+
+<pre><code>import boto3
+s3 = boto3.client("s3")
+
+# 特定バージョンを完全削除（削除マーカーの削除にも同じ API を使う）
+s3.delete_object(
+    Bucket="atcoder-review-artifacts",
+    Key="submissions/abc.json",
+    VersionId="xYz...",  # 削除マーカーのバージョン ID
+)</code></pre>
+
+<h3>4. 強整合性モデル（2020 年 12 月以降）</h3>
+
+<p>S3 は PUT・DELETE・LIST の全操作で強整合性（strong read-after-write consistency）を保証します。</p>
+
+<table>
+<tr><th>操作</th><th>保証される挙動</th></tr>
+<tr><td>PUT 後の GET</td><td>必ず最新データが返る（古いデータは絶対に返らない）</td></tr>
+<tr><td>DELETE 後の GET</td><td>必ず 404 が返る</td></tr>
+<tr><td>PUT 後の LIST</td><td>新オブジェクトが必ずリストに現れる</td></tr>
+<tr><td>DELETE 後の LIST</td><td>削除したキーは必ずリストに現れない</td></tr>
+</table>
+
+<p><strong>更新の原子性</strong>: 同一キーへの PUT は原子的（atomic）に扱われます。GET は「以前のデータ」か「新しいデータ」のいずれかを返し、中間状態の混在したデータは返しません。</p>
+
+<p><strong>バケット設定の結果整合</strong>: バージョニングの有効化などバケット設定の変更には<strong>結果整合</strong>が適用されます。バージョニングを有効化した直後は変更が全サーバーに伝播するまでの短い時間差があります。公式ドキュメントは「有効化後 15 分待ってから書き込みを開始する」ことを推奨しています。</p>
+
+<hr>
+
+<h2>主要な設定・API・パラメータ</h2>
+
+<h3>バージョニング設定（Terraform / boto3）</h3>
+
+<pre><code># Terraform
+resource "aws_s3_bucket_versioning" "main" {
+  bucket = aws_s3_bucket.main.id
+  versioning_configuration {
+    status = "Enabled"  # Enabled | Suspended
+  }
+}</code></pre>
+
+<pre><code># boto3: バージョニング有効化
+s3.put_bucket_versioning(
+    Bucket="atcoder-review-artifacts",
+    VersioningConfiguration={"Status": "Enabled"},
+)</code></pre>
+
+<h3>バージョン一覧の取得と操作</h3>
+
+<pre><code># 全バージョンを一覧（削除マーカーを含む）
+paginator = s3.get_paginator("list_object_versions")
+for page in paginator.paginate(Bucket="atcoder-review-artifacts", Prefix="submissions/"):
+    for ver in page.get("Versions", []):
+        print(ver["Key"], ver["VersionId"], ver["LastModified"])
+    for marker in page.get("DeleteMarkers", []):
+        print(marker["Key"], marker["VersionId"], "DELETE_MARKER")
+
+# 特定バージョンを取得
+response = s3.get_object(
+    Bucket="atcoder-review-artifacts",
+    Key="submissions/abc.json",
+    VersionId="YkistapxCMFLZhiqxMwWFEnbfnUFzfvQ",
+)
+
+# 全バージョンの一括削除（バケット削除前のクリーンアップ）
+# 通常は Lifecycle の NoncurrentVersionExpiration で管理する</code></pre>
+
+<h3>MFA Delete</h3>
+
+<p>MFA Delete は、バージョニングと組み合わせてバケットの保護を強化するオプション機能です。</p>
+
+<p>MFA Delete を有効化すると、次の操作に MFA 認証が必要になります。</p>
+
+<ul>
+<li>バケットのバージョニング状態の変更</li>
+<li>オブジェクトの特定バージョンの完全削除</li>
+</ul>
+
+<pre><code># CLI での MFA Delete 有効化（root アカウントのみ実行可能）
+aws s3api put-bucket-versioning \
+  --bucket my-bucket \
+  --versioning-configuration Status=Enabled,MFADelete=Enabled \
+  --mfa "arn:aws:iam::123456789012:mfa/root-account-mfa-device 123456"</code></pre>
+
+<p><strong>MFA Delete の制限事項</strong></p>
+
+<table>
+<tr><th>項目</th><th>内容</th></tr>
+<tr><td>有効化できるのは</td><td>バケットオーナー（root アカウント）のみ</td></tr>
+<tr><td>設定手段</td><td>CLI または API のみ（コンソール不可）</td></tr>
+<tr><td>Lifecycle との共存</td><td>Lifecycle 設定と MFA Delete は併用不可</td></tr>
+<tr><td>仮想 MFA</td><td>ARN 形式で指定（例: <code>arn:aws:iam::ACCOUNT:mfa/DEVICE</code>）</td></tr>
+</table>
+
+<hr>
+
+<h2>バージョニングとレプリケーション（CRR/SRR）</h2>
+
+<p>S3 レプリケーションは<strong>ソースとデスティネーション両方のバケットでバージョニングが必須</strong>です。</p>
+
+<h3>CRR と SRR の比較</h3>
+
+<table>
+<tr><th></th><th>Cross-Region Replication (CRR)</th><th>Same-Region Replication (SRR)</th></tr>
+<tr><td>対象</td><td>異なるリージョン間</td><td>同一リージョン内</td></tr>
+<tr><td>主な用途</td><td>DR・レイテンシ低減・データ主権</td><td>ログ集約・本番/テスト同期</td></tr>
+<tr><td>バージョニング要件</td><td>ソース・デスティネーション両方で必須</td><td>同左</td></tr>
+<tr><td>既存オブジェクト</td><td>ライブレプリケーションの対象外</td><td>同左</td></tr>
+<tr><td>削除マーカー</td><td>デフォルトでは複製されない（要設定）</td><td>同左</td></tr>
+</table>
+
+<h3>削除マーカーのレプリケーション挙動</h3>
+
+<p>バージョン ID なしの DELETE（削除マーカーの挿入）は、デフォルトではデスティネーションに<strong>複製されません</strong>。誤削除のレプリカへの伝播を防ぐための設計です。</p>
+
+<pre><code># 削除マーカーをレプリカにも反映したい場合
+resource "aws_s3_bucket_replication_configuration" "main" {
+  role   = aws_iam_role.replication.arn
+  bucket = aws_s3_bucket.main.id
+
+  rule {
+    id     = "replicate-all"
+    status = "Enabled"
+
+    delete_marker_replication {
+      status = "Enabled"  # デフォルトは Disabled
+    }
+
+    destination {
+      bucket        = aws_s3_bucket.replica.arn
+      storage_class = "STANDARD_IA"
+    }
+  }
+}</code></pre>
+
+<h3>既存オブジェクトのレプリケーション</h3>
+
+<p>ライブレプリケーション（CRR/SRR）は<strong>設定後に PUT されたオブジェクトのみ</strong>を対象とします。設定前から存在するオブジェクトを複製するには S3 Batch Replication を使います。</p>
+
+<pre><code># Batch Replication による既存オブジェクトの一括複製
+aws s3control create-job \
+  --account-id 123456789012 \
+  --operation '{"S3ReplicateObject":{}}' \
+  --manifest-generator '{...}'  # S3 Inventory またはマニフェスト CSV を指定</code></pre>
+
+<hr>
+
+<h2>よくある落とし穴・誤解</h2>
+
+<h3>1. バージョニング有効化の取り消しができない</h3>
+
+<p>「試しに有効化してみたが、やっぱりやめたい」は不可能です。Suspended にしても既存バージョンは残り続け、ストレージコストは発生し続けます。有効化は慎重に行うか、Lifecycle の <code>NoncurrentVersionExpiration</code> で不要バージョンの自動削除を設定してからにします。</p>
+
+<h3>2. 「削除したはずなのにコストが増えた」</h3>
+
+<p>バージョニング有効バケットで単純 DELETE すると削除マーカーが付くだけで旧バージョンは残ります。旧バージョンも課金対象です。<code>ListObjectVersions</code> で確認し、Lifecycle ルールで <code>NoncurrentVersionExpiration</code> を設定してください。</p>
+
+<pre><code>resource "aws_s3_bucket_lifecycle_configuration" "versions" {
+  bucket = aws_s3_bucket.main.id
+
+  rule {
+    id     = "expire-old-versions"
+    status = "Enabled"
+    filter {}
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30  # 最新でなくなってから 30 日で削除
+    }
+
+    expiration {
+      expired_object_delete_marker = true  # 孤立した削除マーカーも削除
+    }
+  }
+}</code></pre>
+
+<h3>3. バージョニング有効化直後のタイミング問題</h3>
+
+<p>バージョニングを有効化した直後は、設定変更の伝播が完了していない場合があります。公式ドキュメントは有効化後 <strong>15 分間</strong>待ってから書き込みを開始することを推奨しています。</p>
+
+<h3>4. 強整合性が適用されない範囲</h3>
+
+<p>オブジェクト操作は強整合ですが、<strong>バケット設定（バージョニング・CORS・ライフサイクル等）の変更は結果整合</strong>です。バケット設定変更の直後にプログラムからその設定を確認しても、まだ古い値が返ることがあります。</p>
+
+<h3>5. コンカレントな PUT は last-writer-wins</h3>
+
+<p>同一キーへの複数スレッドからの同時 PUT は、タイムスタンプが最新のものが勝ちます。S3 はオブジェクトロック機能（Object Lock）を別途提供していますが、通常の Versioning とは独立した仕組みです。アプリ側でのロック制御が必要な場合は DynamoDB conditional writes などを併用します。</p>
+
+<h3>6. MFA Delete は Lifecycle と共存不可</h3>
+
+<p>MFA Delete を有効化したバケットでは、Lifecycle による自動バージョン削除が機能しません。コスト管理のための自動クリーンアップが止まる点に注意が必要です。</p>
+
+<hr>
+
+<h2>コストへの影響</h2>
+
+<table>
+<tr><th>課金要素</th><th>内容</th></tr>
+<tr><td>全バージョンのストレージ</td><td>「diff」ではなく各バージョンがオブジェクト全体。3 バージョン = 3 オブジェクト分</td></tr>
+<tr><td>削除マーカー</td><td>0 バイトオブジェクトとして保存されるが、管理費がかかる</td></tr>
+<tr><td>PUT リクエスト</td><td>バージョンごとに PUT として課金</td></tr>
+<tr><td>CRR/SRR のデータ転送</td><td>CRR は転送コストが発生。SRR は転送コストなし</td></tr>
+</table>
+
+<p>コスト最適化の基本パターンは Lifecycle との組み合わせです。</p>
+
+<pre><code>バージョン作成（PUT）
+  ↓ 30 日後
+  NoncurrentVersionExpiration で旧バージョン削除
+  ↓（削除マーカーだけが残った場合）
+  expired_object_delete_marker = true で孤立削除マーカーも自動削除</code></pre>
+
+<hr>
+
+<h2>このプロジェクト（AtCoder 復習）での使いどころ</h2>
+
+<table>
+<tr><th>ユースケース</th><th>バージョニングの役割</th></tr>
+<tr><td>AC コードのアーカイブ（<code>codes/{user}/{contest}/{problem}.py</code>）</td><td>誤ったコードの上書きからリカバリ。旧バージョンと比較して改善の可視化</td></tr>
+<tr><td>提出履歴 JSON の更新（<code>submissions/{user}/{date}.json</code>）</td><td>AtCoder API の取得結果を上書き保存しても旧バージョンを遡及確認可能</td></tr>
+<tr><td>CRR でのクロスリージョン DR 構成</td><td>両バケットのバージョニング有効化が前提。削除マーカーのレプリケーションは要件に応じて設定</td></tr>
+</table>
+
+<p>強整合性の観点では、Lambda が AC コードを S3 に PUT した直後に別の Lambda が同一キーを GET しても、常に最新のコードを取得できます。以前のような「PUT したのに GET で旧データが返った」という現象は 2020 年以降発生しません。</p>
+
+<hr>
+
+<h2>公式ドキュメント（出典）</h2>
+
+<ul>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Versioning.html">Retaining multiple versions of objects with S3 Versioning</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html#ConsistencyModel">Amazon S3 data consistency model</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/MultiFactorAuthenticationDelete.html">Configuring MFA delete</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication.html">Replicating objects within and across Regions</a>（閲覧日 2026-05-31）</li>
+<li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html">What is Amazon S3? — Features of Amazon S3</a>（閲覧日 2026-05-31）</li>
+</ul>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase2</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase2</span></li>
+<li><b>負荷生成</b> — オブジェクトを put（ObjectCreated→Lambda が発火）<span class="cmd">make sandbox-load-phase2</span></li>
+<li><b>観測</b> — Lambda Invocations は即時 / S3 ストレージ系は日次<span class="cmd">make sandbox-watch-phase2</span><div class="tstamp">⏱ Lambda は数分、ストレージ系は翌日</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase2</span></li>
+</ol>
+<p class="note warn">⚠ バケットは force_destroy 済みなのでオブジェクトが残っていても destroy できる。</p>
+</section>
+<div class="foot">← <a href="index.html">Phase 2 ルーター</a> ／ <a href="main.md">Markdown 目次</a> ／ 概要は <a href="preview-s3.html">preview-s3</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main></body></html>

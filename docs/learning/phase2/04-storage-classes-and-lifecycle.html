@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 2 教材 — S3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#3b82f6;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:11px}
+ol.steps>li{position:relative;padding:12px 15px 13px 46px;border:1px solid var(--line);border-radius:10px;font-size:14px;margin:0}
+ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:13px;top:12px;width:21px;height:21px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin-top:7px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:13px 0}.note.warn{border-left-color:var(--accent);color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:5px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 2 教材 (S3) · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Phase 2 教材: ストレージクラスとライフサイクル</h1>
+
+<h2>このトピックは何か</h2>
+
+<p>S3 に保存したオブジェクトは、すべてが常に同じ速度・同じコストで参照されるわけではない。アクセス頻度や取り出しレイテンシ要件に合わせて <strong>ストレージクラス</strong> を選ぶことで保存コストを最適化できる。さらに <strong>ライフサイクルルール</strong> を使うと、時間の経過に伴うクラス移行・有効期限切れ・未完マルチパートの掃除を S3 が自動で行う。</p>
+
+<p>このトピックでは次の問いに答える。</p>
+
+<ul>
+  <li>7 種類のストレージクラスのどれを、いつ使うか</li>
+  <li>ライフサイクルルールの設定単位と移行の制約</li>
+  <li>未完マルチパートアップロードが課金され続ける問題と対処</li>
+</ul>
+
+<hr>
+
+<h2>コアコンセプト</h2>
+
+<h3>ストレージクラスの位置づけ</h3>
+
+<p>ストレージクラスはオブジェクト単位で指定するメタデータである。PUT 時に <code>StorageClass</code> パラメータで指定するか、ライフサイクルルールで後から自動移行する。クラスを変えると保存単価・最小保存期間・取り出しコスト・取り出し時間のトレードオフが変わる。</p>
+
+<h3>ライフサイクルルール</h3>
+
+<p>ライフサイクルルールはバケットに設定し、次の 3 つのアクションを自動化する。</p>
+
+<ol>
+  <li><strong>Transition</strong> — 指定日数後に別のストレージクラスへ移行する</li>
+  <li><strong>Expiration</strong> — 指定日数後にオブジェクトを削除する（バージョニング有効時は削除マーカーを付ける）</li>
+  <li><strong>AbortIncompleteMultipartUpload</strong> — 指定日数後に未完のマルチパートアップロードのパーツを削除する</li>
+</ol>
+
+<p>ルールはバケット全体、Prefix、またはオブジェクトタグでスコープを絞ることができる。</p>
+
+<h3>Intelligent-Tiering の自動最適化</h3>
+
+<p>Intelligent-Tiering はアクセスパターンを S3 が自動監視し、Frequent Access / Infrequent Access / Archive Instant Access の 3 段階を自動切替する。オプトインで Deep Archive Access 層も利用できる。監視コストとして <strong>$0.0025/1,000 objects/月</strong> がかかる。128 KB 未満のオブジェクトは常に Frequent Access に留まるため、小オブジェクトが大量にある場合は通常の Standard の方が安い。</p>
+
+<hr>
+
+<h2>主要な設定・API・パラメータ</h2>
+
+<h3>ストレージクラス比較表</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>クラス</th>
+      <th>用途</th>
+      <th>保存単価（目安）</th>
+      <th>最小保存期間</th>
+      <th>取り出しコスト</th>
+      <th>取り出し時間</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>S3 Standard</td>
+      <td>頻繁アクセス</td>
+      <td>高</td>
+      <td>なし</td>
+      <td>なし</td>
+      <td>ミリ秒</td>
+    </tr>
+    <tr>
+      <td>S3 Intelligent-Tiering</td>
+      <td>アクセスパターン不明</td>
+      <td>中〜高（監視コストあり）</td>
+      <td>なし</td>
+      <td>なし（Frequent/IA）</td>
+      <td>ミリ秒</td>
+    </tr>
+    <tr>
+      <td>S3 Standard-IA</td>
+      <td>低頻度・長期保存</td>
+      <td>中</td>
+      <td><strong>30 日</strong></td>
+      <td>あり（GB 単価）</td>
+      <td>ミリ秒</td>
+    </tr>
+    <tr>
+      <td>S3 One Zone-IA</td>
+      <td>低頻度・単一 AZ 可</td>
+      <td>低（Standard-IA の約 80%）</td>
+      <td><strong>30 日</strong></td>
+      <td>あり（GB 単価）</td>
+      <td>ミリ秒</td>
+    </tr>
+    <tr>
+      <td>S3 Glacier Instant Retrieval</td>
+      <td>アーカイブ・即時取り出し</td>
+      <td>低</td>
+      <td><strong>90 日</strong></td>
+      <td>あり（高め）</td>
+      <td>ミリ秒</td>
+    </tr>
+    <tr>
+      <td>S3 Glacier Flexible Retrieval</td>
+      <td>アーカイブ</td>
+      <td>非常に低</td>
+      <td><strong>90 日</strong></td>
+      <td>あり</td>
+      <td>分〜12 時間</td>
+    </tr>
+    <tr>
+      <td>S3 Glacier Deep Archive</td>
+      <td>長期アーカイブ（7 年〜）</td>
+      <td>最安（$0.00099/GB/月）</td>
+      <td><strong>180 日</strong></td>
+      <td>あり（最高）</td>
+      <td>12〜48 時間</td>
+    </tr>
+  </tbody>
+</table>
+
+<blockquote><strong>One Zone-IA の注意</strong>: データは 1 つの AZ にのみ保存される。AZ 障害でデータが失われても問題ないケース（再生成可能なサムネイル・暫定キャッシュ等）に限定して使う。</blockquote>
+
+<h3>Glacier の取り出しオプション</h3>
+
+<p>Glacier Flexible Retrieval には 3 段階の取り出し速度があり、速いほど料金が高い。</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>取り出しオプション</th>
+      <th>完了時間</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Expedited</td>
+      <td>1〜5 分</td>
+    </tr>
+    <tr>
+      <td>Standard</td>
+      <td>3〜5 時間</td>
+    </tr>
+    <tr>
+      <td>Bulk</td>
+      <td>5〜12 時間</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Glacier Deep Archive は Standard（12 時間以内）と Bulk（48 時間以内）の 2 段階。Expedited はない。</p>
+
+<h3>PUT 時のストレージクラス指定（boto3）</h3>
+
+<pre><code>import boto3
+
+s3 = boto3.client("s3")
+
+# Standard-IA でアップロード
+s3.put_object(
+    Bucket="atcoder-review-artifacts",
+    Key="archive/2025/abc300.json",
+    Body=data,
+    StorageClass="STANDARD_IA",
+)
+
+# Intelligent-Tiering でアップロード
+s3.put_object(
+    Bucket="atcoder-review-artifacts",
+    Key="user-uploads/unknown-pattern.bin",
+    Body=data,
+    StorageClass="INTELLIGENT_TIERING",
+)</code></pre>
+
+<p><code>StorageClass</code> を省略すると <code>STANDARD</code> になる。</p>
+
+<h3>ライフサイクルルール（Terraform）</h3>
+
+<pre><code>resource "aws_s3_bucket_lifecycle_configuration" "main" {
+  bucket = aws_s3_bucket.main.id
+
+  # ルール 1: コード・提出データの段階的アーカイブ
+  rule {
+    id     = "archive-old-submissions"
+    status = "Enabled"
+
+    filter {
+      prefix = "submissions/"
+    }
+
+    transition {
+      days          = 30
+      storage_class = "STANDARD_IA"
+    }
+
+    transition {
+      days          = 90
+      storage_class = "GLACIER_IR"   # Glacier Instant Retrieval
+    }
+
+    transition {
+      days          = 365
+      storage_class = "DEEP_ARCHIVE"
+    }
+
+    expiration {
+      days = 2555   # 7 年後に削除
+    }
+  }
+
+  # ルール 2: 未完マルチパートの掃除（必須）
+  rule {
+    id     = "abort-incomplete-multipart"
+    status = "Enabled"
+    filter {}   # バケット全体
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+}</code></pre>
+
+<h3>ライフサイクルルール（AWS CLI / JSON）</h3>
+
+<pre><code>{
+  "Rules": [
+    {
+      "ID": "archive-old-submissions",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "submissions/" },
+      "Transitions": [
+        { "Days": 30,  "StorageClass": "STANDARD_IA" },
+        { "Days": 90,  "StorageClass": "GLACIER_IR" },
+        { "Days": 365, "StorageClass": "DEEP_ARCHIVE" }
+      ],
+      "Expiration": { "Days": 2555 }
+    },
+    {
+      "ID": "abort-incomplete-multipart",
+      "Status": "Enabled",
+      "Filter": {},
+      "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 7 }
+    }
+  ]
+}</code></pre>
+
+<pre><code>aws s3api put-bucket-lifecycle-configuration \
+  --bucket atcoder-review-artifacts \
+  --lifecycle-configuration file://lifecycle.json</code></pre>
+
+<h3>クラス移行の方向制約</h3>
+
+<p>S3 のライフサイクルで移行できる方向は <strong>「Standard 側 → Glacier 側」の一方向のみ</strong>。</p>
+
+<pre><code>Standard
+  ↓
+Intelligent-Tiering / Standard-IA / One Zone-IA
+  ↓
+Glacier Instant Retrieval
+  ↓
+Glacier Flexible Retrieval
+  ↓
+Glacier Deep Archive</code></pre>
+
+<p>Glacier から Standard に戻すには <code>RestoreObject</code> API で一時コピーを取り出してから <code>CopyObject</code> でクラスを指定し直す必要がある。</p>
+
+<hr>
+
+<h2>よくある落とし穴・誤解</h2>
+
+<h3>最小保存期間による逆コスト</h3>
+
+<p>Standard-IA・One Zone-IA は <strong>30 日未満の保存でも 30 日分</strong>、Glacier 系は <strong>90 日（Deep Archive は 180 日）分</strong>の料金が発生する。作成 → 数日後に削除するような短命オブジェクトに IA を使うと Standard より高くなる。</p>
+
+<p><strong>判断基準</strong>: Standard-IA は「月 1 回未満しかアクセスしない &amp; 30 日以上保持する」が揃って初めて Standard より安くなる。</p>
+
+<h3>未完マルチパートの無言課金</h3>
+
+<p>5 GB 超のオブジェクトや AWS CLI が自動で切り替える 8 MB 超のアップロードは、内部的にマルチパートになる。アップロードが途中で失敗してもパーツは S3 に残り続け、ListObjectsV2 には見えないのに課金される。大量アップロードシステムでは数か月で数百ドルの意図しない請求につながることがある。</p>
+
+<p><strong>対処</strong>: <code>AbortIncompleteMultipartUpload</code> のライフサイクルルールをバケット作成時に必ず設定する。S3 コンソールの「Multipart uploads」タブで現在の未完パーツを確認できる。</p>
+
+<h3>Glacier からの取り出しはオブジェクトが直接戻るわけではない</h3>
+
+<p><code>RestoreObject</code> を呼ぶと、Glacier から Standard（一時コピー）への復元リクエストが非同期で始まる。復元が完了するまでオブジェクトは読めない。完了を知るには S3 イベント通知（<code>s3:ObjectRestore:Completed</code>）か、<code>HeadObject</code> レスポンスの <code>Restore</code> ヘッダを確認する。</p>
+
+<h3>Intelligent-Tiering の小オブジェクト問題</h3>
+
+<p>128 KB 未満のオブジェクトは Infrequent や Archive 層に降りないため、監視コスト（$0.0025/1,000 objects/月）だけが発生する。ログの断片・サムネイル・小 JSON が大量にある場合は Standard が安い。</p>
+
+<h3>ライフサイクルルールの <code>filter {}</code> の必要性</h3>
+
+<p>AWS API v2（Terraform AWS Provider v4 以降）では <code>filter</code> ブロックを省略するとエラーになるか、バケット全体に適用されないことがある。バケット全体に適用したい場合は空の <code>filter {}</code> を明示する。</p>
+
+<hr>
+
+<h2>このプロジェクト（AtCoder 復習）での使いどころ</h2>
+
+<p>AtCoder 復習ツールでは、提出データとコードファイルのアクセス頻度が時間経過で急減する傾向がある。以下のライフサイクル設計が自然にフィットする。</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>データ種別</th>
+      <th>Prefix 例</th>
+      <th>推奨クラス推移</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>最近の提出 JSON</td>
+      <td><code>submissions/{user}/{date}.json</code></td>
+      <td>Standard → 30 日後 Standard-IA → 365 日後 Deep Archive</td>
+    </tr>
+    <tr>
+      <td>AC コード（参照用）</td>
+      <td><code>codes/{user}/{contest}/</code></td>
+      <td>Standard → 60 日後 Glacier IR → 180 日後 Glacier Flexible</td>
+    </tr>
+    <tr>
+      <td>Lambda デプロイ ZIP</td>
+      <td><code>lambda-artifacts/{version}.zip</code></td>
+      <td>Standard（短命。Expiration で 90 日後削除）</td>
+    </tr>
+    <tr>
+      <td>一時エクスポート CSV</td>
+      <td><code>exports/tmp/</code></td>
+      <td>Standard-IA（生成 → ダウンロード → 不要になるサイクル向き）</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>コードの生文字列は DynamoDB の 400 KB アイテム制限に引っかかる可能性がある。コード本体は S3 に置き、DynamoDB には S3 キーだけを保持する<strong>参照パターン</strong>と、ライフサイクルによる自動アーカイブを組み合わせると、ストレージコストを長期間意識せず運用できる。</p>
+
+<hr>
+
+<h2>公式ドキュメント（出典）</h2>
+
+<ul>
+  <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html">Amazon S3 ストレージクラスの使用</a>（閲覧日 2026-05-31）</li>
+  <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lifecycle-mgmt.html">オブジェクトライフサイクル管理</a>（閲覧日 2026-05-31）</li>
+  <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/intro-lifecycle-rules.html">ライフサイクルルールの設定要素</a>（閲覧日 2026-05-31）</li>
+  <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/lifecycle-transition-general-considerations.html">S3 Glacier ストレージクラスを使用したオブジェクトの移行</a>（閲覧日 2026-05-31）</li>
+  <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/intelligent-tiering.html">S3 Intelligent-Tiering を使用したストレージコストの最適化</a>（閲覧日 2026-05-31）</li>
+  <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html">マルチパートアップロードの概要</a>（閲覧日 2026-05-31）</li>
+</ul>
+
+<section class="handson">
+<h2>ハンズオン — 実 AWS sandbox を動かす</h2>
+<p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>。終わったら必ず destroy。</p>
+<ol class="steps">
+<li><b>無料検証</b>（課金なし）<span class="cmd">make sandbox-test-phase2</span></li>
+<li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase2</span></li>
+<li><b>負荷生成</b> — オブジェクトを put（ObjectCreated→Lambda が発火）<span class="cmd">make sandbox-load-phase2</span></li>
+<li><b>観測</b> — Lambda Invocations は即時 / S3 ストレージ系は日次<span class="cmd">make sandbox-watch-phase2</span><div class="tstamp">⏱ Lambda は数分、ストレージ系は翌日</div></li>
+<li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase2</span></li>
+</ol>
+<p class="note warn">⚠ バケットは force_destroy 済みなのでオブジェクトが残っていても destroy できる。</p>
+</section>
+<div class="foot">← <a href="index.html">Phase 2 ルーター</a> ／ <a href="main.md">Markdown 目次</a> ／ 概要は <a href="preview-s3.html">preview-s3</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+</main></body></html>
