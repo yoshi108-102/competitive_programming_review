@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 リファレンス / Q&A</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 リファレンス / Q&A · <a href="../../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>DynamoDB キー設計 vs RDB — 比較リファレンス</h1>
+
+<h2>1. 設計思想の根本的な違い</h2>
+
+<table>
+<thead><tr><th>観点</th><th>RDB (リレーショナルDB)</th><th>DynamoDB (NoSQL)</th></tr></thead>
+<tbody>
+<tr><td>設計の出発点</td><td>データの正規化（重複を排除）</td><td>アクセスパターン（どんなクエリを投げるか）</td></tr>
+<tr><td>設計の順序</td><td>スキーマ設計 → あとからクエリ最適化</td><td><strong>先にクエリパターンを決める</strong> → それに合わせてスキーマ設計</td></tr>
+<tr><td>データの持ち方</td><td>正規化（テーブル分割、JOINで結合）</td><td>非正規化（関連データをまとめて持つ）</td></tr>
+<tr><td>柔軟性</td><td>任意のWHERE句、JOIN、サブクエリ可</td><td>事前定義したキーでのアクセスのみ高速</td></tr>
+<tr><td>スケーラビリティ</td><td>垂直スケール中心（サーバースペック増強）</td><td>水平スケール（パーティション自動分散）</td></tr>
+</tbody>
+</table>
+
+<blockquote><p><strong>重要</strong>: RDBでは「まずデータを正規化し、あとからクエリを最適化」する。DynamoDBでは「先にアクセスパターンを全て洗い出し、それに基づいてキーを設計」する。順序が逆。</p></blockquote>
+
+<hr>
+
+<h2>2. キーの概念比較</h2>
+
+<h3>RDBの主キーとインデックス</h3>
+
+<pre><code class="language-sql">-- RDBでのテーブル定義
+CREATE TABLE submissions (
+    id          BIGINT PRIMARY KEY,        -- 主キー（1カラム）
+    user_id     VARCHAR(255),
+    problem_id  VARCHAR(255),
+    result      VARCHAR(10),
+    submitted_at TIMESTAMP
+);
+
+-- インデックスは後から自由に追加できる
+CREATE INDEX idx_user_id ON submissions(user_id);
+CREATE INDEX idx_problem ON submissions(problem_id, result);</code></pre>
+
+<p>RDBでは:</p>
+<ul>
+<li>主キーは行を一意に特定するだけ</li>
+<li>WHERE句で任意のカラムを指定できる（インデックスがなくても動く、遅いだけ）</li>
+<li>インデックスは後から追加・削除が自由</li>
+</ul>
+
+<h3>DynamoDBのPK / SK / GSI</h3>
+
+<pre><code>DynamoDBでのテーブル定義（概念）:
+
+submissions テーブル:
+  PK (Partition Key): user_id     ← データのグループ化（物理配置を決定）
+  SK (Sort Key):      submission_id ← グループ内の並び順・個別特定
+
+  → Query(PK="user-123") で「user-123の全提出」を高速取得
+  → GetItem(PK="user-123", SK="SUB#12345") で1件を特定</code></pre>
+
+<p>DynamoDBでは:</p>
+<ul>
+<li>PKはデータの<strong>物理的な配置場所</strong>を決める（ハッシュ関数で分散）</li>
+<li>SKはパーティション内の<strong>ソート順</strong>を決める</li>
+<li>PK以外での検索にはGSI（Global Secondary Index）が必要</li>
+</ul>
+
+<hr>
+
+<h2>3. PK（Partition Key）詳細</h2>
+
+<h3>役割</h3>
+
+<p>PKの値をハッシュ関数に通して、データを格納する物理パーティションを決定する。</p>
+
+<pre><code>PK値 "user-123" → ハッシュ関数 → パーティション A に格納
+PK値 "user-456" → ハッシュ関数 → パーティション B に格納
+PK値 "user-789" → ハッシュ関数 → パーティション A に格納（ハッシュが同じ場合）</code></pre>
+
+<h3>制約</h3>
+
+<ul>
+<li>PKでの検索は<strong>完全一致のみ</strong>（<code>=</code> だけ、<code>LIKE</code> や <code>&gt;=</code> は不可）</li>
+<li>PKの値は変更不可（変更したい場合はアイテムを削除→再作成）</li>
+<li>カーディナリティ（値の種類）が高い属性を選ぶべき</li>
+</ul>
+
+<h3>設計のコツ</h3>
+
+<table>
+<thead><tr><th>良いPK</th><th>悪いPK</th><th>理由</th></tr></thead>
+<tbody>
+<tr><td><code>user_id</code></td><td><code>status</code>（"active"/"inactive"）</td><td>statusは2値しかなく、データが偏る（ホットパーティション）</td></tr>
+<tr><td><code>order_id</code></td><td><code>country</code>（"JP"/"US"/...）</td><td>特定の国にアクセスが集中する可能性</td></tr>
+<tr><td><code>device_id</code></td><td><code>created_date</code></td><td>日付だと当日のパーティションにアクセス集中</td></tr>
+</tbody>
+</table>
+
+<hr>
+
+<h2>4. SK（Sort Key）詳細</h2>
+
+<h3>役割</h3>
+
+<p>同じPK内でデータを<strong>ソート順に並べて格納</strong>する。範囲クエリが可能。</p>
+
+<pre><code>パーティション PK="user-123" 内:
+
+  SK: "SUB#00001"  →  { problem: "abc300_a", result: "AC",  submitted_at: 1700000000 }
+  SK: "SUB#00002"  →  { problem: "abc300_b", result: "WA",  submitted_at: 1700000060 }
+  SK: "SUB#00003"  →  { problem: "abc300_c", result: "AC",  submitted_at: 1700000120 }
+  SK: "SUB#00004"  →  { problem: "abc301_a", result: "TLE", submitted_at: 1700001000 }
+       ↑ ソート済み</code></pre>
+
+<h3>クエリの種類</h3>
+
+<table>
+<thead><tr><th>操作</th><th>例</th><th>RDB相当</th></tr></thead>
+<tbody>
+<tr><td>完全一致</td><td><code>SK = "SUB#00002"</code></td><td><code>WHERE submission_id = 'SUB#00002'</code></td></tr>
+<tr><td>前方一致</td><td><code>SK begins_with "SUB#"</code></td><td><code>WHERE submission_id LIKE 'SUB#%'</code></td></tr>
+<tr><td>範囲</td><td><code>SK BETWEEN "SUB#00001" AND "SUB#00003"</code></td><td><code>WHERE submission_id BETWEEN ...</code></td></tr>
+<tr><td>以上/以下</td><td><code>SK &gt;= "SUB#00003"</code></td><td><code>WHERE submission_id &gt;= 'SUB#00003'</code></td></tr>
+</tbody>
+</table>
+
+<h3>複合ソートキーパターン</h3>
+
+<p>SKに複数の情報を埋め込むことで、より柔軟なクエリが可能:</p>
+
+<pre><code>SK: "2024-01-15#AC#abc300_a"
+     日付      結果  問題ID
+
+→ begins_with("2024-01") で2024年1月の提出のみ取得
+→ begins_with("2024-01-15#AC") で特定日のAC提出のみ取得</code></pre>
+
+<hr>
+
+<h2>5. GSI（Global Secondary Index）詳細</h2>
+
+<h3>RDBのインデックスとの違い</h3>
+
+<table>
+<thead><tr><th>観点</th><th>RDBのインデックス</th><th>DynamoDBのGSI</th></tr></thead>
+<tbody>
+<tr><td>作成タイミング</td><td>いつでも自由に追加・削除</td><td>いつでも追加可（ただし既存データの再構築が発生）</td></tr>
+<tr><td>ストレージ</td><td>元データへのポインタ</td><td><strong>データのコピーが別途作成される</strong></td></tr>
+<tr><td>コスト</td><td>ストレージのみ</td><td>ストレージ + スループット（読み書き両方）</td></tr>
+<tr><td>一貫性</td><td>常に最新（同一トランザクション）</td><td><strong>結果整合性</strong>（数ミリ秒の遅延あり）</td></tr>
+<tr><td>上限</td><td>実質無制限</td><td>1テーブルあたり最大20個</td></tr>
+<tr><td>クエリ</td><td>元テーブルと同じSQLで利用</td><td>GSI用に別途Queryを実行</td></tr>
+</tbody>
+</table>
+
+<h3>GSIの仕組み</h3>
+
+<p>GSIは「元テーブルのデータを、別のPK+SKの組み合わせでコピーしたもの」。</p>
+
+<pre><code>【元テーブル: problems】
+PK: problem_id
+
+problem_id         | title  | tag    | difficulty
+PROBLEM#abc300_a   | A問題  | 全探索  | 200
+PROBLEM#abc300_b   | B問題  | DP     | 500
+PROBLEM#abc300_c   | C問題  | 全探索  | 800
+
+↓ GSI "TagDifficultyIndex" が自動でコピーを作成
+
+【GSI: TagDifficultyIndex】
+GSI PK: tag,  GSI SK: difficulty
+
+パーティション "全探索":
+  difficulty=200 → { problem_id: "PROBLEM#abc300_a", title: "A問題" }
+  difficulty=800 → { problem_id: "PROBLEM#abc300_c", title: "C問題" }
+
+パーティション "DP":
+  difficulty=500 → { problem_id: "PROBLEM#abc300_b", title: "B問題" }</code></pre>
+
+<h3>GSI設計のベストプラクティス</h3>
+
+<ol>
+<li><strong>必要最小限にする</strong>: GSIはストレージとスループットのコストがかかる</li>
+<li><strong>射影（Projection）を最適化する</strong>: 全属性をコピー（ALL）するか、必要な属性のみ（INCLUDE）にするか</li>
+<li><strong>ホットパーティションを避ける</strong>: GSIのPKにもカーディナリティの高い属性を選ぶ</li>
+<li><strong>スパースインデックスを活用する</strong>: GSI PKに設定した属性が存在しないアイテムはGSIに含まれない → フィルタとして機能</li>
+</ol>
+
+<h3>LSI（Local Secondary Index）との違い</h3>
+
+<table>
+<thead><tr><th>観点</th><th>GSI</th><th>LSI</th></tr></thead>
+<tbody>
+<tr><td>PK</td><td>元テーブルと異なるPKを指定可能</td><td>元テーブルと同じPK</td></tr>
+<tr><td>SK</td><td>自由に指定</td><td>元テーブルと異なるSKを指定</td></tr>
+<tr><td>作成タイミング</td><td>いつでも</td><td><strong>テーブル作成時のみ</strong></td></tr>
+<tr><td>一貫性</td><td>結果整合性のみ</td><td>強い整合性も選択可能</td></tr>
+<tr><td>上限</td><td>20個/テーブル</td><td>5個/テーブル</td></tr>
+<tr><td>用途</td><td>全く異なるアクセスパターン</td><td>同じPKで別のソート順が欲しい場合</td></tr>
+</tbody>
+</table>
+
+<hr>
+
+<h2>6. 実践: 同じデータをRDBとDynamoDBで設計比較</h2>
+
+<h3>ユースケース: 「ユーザーの提出一覧を取得」「特定の問題のAC率を計算」</h3>
+
+<h4>RDB設計</h4>
+
+<pre><code class="language-sql">-- 正規化されたテーブル
+CREATE TABLE users (
+    id VARCHAR(255) PRIMARY KEY,
+    atcoder_username VARCHAR(255)
+);
+
+CREATE TABLE submissions (
+    id BIGINT PRIMARY KEY,
+    user_id VARCHAR(255) REFERENCES users(id),
+    problem_id VARCHAR(255),
+    result VARCHAR(10),
+    submitted_at TIMESTAMP
+);
+
+-- クエリ1: ユーザーの提出一覧
+SELECT * FROM submissions WHERE user_id = 'abc123' ORDER BY submitted_at DESC;
+
+-- クエリ2: 問題のAC率
+SELECT
+    problem_id,
+    COUNT(*) AS total,
+    SUM(CASE WHEN result = 'AC' THEN 1 ELSE 0 END) AS ac_count
+FROM submissions
+WHERE problem_id = 'abc300_a'
+GROUP BY problem_id;</code></pre>
+
+<p>→ RDBではどちらのクエリもSQLで書ける。インデックスで最適化するだけ。</p>
+
+<h4>DynamoDB設計</h4>
+
+<pre><code>submissions テーブル:
+  PK: user_id,  SK: SUB#{submission_id}
+  → クエリ1は Query(PK="abc123") で解決
+
+  しかしクエリ2（problem_idで検索）はPKが user_id なのでできない
+  → GSIが必要:
+
+GSI "ProblemIndex":
+  GSI PK: problem_id,  GSI SK: submission_id
+  → Query(GSI, PK="abc300_a") でその問題の全提出を取得し、アプリ側でAC率を計算</code></pre>
+
+<p>→ DynamoDBではアクセスパターンごとにキーやGSIを設計する必要がある。</p>
+
+<hr>
+
+<h2>7. PK + SK で一意性が足りない場合の対処法</h2>
+
+<p>PK + SK の2キーだけで、あらゆるデータの一意性と検索要件を満たせるわけではない。</p>
+
+<h3>問題の例</h3>
+
+<pre><code>PK=user_id, SK=problem_id の場合:
+
+PK: "abc123", SK: "abc300_a" → 1回目のAC提出
+PK: "abc123", SK: "abc300_a" → 2回目のWA提出  ← 重複！上書きされる</code></pre>
+
+<p>DynamoDBではPK+SKが同じアイテムは上書きされるため、この設計では同じ問題への複数提出を保存できない。</p>
+
+<h3>対処法1: SKに一意な値を含める</h3>
+
+<pre><code>PK: "abc123", SK: "SUB#12345" → abc300_a へのAC提出
+PK: "abc123", SK: "SUB#12346" → abc300_a へのWA提出  ← 別アイテム、OK</code></pre>
+
+<h3>対処法2: SKを階層化して深い構造を表現する</h3>
+
+<p>提出の中にテストケースごとの結果がある場合:</p>
+
+<pre><code>PK: "abc123", SK: "SUB#12345"            → 提出のメタデータ
+PK: "abc123", SK: "SUB#12345#TC#01"      → テストケース1の結果
+PK: "abc123", SK: "SUB#12345#TC#02"      → テストケース2の結果
+PK: "abc123", SK: "SUB#12345#TC#03"      → テストケース3の結果</code></pre>
+
+<p>SKの前方一致検索（<code>begins_with</code>）を活用:</p>
+<ul>
+<li><code>begins_with "SUB#12345"</code> → 提出メタデータ + 全テストケース</li>
+<li><code>begins_with "SUB#12345#TC#"</code> → テストケースだけ</li>
+<li><code>= "SUB#12345#TC#03"</code> → テストケース3だけ</li>
+</ul>
+
+<h3>対処法3: アイテム内にリストで持つ（ネスト構造）</h3>
+
+<pre><code class="language-json">{
+  "PK": "abc123",
+  "SK": "SUB#12345",
+  "problem_id": "abc300_a",
+  "test_cases": [
+    { "id": 1, "result": "AC", "time": 10 },
+    { "id": 2, "result": "AC", "time": 15 },
+    { "id": 3, "result": "WA", "time": 20 }
+  ]
+}</code></pre>
+
+<p>DynamoDBはJSON的なネスト構造を1アイテム内に持てる。テストケース個別の検索が不要ならこちらがシンプル。</p>
+
+<h3>対処法の比較</h3>
+
+<table>
+<thead><tr><th></th><th>SK階層化</th><th>リストで持つ</th><th>テーブル分割</th></tr></thead>
+<tbody>
+<tr><td>個別検索</td><td>できる</td><td>できない</td><td>できる</td></tr>
+<tr><td>個別更新</td><td>できる</td><td>アイテムごと書き換え</td><td>できる</td></tr>
+<tr><td>取得効率</td><td>複数アイテム取得</td><td>1アイテムで全部</td><td>複数テーブルに問い合わせ</td></tr>
+<tr><td>適するケース</td><td>個別操作が必要</td><td>まとめて取得すればOK</td><td>完全に独立したデータ</td></tr>
+</tbody>
+</table>
+
+<hr>
+
+<h2>8. DynamoDBがこの構造を採用している理由</h2>
+
+<h3>RDBの限界: スケールの壁</h3>
+
+<p>RDBはデータ量が増えると問題が出る:</p>
+
+<pre><code>100万行:   インデックスがあれば高速（数ms）
+1億行:     JOINが遅くなり、サーバー増強が必要（垂直スケール）
+100億行:   1台のサーバーでは限界、シャーディングを自前で設計・運用する必要がある</code></pre>
+
+<h3>DynamoDBの戦略: 最初から分散する</h3>
+
+<p>PKのハッシュ値でデータを最初から複数のサーバーに分散配置する:</p>
+
+<pre><code>PKの値 → ハッシュ関数 → どのサーバーに置くか決まる
+
+サーバーA: user_id="abc123" のデータ全部
+サーバーB: user_id="def456" のデータ全部
+サーバーC: user_id="ghi789" のデータ全部</code></pre>
+
+<p>この構造により:</p>
+<ul>
+<li><code>Query(PK="abc123")</code> → サーバーAだけ見ればいい</li>
+<li>他のサーバーのデータ量は関係ない</li>
+<li><strong>テーブルが100行でも100億行でも、常に数ミリ秒で返る</strong></li>
+<li>データが増えたらサーバーを足すだけ（水平スケール）</li>
+</ul>
+
+<h3>制約は代償ではなく設計の根幹</h3>
+
+<table>
+<thead><tr><th>RDB</th><th>DynamoDB</th></tr></thead>
+<tbody>
+<tr><td>任意のカラムで検索できる</td><td>PKでしか高速検索できない</td></tr>
+<tr><td>→ 全データを知っているサーバーが必要</td><td>→ 該当サーバーだけ見ればいい</td></tr>
+<tr><td>→ スケールしにくい</td><td>→ 無限にスケールする</td></tr>
+</tbody>
+</table>
+
+<p>「PKでしか検索できない」のは、<strong>「どのサーバーに聞けばいいか一発でわかる」ための仕組み</strong>。任意のカラムで検索を許すと「どのサーバーにデータがあるかわからない」→「全サーバーに聞く」→ 分散の意味がなくなる。</p>
+
+<h3>GSIが「コピー」である理由もここにある</h3>
+
+<p>GSIは別のPKで分散し直したコピー:</p>
+
+<pre><code>元テーブル: user_id で分散
+  サーバーA: user_id="abc123" → [提出1, 提出2, 提出3]
+  サーバーB: user_id="def456" → [提出4, 提出5]
+
+GSI: problem_id で分散（コピー）
+  サーバーX: problem_id="abc300_a" → [提出1, 提出4]
+  サーバーY: problem_id="abc300_b" → [提出2, 提出5]</code></pre>
+
+<p>「別の切り口で検索」=「別の基準で分散配置し直す」= データのコピーが必要 → コスト増。</p>
+
+<h3>DynamoDB誕生の背景</h3>
+
+<p>Amazon.comのショッピングカートという、何億人ものユーザーが同時にアクセスするシステムのために生まれた。柔軟性よりも「絶対に遅くならないこと」が最優先だった。</p>
+
+<pre><code>RDBの考え方:
+  「何でも検索できるようにして、遅くなったらチューニングする」
+  → 柔軟だが、規模が大きくなると限界がくる
+
+DynamoDBの考え方:
+  「検索方法を制限する代わりに、どんな規模でも同じ速度を保証する」
+  → 制約があるが、規模に関係なく数ミリ秒で応答する</code></pre>
+
+<hr>
+
+<h2>9. DynamoDBのデメリット（RDBと比較しての弱点）</h2>
+
+<p>セクション8までは DynamoDB の設計思想と強みを説明してきたが、その裏返しとして明確な弱点もある。ここでは「どういう場面で DynamoDB が向かないか」を具体的に洗い出す。</p>
+
+<h3>9.1 アクセスパターンを「事前に」全部決める必要がある</h3>
+
+<p>RDB なら「とりあえずテーブル作って、検索要件は後から考える」で何とかなる。DynamoDB では設計時点でアクセスパターンを読み切れないと致命傷。</p>
+
+<pre><code>設計時:    user_id で引く、problem_id で引く、tag+difficulty で引く、の3パターン
+         ↓
+実装後:  「やっぱり result=AC だけを日付順で一覧したい」
+         ↓
+対応:    GSI 追加 → 既存データの再構築 + 追加コスト</code></pre>
+
+<p>RDB なら <code>CREATE INDEX</code> 一発で済む話が、DynamoDB では設計見直し・GSI追加・非正規化の作り直し、という大きな手戻りになる。</p>
+
+<h3>9.2 JOINがない → 非正規化の代償</h3>
+
+<pre><code>RDB:
+  users と submissions を JOIN
+  → ユーザー名が変わったら users.name を1箇所更新すれば全クエリに反映
+
+DynamoDB:
+  submissions の中に username を埋め込む（非正規化）
+  → ユーザー名が変わったら、その人の全 submissions を更新しないといけない</code></pre>
+
+<p><strong>書き込み時の整合性維持がアプリ側の責任</strong>になる。「更新忘れ → データ不整合」のバグが出やすい。</p>
+
+<h3>9.3 集計・分析クエリが壊滅的に苦手</h3>
+
+<p>SQL なら1行で書けるものが、DynamoDB では大仕事。</p>
+
+<table>
+<thead><tr><th>やりたいこと</th><th>RDB</th><th>DynamoDB</th></tr></thead>
+<tbody>
+<tr><td>全ユーザー数</td><td><code>SELECT COUNT(*) FROM users</code></td><td>全件 Scan（高コスト・遅い）</td></tr>
+<tr><td>問題ごとのAC率</td><td><code>GROUP BY problem_id</code></td><td>GSI 取得 → <strong>アプリ側で集計</strong></td></tr>
+<tr><td>平均提出時間</td><td><code>AVG(time)</code></td><td>全件取ってアプリで計算</td></tr>
+<tr><td>月次レポート</td><td>SQL 一発</td><td>DynamoDB Streams → S3 → Athena の別パイプライン</td></tr>
+</tbody>
+</table>
+
+<p><strong>BIツール・分析用途には不向き</strong>。本格的な分析が必要なら DynamoDB Streams で S3 に流して Athena で SQL を叩く、といった別系統の仕組みを組む。</p>
+
+<h3>9.4 トランザクションの制約</h3>
+
+<p><code>TransactWriteItems</code> はあるが、制約が多い:</p>
+
+<ul>
+<li><strong>最大100アイテム / 4MB</strong> まで</li>
+<li><strong>書き込みコストが通常の2倍</strong></li>
+<li>クロスリージョン不可</li>
+<li>複雑な分岐ロジック（条件 → 更新 or ロールバック）は組みにくい</li>
+</ul>
+
+<p>銀行の勘定系のような厳密なトランザクション要件には不向き。</p>
+
+<h3>9.5 結果整合性（Eventual Consistency）の罠</h3>
+
+<pre><code>書き込み:
+  サーバーA に書き込み
+  → サーバーB, C にレプリカ複製（数ms〜数十ms）
+  → その隙間に B から読むと「古いデータ」が返る</code></pre>
+
+<ul>
+<li><strong>GSIは常に結果整合性のみ</strong>（強整合性を選べない）</li>
+<li>ベーステーブルは <code>ConsistentRead=true</code> で強整合性にできるが、RCU コストが2倍</li>
+</ul>
+
+<p>「書いた直後に読んだのに、反映されてない?」という挙動に初心者はハマりやすい。</p>
+
+<h3>9.6 ホットパーティション問題</h3>
+
+<pre><code>PK = "status" (値は "active" or "inactive" の2種類)
+  → ほぼ全データが "active" のパーティションに集中
+  → そのパーティションだけスループット上限（3000 RCU / 1000 WCU）に張り付く
+  → 他のパーティションは暇なのに、全体として遅くなる → スロットリング</code></pre>
+
+<p>PK 設計のミスが<strong>性能的な爆弾</strong>になる。RDB なら「インデックス効いてないけど動く」で済むが、DynamoDB はスロットリングで<strong>エラーが返る</strong>。</p>
+
+<h3>9.7 アイテムサイズ 400KB 上限</h3>
+
+<p>1アイテムは最大 <strong>400KB</strong>。</p>
+
+<ul>
+<li>画像・PDF・長いソースコードの丸ごと保存は不可 → S3 に置いて ARN だけ DynamoDB に保存する二段構え</li>
+<li>JSON ネスト構造を富豪的に持つと上限に引っかかる</li>
+<li>対処法3（リストで持つ）も大量データでは限界</li>
+</ul>
+
+<h3>9.8 クエリ柔軟性の欠如</h3>
+
+<p>DynamoDB 単体ではできないこと:</p>
+
+<ul>
+<li><code>LIKE "%キーワード%"</code> の部分一致検索 → OpenSearch などに流す必要あり</li>
+<li>複数条件の <code>OR</code>（GSI で別々にクエリして自分でマージ）</li>
+<li>非キー属性でのフィルタは「取得後にフィルタ」なので読み込み量は変わらない（= RCU コスト発生）</li>
+</ul>
+
+<p><strong>「動的な検索条件を受け付ける管理画面や全文検索」は DynamoDB 単体では作れない。</strong></p>
+
+<h3>9.9 コスト予測の難しさ</h3>
+
+<table>
+<thead><tr><th>RDB (RDS)</th><th>DynamoDB</th></tr></thead>
+<tbody>
+<tr><td>インスタンス代（固定）+ ストレージ</td><td>RCU/WCU × クエリ数 × アイテムサイズ</td></tr>
+<tr><td>使わなくても固定費</td><td>使った分だけ課金（オンデマンド）</td></tr>
+<tr><td>見積もりしやすい</td><td><strong>使い方で桁が変わる</strong></td></tr>
+</tbody>
+</table>
+
+<p>GSI は「1テーブル分のコピー」相当なので、GSI 3つ = ストレージ4倍 + 書き込みコストも4倍。アクセスパターン追加＝コスト急増に直結する。</p>
+
+<h3>9.10 スキーマレスゆえの混乱</h3>
+
+<p>DynamoDB 自体はスキーマを強制しない。結果として:</p>
+
+<ul>
+<li>アプリのバージョン違いで属性名が混在（<code>userId</code> と <code>user_id</code> が両方存在、など）しても止まらない</li>
+<li><strong>バリデーションは 100% アプリ側の責任</strong></li>
+<li>「このテーブルに何の属性が入り得るか」を別途ドキュメントで管理する必要がある</li>
+</ul>
+
+<p>RDB なら <code>NOT NULL</code> や型制約が守ってくれるが、DynamoDB はノーガード。</p>
+
+<h3>9.11 ツール・エコシステムの弱さ</h3>
+
+<ul>
+<li>SQL が使えないので、既存の BI ツール（Tableau, Redash, Metabase 等）が直接繋がらない</li>
+<li>ORM（SQLAlchemy, Prisma 等）の SQL 前提設計と相性が悪い</li>
+<li>アドホック分析は AWS コンソールだけでは厳しく、NoSQL Workbench 等の専用ツールが必要</li>
+</ul>
+
+<h3>9.12 学習コストと「常識の違い」</h3>
+
+<p>SQL の常識（JOIN、正規化、インデックスは後で追加）は<strong>全部捨てる必要</strong>がある。Single Table Design、非正規化、アクセスパターン駆動設計、という別の思考体系を学び直す必要がある。</p>
+
+<p>チームに NoSQL 経験者がいないと、<strong>RDB 風に設計してしまって性能もコストも両方失敗する</strong>という典型的な事故が起きやすい。</p>
+
+<h3>9.13 デメリットが顕在化しやすいケース（まとめ）</h3>
+
+<table>
+<thead><tr><th>シチュエーション</th><th>なぜ DynamoDB が合わないか</th></tr></thead>
+<tbody>
+<tr><td>アクセスパターンが固まっていない（プロトタイプ）</td><td>スキーマ変更コストが高い</td></tr>
+<tr><td>自由な検索機能を提供したい（管理画面・検索UI）</td><td>クエリ柔軟性が無い</td></tr>
+<tr><td>集計・レポートが中心</td><td>集計機能が無い</td></tr>
+<tr><td>チームに SQL 経験者しかいない</td><td>学習コストが高い</td></tr>
+<tr><td>厳密なトランザクションが必要（金融系）</td><td>トランザクションの制約が多い</td></tr>
+<tr><td>データ量が中規模以下で頭打ち</td><td>スケール性能を活かせず RDB の方が楽</td></tr>
+</tbody>
+</table>
+
+<hr>
+
+<h2>10. 判断基準: いつDynamoDBを選ぶか</h2>
+
+<table>
+<thead><tr><th>DynamoDBが向いている場合</th><th>RDBが向いている場合</th></tr></thead>
+<tbody>
+<tr><td>アクセスパターンが事前に明確</td><td>アドホックなクエリが多い</td></tr>
+<tr><td>高スループット・低レイテンシが必要</td><td>複雑なJOIN・集計が必要</td></tr>
+<tr><td>サーバーレス構成（Lambda連携）</td><td>トランザクションの厳密性が重要</td></tr>
+<tr><td>データ量が大きくスケールが必要</td><td>データ量が小〜中規模</td></tr>
+<tr><td>キーバリュー/ドキュメント型のデータ</td><td>リレーショナルなデータ構造</td></tr>
+<tr><td>運用負荷を下げたい（フルマネージド）</td><td>既存のSQL資産を活かしたい</td></tr>
+</tbody>
+</table>
+
+<hr>
+
+<h2>参考資料</h2>
+
+<ul>
+<li><a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.CoreComponents.html">Core components of Amazon DynamoDB - AWS公式ドキュメント</a></li>
+<li><a href="https://dynomate.io/blog/dynamodb-partition-key-vs-sort-key/">DynamoDB Partition Key vs Sort Key: Complete Guide - Dynomate Blog</a></li>
+<li><a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-general-nosql-design.html">NoSQL design for DynamoDB - AWS公式ドキュメント</a></li>
+<li><a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/SQLtoNoSQL.WhyDynamoDB.html">Choosing between relational (SQL) and NoSQL - AWS公式ドキュメント</a></li>
+<li><a href="https://dynomate.io/blog/dynamodb-gsi/">Global Secondary Indexes (GSI) in DynamoDB: Complete Guide - Dynomate Blog</a></li>
+<li><a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-indexes-general.html">General guidelines for secondary indexes in DynamoDB - AWS公式ドキュメント</a></li>
+<li><a href="https://aws.amazon.com/blogs/database/choosing-the-right-dynamodb-partition-key/">Choosing the Right DynamoDB Partition Key - AWS Database Blog</a></li>
+<li><a href="https://dynobase.dev/dynamodb-gsi/">DynamoDB Global Secondary Index - The Ultimate Guide - Dynobase</a></li>
+</ul>
+
+<div class="foot">← <a href="../../index.html">Phase 1 ルーター</a> ／ <a href="../../main.md">Markdown 目次</a></div>
+</main></body></html>

@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 リファレンス / Q&A</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 リファレンス / Q&amp;A · <a href="../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>02. json.dumps の default パラメータと DynamoDB Decimal 問題</h1>
+
+<blockquote>
+<p>出典:</p>
+<ul>
+  <li><a href="https://docs.python.org/3/library/json.html">Python <code>json</code> — JSON encoder and decoder</a>（閲覧日 2026-05-09）
+    <ul>
+      <li><code>json.dumps()</code> シグネチャと <code>default</code> 引数: <a href="https://docs.python.org/3/library/json.html#json.dumps"><code>json.dumps</code></a></li>
+      <li>Python → JSON 型対応表: <a href="https://docs.python.org/3/library/json.html#basic-usage">Basic Usage</a></li>
+      <li>JSONEncoder のサブクラス化: <a href="https://docs.python.org/3/library/json.html#json.JSONEncoder.default"><code>json.JSONEncoder.default</code></a></li>
+    </ul>
+  </li>
+  <li><a href="https://docs.aws.amazon.com/boto3/latest/reference/customizations/dynamodb.html">Boto3 DynamoDB customization reference</a>（閲覧日 2026-05-09）
+    <ul>
+      <li>DynamoDB Number 型 ↔ Python <code>Decimal</code> の対応</li>
+    </ul>
+  </li>
+</ul>
+<p>このノートは公式ドキュメントの「<code>json</code> モジュールの <code>dumps</code>/エンコーダ」と「Boto3 DynamoDB の型対応」を起点に、Claude が自動生成した教材です。</p>
+</blockquote>
+
+<h2>概要</h2>
+
+<p>Lambda が DynamoDB から取り出したデータをそのまま <code>json.dumps(...)</code> するとほぼ確実に <code>TypeError: Object of type Decimal is not JSON serializable</code> で落ちる。
+これは Python 標準の JSON エンコーダが扱える型が限定されていて、DynamoDB が<strong>意図的に</strong> <code>decimal.Decimal</code> を返してくるためで、両者を繋ぐのが <code>json.dumps()</code> の <code>default</code> 引数（または <code>JSONEncoder</code> のサブクラス化）。</p>
+
+<p><code>shared/response.py</code> の最終的な実装は <code>json.dumps(body, default=str)</code> という 1 行に集約されるが、その「<code>default=str</code> だけで済むのか／それで本当に良いのか」を判断できるよう、ここで <code>default</code> 引数の挙動と Decimal の素性を押さえる。</p>
+
+<blockquote>
+<p>前提（既習）: HTTP レスポンスの三要素（<code>statusCode</code> / <code>headers</code> / <code>body</code>）と CORS ヘッダの意味は <a href="01-lambda-response-format-and-cors.md">01-lambda-response-format-and-cors.md</a> で扱った。本稿は <code>body=...</code> に何を渡すかという<strong>シリアライズ層</strong>に集中する。</p>
+</blockquote>
+
+<h2>公式 docs に沿った解説</h2>
+
+<h3>A. <code>json.dumps()</code> のシグネチャと <code>default</code> 引数</h3>
+
+<p>公式 docs より、<code>json.dumps()</code> のシグネチャは以下:</p>
+
+<pre><code>json.dumps(obj, *, skipkeys=False, ensure_ascii=True, check_circular=True,
+           allow_nan=True, cls=None, indent=None, separators=None,
+           default=None, sort_keys=False, **kw)</code></pre>
+
+<p><code>default</code> 引数の定義（公式 docs 引用）:</p>
+
+<blockquote>
+<p>If specified, <strong>default</strong> should be a function that gets called for objects that can't otherwise be serialized. It should return a JSON encodable version of the object or raise a <code>TypeError</code>. If not specified, <code>TypeError</code> is raised.</p>
+</blockquote>
+
+<p>ポイントを噛み砕くと:</p>
+
+<ul>
+  <li><code>default</code> は<strong>関数</strong>を渡す引数（フォールバック用コールバック）</li>
+  <li>エンコーダが「素では JSON にできない型」に出会った時にだけ呼ばれる（既知の型はスルー）</li>
+  <li>戻り値は <strong>JSON 化可能な値</strong>（<code>dict</code> / <code>list</code> / <code>str</code> / <code>int</code> / <code>float</code> / <code>bool</code> / <code>None</code> のいずれか）でなければならない</li>
+  <li><code>default</code> を渡さないと <code>TypeError</code> が即座に発生</li>
+</ul>
+
+<h3>B. Python → JSON の型対応表（公式 docs より）</h3>
+
+<table>
+  <thead>
+    <tr><th>Python</th><th>JSON</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>dict</code></td><td>object</td></tr>
+    <tr><td><code>list</code>, <code>tuple</code></td><td>array</td></tr>
+    <tr><td><code>str</code></td><td>string</td></tr>
+    <tr><td><code>int</code>, <code>float</code>, <code>int</code>/<code>float</code> 派生 Enum</td><td>number</td></tr>
+    <tr><td><code>True</code></td><td><code>true</code></td></tr>
+    <tr><td><code>False</code></td><td><code>false</code></td></tr>
+    <tr><td><code>None</code></td><td><code>null</code></td></tr>
+  </tbody>
+</table>
+
+<p>公式 docs の補足:</p>
+
+<blockquote>
+<p>Keys in key/value pairs of JSON are always of the type <code>str</code>. When a dictionary is converted into JSON, all the keys of the dictionary are coerced to strings.</p>
+</blockquote>
+
+<p>ここに<strong>載っていない型</strong>はすべて <code>default</code> フォールバック行きになる。代表例:</p>
+
+<ul>
+  <li><code>decimal.Decimal</code></li>
+  <li><code>datetime.datetime</code> / <code>datetime.date</code></li>
+  <li><code>uuid.UUID</code></li>
+  <li><code>set</code> / <code>frozenset</code></li>
+  <li><code>bytes</code> / <code>bytearray</code></li>
+  <li>自作クラス全般</li>
+</ul>
+
+<h3>C. <code>default=str</code> 慣用句</h3>
+
+<p>公式 docs には <code>default=str</code> という具体例は載っていないが、<code>default</code> 引数の契約（呼ばれる／JSON 化可能な値を返す）から派生する慣用パターン。</p>
+
+<p><code>str</code> 関数自体は「任意のオブジェクトを <code>str</code> 化して返す」関数なので、<code>default</code> 引数の要件（JSON 化可能な値を返す）を満たす。よって:</p>
+
+<pre><code>import json
+from decimal import Decimal
+from datetime import datetime
+
+json.dumps({
+    "price": Decimal("100.50"),
+    "ts": datetime(2026, 5, 9, 12, 0, 0),
+}, default=str)
+# =&gt; '{"price": "100.50", "ts": "2026-05-09 12:00:00"}'</code></pre>
+
+<p>特徴:</p>
+
+<ul>
+  <li><strong>シンプル</strong>: 1 行の宣言で「未知の型はとりあえず <code>str()</code> する」と決められる</li>
+  <li><strong>欠点</strong>: すべて文字列になる。クライアントが JSON で <strong>数値として</strong> 受け取りたい場合は型情報が落ちる（例: <code>100.50</code> → <code>"100.50"</code>）</li>
+  <li><strong>代替</strong>: 型ごとに分岐する独自関数 or <code>JSONEncoder</code> サブクラス（後述）</li>
+</ul>
+
+<h3>D. <code>JSONEncoder</code> のサブクラス化（より厳密にやる場合）</h3>
+
+<p>公式 docs より:</p>
+
+<blockquote>
+<p>To extend this to recognize other objects, subclass and implement a <code>default()</code> method with another method that returns a serializable object for <code>o</code> if possible, otherwise it should call the superclass implementation (to raise <code>TypeError</code>).</p>
+</blockquote>
+
+<p>例（複素数型対応、公式 docs 抜粋を整形）:</p>
+
+<pre><code>class ComplexEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, complex):
+            return [obj.real, obj.imag]
+        # 親クラスに委ねて未知型は TypeError
+        return super().default(obj)
+
+json.dumps(2 + 1j, cls=ComplexEncoder)
+# =&gt; '[2.0, 1.0]'</code></pre>
+
+<p><code>default</code> 引数（関数渡し）と <code>cls</code> 引数（エンコーダクラス渡し）の使い分け:</p>
+
+<table>
+  <thead>
+    <tr><th></th><th><code>default=fn</code></th><th><code>cls=MyEncoder</code></th></tr>
+  </thead>
+  <tbody>
+    <tr><td>用途</td><td>1 関数で済む単純なフォールバック</td><td>型ごとに分岐したい / 再利用したい</td></tr>
+    <tr><td>親クラスへの委譲</td><td>できない（TypeError を自分で raise）</td><td><code>super().default(obj)</code> で自然に書ける</td></tr>
+    <tr><td>ステート</td><td>持てない</td><td>クラス属性として持てる</td></tr>
+    <tr><td>速度</td><td>同等（公式 docs 上の差は明記なし）</td><td>同等</td></tr>
+  </tbody>
+</table>
+
+<h3>E. DynamoDB が <code>Decimal</code> を返す事情（boto3 docs より）</h3>
+
+<p>Boto3 の Table Resource ドキュメントには、DynamoDB の <strong>Number (N)</strong> 型と Python 型の対応として以下が示されている:</p>
+
+<table>
+  <thead>
+    <tr><th>Python</th><th>DynamoDB</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>integer</code></td><td>Number (N)</td></tr>
+    <tr><td><code>decimal.Decimal</code></td><td>Number (N)</td></tr>
+  </tbody>
+</table>
+
+<p>つまり Boto3 の <code>Table.get_item</code> などが返す数値属性は <strong><code>Decimal</code> インスタンス</strong>。<code>int</code> や <code>float</code> ではない。</p>
+
+<p>公式 docs 上にはっきりした「なぜ Decimal なのか」の記述はないが、設計上の含意は明確:</p>
+
+<ul>
+  <li>DynamoDB の Number 型は内部的に<strong>文字列で</strong>保持され、最大 38 桁の精度を持つ（IEEE 754 浮動小数点ではない）</li>
+  <li>これを <code>float</code> で受けると <code>0.1 + 0.2 == 0.3</code> が False になる類の精度欠落が起きる</li>
+  <li><code>Decimal</code> で受けることで「DynamoDB に書いた数値と帰ってきた数値がビット単位で一致する」ことを保証している</li>
+</ul>
+
+<blockquote>
+<p>補足（公式 docs には記載なし）: DynamoDB Stream や AWS SDK 全般でも数値は string 表現で交換されており、Decimal 採用は Boto3 単独の癖ではなく DynamoDB 全体の設計と整合している。</p>
+</blockquote>
+
+<h3>F. Decimal × json.dumps が衝突する理由</h3>
+
+<p>ここまでの 2 つの事実を組み合わせると、衝突は構造的:</p>
+
+<ul>
+  <li>Boto3 は精度保護のため <code>Decimal</code> を返す</li>
+  <li>Python 標準の <code>json</code> モジュールは Python → JSON 型対応表に <code>Decimal</code> を含めていない（<code>int</code> と <code>float</code> のみ）</li>
+  <li>結果: DynamoDB から取り出した item をそのまま <code>json.dumps()</code> すると <code>TypeError: Object of type Decimal is not JSON serializable</code></li>
+</ul>
+
+<pre><code>import json, decimal
+json.dumps({"price": decimal.Decimal("100.50")})
+# TypeError: Object of type Decimal is not JSON serializable</code></pre>
+
+<p>これは「ライブラリのバグ」ではなく、両側の <strong>正当な設計判断</strong>が出会った結果。だから Lambda 側で意識的に橋渡しする必要がある。</p>
+
+<h3>G. <code>datetime</code> も同じ系譜</h3>
+
+<p><code>datetime.datetime</code> / <code>datetime.date</code> も Python 標準の json では未対応のため、<code>default</code> フォールバックが必要。<code>default=str</code> だと:</p>
+
+<pre><code>str(datetime(2026, 5, 9, 12, 0, 0))   # '2026-05-09 12:00:00'
+str(datetime(2026, 5, 9, 12, 0, 0).isoformat())  # '2026-05-09T12:00:00'</code></pre>
+
+<p><code>str()</code> の出力は <code>datetime</code> の場合「<code>YYYY-MM-DD HH:MM:SS</code>」と空白区切り。フロントが厳密に ISO8601 を期待するなら、<code>default=str</code> ではなく <code>default=lambda o: o.isoformat() if isinstance(o, datetime) else str(o)</code> のような分岐が必要。</p>
+
+<blockquote>
+<p>このプロジェクトでは Decimal の方が登場頻度が高く、<code>datetime</code> を直接シリアライズする箇所はまだ無い見込み。<code>default=str</code> で十分なケースに該当するが、登場した時に再考する。</p>
+</blockquote>
+
+<h2>重要ポイント</h2>
+
+<ul>
+  <li><code>default</code> は「未知型に出会ったときに呼ばれるフォールバック関数」。<strong>戻り値は JSON 化可能な値</strong>でなければならない</li>
+  <li>Python 標準 json の対応型は <code>dict / list / tuple / str / int / float / bool / None</code> のみ。<strong><code>Decimal</code> も <code>datetime</code> も範囲外</strong></li>
+  <li>DynamoDB は精度保証のため Number 型を <code>Decimal</code> で返してくる（Boto3 の意図的な設計）</li>
+  <li><code>default=str</code> は「未知型はとりあえず <code>str()</code>」というワンライナーの慣用句。十分な多くのケースで使える反面、<strong>型情報が文字列として落ちる</strong>ことを理解しておく</li>
+  <li>厳密に型ごと分岐したい場合は <code>json.JSONEncoder</code> をサブクラス化して <code>default()</code> を実装、<code>cls=MyEncoder</code> で渡す</li>
+  <li>このプロジェクトの <code>shared/response.py</code> ではまず <code>default=str</code> を採用する。後で問題が出たら <code>JSONEncoder</code> 化する設計余地を残す</li>
+</ul>
+
+<h2>コード例</h2>
+
+<h3>落ちる例</h3>
+
+<pre><code>import json
+from decimal import Decimal
+
+item = {"id": "SUB001", "score": Decimal("1500.5")}
+json.dumps(item)
+# TypeError: Object of type Decimal is not JSON serializable</code></pre>
+
+<h3><code>default=str</code> で吸収</h3>
+
+<pre><code>import json
+from decimal import Decimal
+
+item = {"id": "SUB001", "score": Decimal("1500.5")}
+json.dumps(item, default=str)
+# '{"id": "SUB001", "score": "1500.5"}'
+# &lt;- score が文字列になっている点に注意</code></pre>
+
+<h3><code>JSONEncoder</code> で型ごと厳密に処理</h3>
+
+<pre><code>import json
+from decimal import Decimal
+from datetime import datetime
+
+class AppEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            # 整数値なら int、それ以外は float に
+            return int(obj) if obj % 1 == 0 else float(obj)
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
+
+item = {"id": "SUB001", "score": Decimal("1500.5"), "ts": datetime(2026, 5, 9)}
+json.dumps(item, cls=AppEncoder)
+# '{"id": "SUB001", "score": 1500.5, "ts": "2026-05-09T00:00:00"}'</code></pre>
+
+<p><code>Decimal</code> → <code>float</code> キャストには微小な精度欠落リスクがある（IEEE754 の限界）。AtCoder スコアのような整数中心の用途では問題になりにくいが、金額計算では <code>str</code> 化して JS 側で文字列のまま扱う方が安全という選択肢もある。</p>
+
+<h2>関連</h2>
+
+<ul>
+  <li>前: <a href="01-lambda-response-format-and-cors.md">01-lambda-response-format-and-cors.md</a> — Lambda Proxy Integration の戻り値三要素、CORS</li>
+  <li>次: <a href="03-shared-response-helper-design.md">03-shared-response-helper-design.md</a> — <code>shared/response.py</code> の設計ノート（このシリアライズ層を含めて 1 関数に閉じ込める）</li>
+  <li>議論・Q&amp;A: （<code>lesson</code> 中に発生したら <code>reference/</code> 配下にリンクが追加されます）</li>
+</ul>
+
+<hr>
+
+<p><em>Auto-generated at 2026-05-09 via /learning-flow:material（公式 docs 駆動）</em></p>
+
+<h2>振り返りクイズ</h2>
+
+<p>回答は各問の <strong>回答</strong>: 行の下に記入してください。
+全問記入後に <code>/learning-flow:grade</code> を実行すると、Claude が採点して進捗を更新します。</p>
+
+<hr>
+
+<h3>Q1. <code>default</code> 引数の契約</h3>
+
+<p><code>json.dumps(obj, default=fn)</code> の <code>fn</code> に渡せる関数の <strong>満たすべき契約</strong> を答えよ。</p>
+
+<p>具体的には:</p>
+<ul>
+  <li><code>fn</code> はどんなタイミングで呼ばれるか</li>
+  <li><code>fn</code> の戻り値はどうあるべきか</li>
+  <li>戻り値が契約を満たさなかったらどうなるか</li>
+</ul>
+
+<p>また、以下のコードはなぜ動かないか説明せよ。</p>
+
+<pre><code>import json
+from decimal import Decimal
+
+def fn(obj):
+    if isinstance(obj, Decimal):
+        return obj  # &lt;- Decimal を返してしまう
+
+json.dumps({"x": Decimal("1.5")}, default=fn)</code></pre>
+
+<p><strong>参考</strong>:</p>
+<ul>
+  <li><a href="https://docs.python.org/3/library/json.html#json.dumps"><code>json.dumps</code> - Python Docs</a></li>
+</ul>
+
+<p><strong>回答</strong>:</p>
+
+<hr>
+
+<h3>Q2. <code>default=str</code> の構造的トレードオフ</h3>
+
+<p><code>shared/response.py</code> の MVP 実装では <code>json.dumps(body, default=str)</code> を採用する。
+このワンライナー慣用句が成立する仕組みと、<strong>フロントエンド側に与える影響</strong>（型情報の観点）を説明せよ。</p>
+
+<p>具体的には:</p>
+<ul>
+  <li>なぜ組み込み関数 <code>str</code> を <code>default</code> 引数にそのまま渡せるのか（契約面で）</li>
+  <li>DynamoDB から取れた <code>Decimal("1500.5")</code> がフロントに届いた時、JS 側で <code>score * 2</code> のような数値演算を直接できるか</li>
+  <li>できないなら、フロント側で何をする必要があるか</li>
+</ul>
+
+<p><strong>参考</strong>:</p>
+<ul>
+  <li><a href="https://docs.python.org/3/library/json.html#json.dumps"><code>json.dumps</code> - Python Docs</a></li>
+  <li><a href="https://docs.python.org/3/library/json.html#py-to-json-table">Python → JSON conversion table - Python Docs</a></li>
+</ul>
+
+<p><strong>回答</strong>:</p>
+
+<hr>
+
+<h3>Q3. なぜ Boto3 は <code>Decimal</code> を返すのか</h3>
+
+<p>Boto3 の DynamoDB Table Resource は数値属性を <code>int</code> でも <code>float</code> でもなく <code>decimal.Decimal</code> で返してくる。
+この設計判断の理由を、<strong>float で受けたらどんな問題が起きるか</strong>という具体例とともに説明せよ。</p>
+
+<p>ヒント: DynamoDB 側で Number 型がどう保持されているか、IEEE 754 浮動小数点の限界（例: <code>0.1 + 0.2 == 0.3</code> の結果）。</p>
+
+<p><strong>参考</strong>:</p>
+<ul>
+  <li><a href="https://docs.aws.amazon.com/boto3/latest/reference/customizations/dynamodb.html">Boto3 DynamoDB customization - Valid item types</a></li>
+  <li><a href="https://docs.python.org/3/tutorial/floatingpoint.html">Floating Point Arithmetic: Issues and Limitations - Python Docs</a></li>
+</ul>
+
+<p><strong>回答</strong>:</p>
+
+<hr>
+
+<h3>Q4. <code>default=fn</code> と <code>cls=MyEncoder</code> の使い分け</h3>
+
+<p><code>json.dumps</code> で未知型を救う方法として、<code>default</code> 引数に関数を渡す方法と、<code>json.JSONEncoder</code> をサブクラス化して <code>cls=MyEncoder</code> で渡す方法がある。</p>
+
+<p>両者を比較し、<strong><code>shared/response.py</code> でまず <code>default=str</code> を採用し、後で必要になったら <code>JSONEncoder</code> 化する</strong> という移行戦略がなぜ妥当なのか、設計上の利点を説明せよ。</p>
+
+<p>ヒント: <code>json.dumps(body, default=str)</code> から <code>json.dumps(body, cls=AppEncoder)</code> への置き換えで、ハンドラ側のコードはどれだけ変わるか。</p>
+
+<p><strong>参考</strong>:</p>
+<ul>
+  <li><a href="https://docs.python.org/3/library/json.html#json.JSONEncoder"><code>json.JSONEncoder</code> - Python Docs</a></li>
+  <li><a href="https://docs.python.org/3/library/json.html#json.JSONEncoder.default"><code>json.JSONEncoder.default</code> - Python Docs</a></li>
+</ul>
+
+<p><strong>回答</strong>:</p>
+
+<hr>
+
+<h3>Q5. <code>datetime</code> の <code>default=str</code> 落とし穴</h3>
+
+<p><code>datetime.datetime</code> を <code>default=str</code> でシリアライズすると、出力フォーマットがフロント側の期待と食い違うことがある。</p>
+
+<pre><code>import json
+from datetime import datetime
+
+json.dumps({"ts": datetime(2026, 5, 9, 12, 0, 0)}, default=str)</code></pre>
+
+<p>(a) このコードの出力文字列は何になるか（<code>ts</code> の値部分のフォーマット）<br>
+(b) フロントが ISO 8601 形式（<code>2026-05-09T12:00:00</code>）を期待していた場合、何が問題か<br>
+(c) <code>default=str</code> を変えずにこれを解決するならどう書けばよいか（簡単な方針で良い）</p>
+
+<p><strong>参考</strong>:</p>
+<ul>
+  <li><a href="https://docs.python.org/3/library/datetime.html#datetime.datetime.__str__"><code>datetime.datetime.__str__</code> - Python Docs</a></li>
+  <li><a href="https://docs.python.org/3/library/datetime.html#datetime.datetime.isoformat"><code>datetime.datetime.isoformat</code> - Python Docs</a></li>
+</ul>
+
+<p><strong>回答</strong>:</p>
+
+<div class="foot">← <a href="../index.html">Phase 1 ルーター</a> ／ <a href="../main.md">Markdown 目次</a></div>
+</main></body></html>

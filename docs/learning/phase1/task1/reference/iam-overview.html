@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 リファレンス / Q&A</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 リファレンス / Q&amp;A · <a href="../../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>AWS IAM（Identity and Access Management）概要</h1>
+
+<h2>IAMとは</h2>
+
+<p><strong>「誰が（認証）、何に対して（リソース）、何をできるか（権限）」を管理するサービス。</strong></p>
+
+<p>AWSの全サービスへのアクセスはIAMを通じて制御される。AWSアカウントを作った時点でIAMが有効になっている。</p>
+
+<hr>
+
+<h2>1. IAMの主要コンポーネント</h2>
+
+<pre><code>IAM の構成要素:
+
+  ┌─ ユーザー (User)     ── 人やアプリに紐づくアカウント
+  │
+  ├─ グループ (Group)    ── ユーザーをまとめて権限を一括付与
+  │
+  ├─ ロール (Role)       ── 一時的に「被れる帽子」（誰でも使える権限セット）
+  │
+  └─ ポリシー (Policy)   ── 「何を許可/拒否するか」のJSON定義</code></pre>
+
+<h3>ユーザー (IAM User)</h3>
+
+<pre><code>人やアプリケーションに紐づく永続的なアカウント。
+
+例:
+  - 開発者 tanaka → IAMユーザー "tanaka" → アクセスキー発行
+  - CI/CDシステム → IAMユーザー "ci-bot" → アクセスキー発行
+
+問題点:
+  - アクセスキーが永続的 → 漏洩リスク
+  - 2026年現在、人間のアクセスにはIAM Identity Centerが推奨</code></pre>
+
+<h3>グループ (IAM Group)</h3>
+
+<pre><code>ユーザーをまとめるコンテナ。グループにポリシーを付ければ、所属ユーザー全員に権限が付く。
+
+例:
+  グループ "developers" → DynamoDB読み書き権限のポリシーを付与
+    ├── ユーザー tanaka → DynamoDB読み書きOK
+    ├── ユーザー suzuki → DynamoDB読み書きOK
+    └── ユーザー sato   → DynamoDB読み書きOK</code></pre>
+
+<h3>ロール (IAM Role)</h3>
+
+<pre><code>「一時的に被れる帽子」。特定のユーザーに紐づかず、必要なときに誰でも（許可された相手が）引き受ける（assume）できる。
+
+例:
+  ロール "lambda-sync-role"
+    → DynamoDB読み書き権限
+    → Lambda関数がこのロールを引き受けて実行
+    → 一時的な認証情報が自動発行される（数時間で期限切れ）
+
+今回のプロジェクト:
+  - Lambda: sync_submissions → "lambda-sync-role" を引き受ける → DynamoDB読み書きOK
+  - Lambda: get_submissions  → "lambda-get-role" を引き受ける  → DynamoDB読み取りのみ</code></pre>
+
+<p>ロールの重要な特徴:</p>
+<ul>
+  <li><strong>永続的な認証情報を持たない</strong>（アクセスキーがない）</li>
+  <li><strong>一時的な認証情報が自動で発行・ローテーションされる</strong></li>
+  <li><strong>信頼ポリシー（Trust Policy）で「誰がこのロールを使えるか」を制御</strong></li>
+</ul>
+
+<h3>ポリシー (IAM Policy)</h3>
+
+<p><strong>「何を許可/拒否するか」をJSON形式で定義したもの。</strong> IAMの中核。</p>
+
+<hr>
+
+<h2>2. IAMポリシーの構造</h2>
+
+<pre><code class="language-json">{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:GetItem",
+        "dynamodb:Query"
+      ],
+      "Resource": "arn:aws:dynamodb:ap-northeast-1:123456789:table/atcoder-review-users-prod"
+    }
+  ]
+}</code></pre>
+
+<h3>各要素の意味</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>要素</th>
+      <th>意味</th>
+      <th>例</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Effect</strong></td>
+      <td>許可 or 拒否</td>
+      <td><code>"Allow"</code> or <code>"Deny"</code></td>
+    </tr>
+    <tr>
+      <td><strong>Action</strong></td>
+      <td>何の操作か</td>
+      <td><code>"dynamodb:GetItem"</code>, <code>"s3:PutObject"</code></td>
+    </tr>
+    <tr>
+      <td><strong>Resource</strong></td>
+      <td>どのリソースに対して</td>
+      <td>テーブルのARN、S3バケットのARN等</td>
+    </tr>
+    <tr>
+      <td><strong>Condition</strong></td>
+      <td>条件（省略可）</td>
+      <td>IPアドレス制限、MFA必須等</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>読み方の例</h3>
+
+<pre><code class="language-json">{
+  "Effect": "Allow",                           ← 許可する
+  "Action": ["dynamodb:GetItem", "dynamodb:Query"],  ← GetItemとQueryの操作を
+  "Resource": "arn:aws:dynamodb:...:table/users"      ← usersテーブルに対して
+}</code></pre>
+
+<p>→ 「usersテーブルへのGetItemとQueryを許可する」</p>
+
+<h3>Deny は Allow より強い</h3>
+
+<pre><code class="language-json">// ポリシー1: 全DynamoDB操作を許可
+{ "Effect": "Allow", "Action": "dynamodb:*", "Resource": "*" }
+
+// ポリシー2: DeleteTable を拒否
+{ "Effect": "Deny", "Action": "dynamodb:DeleteTable", "Resource": "*" }
+
+// → 両方が付いている場合、DeleteTable は拒否される（Deny が勝つ）</code></pre>
+
+<hr>
+
+<h2>3. ポリシーの種類</h2>
+
+<h3>管理ポリシー（Managed Policy）</h3>
+
+<pre><code>AWS管理ポリシー: AWSが用意した定番ポリシー
+  例: "AmazonDynamoDBReadOnlyAccess" → DynamoDB全テーブルの読み取り権限
+
+カスタマー管理ポリシー: 自分で作るポリシー
+  例: "atcoder-review-sync-dynamodb" → 特定テーブルの読み書き権限</code></pre>
+
+<p>再利用可能。複数のユーザーやロールに付けられる。</p>
+
+<h3>インラインポリシー（Inline Policy）</h3>
+
+<pre><code>特定のユーザー/ロール/グループに直接埋め込むポリシー。
+そのエンティティが削除されると一緒に消える。
+
+今回のTerraformコードではこちらを使用:
+  aws_iam_role_policy → ロールに直接ポリシーを埋め込む</code></pre>
+
+<h3>使い分け</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th></th>
+      <th>管理ポリシー</th>
+      <th>インラインポリシー</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>再利用性</td>
+      <td>複数のロール/ユーザーに付けられる</td>
+      <td>1つのエンティティ専用</td>
+    </tr>
+    <tr>
+      <td>管理</td>
+      <td>独立して存在</td>
+      <td>エンティティと一体</td>
+    </tr>
+    <tr>
+      <td>用途</td>
+      <td>共通の権限セット</td>
+      <td>そのロール固有の権限</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>4. ARN（Amazon Resource Name）</h2>
+
+<p>ポリシーの <code>Resource</code> で使う、AWSリソースの一意な識別子。</p>
+
+<pre><code>arn:aws:dynamodb:ap-northeast-1:123456789012:table/atcoder-review-users-prod
+│   │   │        │              │             │
+│   │   │        │              │             └── リソース名
+│   │   │        │              └── AWSアカウントID
+│   │   │        └── リージョン
+│   │   └── サービス名
+│   └── パーティション（通常 aws）
+└── ARNプレフィックス</code></pre>
+
+<p>ワイルドカードも使える:</p>
+
+<pre><code>"arn:aws:dynamodb:ap-northeast-1:123456789012:table/*"          ← 全テーブル
+"arn:aws:dynamodb:ap-northeast-1:123456789012:table/users/index/*"  ← usersテーブルの全GSI</code></pre>
+
+<hr>
+
+<h2>5. 信頼ポリシー（Trust Policy）</h2>
+
+<p>ロールには「誰がこのロールを引き受けられるか」を定義する信頼ポリシーがある。</p>
+
+<pre><code class="language-json">{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "lambda.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}</code></pre>
+
+<p>→ 「Lambdaサービスがこのロールを引き受けることを許可する」</p>
+
+<p>Terraformでは <code>assume_role_policy</code> として書く:</p>
+
+<pre><code class="language-hcl">resource "aws_iam_role" "lambda_sync" {
+  name = "lambda-sync-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+    }]
+  })
+}</code></pre>
+
+<hr>
+
+<h2>6. 最小権限の原則（Principle of Least Privilege）</h2>
+
+<p><strong>必要最小限の権限だけを付与する。</strong></p>
+
+<pre><code>× 悪い例: Lambda に全権限
+  "Action": "dynamodb:*"
+  "Resource": "*"
+  → 全テーブルに対して何でもできる（DeleteTableも可能）
+
+○ 良い例: 必要な操作だけ、必要なテーブルだけ
+  "Action": ["dynamodb:GetItem", "dynamodb:Query"]
+  "Resource": "arn:aws:dynamodb:...:table/users"
+  → usersテーブルの読み取りのみ</code></pre>
+
+<p>今回のプロジェクトでロールを機能単位で分けているのはこの原則に基づく:</p>
+<ul>
+  <li><code>lambda-sync-role</code>: DynamoDB読み書き（sync_submissionsに必要）</li>
+  <li><code>lambda-get-role</code>: DynamoDB読み取りのみ（get_submissionsに必要）</li>
+  <li><code>lambda-save-user-role</code>: usersテーブルのみ読み書き</li>
+</ul>
+
+<hr>
+
+<h2>7. 今回のプロジェクトでのIAM構成</h2>
+
+<pre><code>Lambda: save_user
+  └── IAMロール: lambda-save-user-role
+       ├── 信頼ポリシー: Lambdaサービスが引き受け可能
+       ├── 権限ポリシー: usersテーブルのGetItem/PutItem/UpdateItem
+       └── 自動付与: AWSLambdaBasicExecutionRole（CloudWatch Logs書き込み）
+
+Lambda: sync_submissions
+  └── IAMロール: lambda-sync-role
+       ├── 信頼ポリシー: Lambdaサービスが引き受け可能
+       ├── 権限ポリシー: users + submissionsテーブルの読み書き
+       └── 自動付与: AWSLambdaBasicExecutionRole
+
+Lambda: get_submissions
+  └── IAMロール: lambda-get-role
+       ├── 信頼ポリシー: Lambdaサービスが引き受け可能
+       ├── 権限ポリシー: users + submissions + problemsテーブルの読み取り
+       └── 自動付与: AWSLambdaBasicExecutionRole</code></pre>
+
+<hr>
+
+<h2>参考資料</h2>
+
+<ul>
+  <li><a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html">IAM roles - AWS公式ドキュメント</a></li>
+  <li><a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html">Policies and permissions in IAM - AWS公式ドキュメント</a></li>
+  <li><a href="https://open-exam-prep.com/exams/aws-solutions-architect/design-secure-architectures/iam-fundamentals">IAM Fundamentals — Users, Groups, Roles - OpenExamPrep</a></li>
+  <li><a href="https://knowledge.businesscompassllc.com/aws-iam-basics-users-roles-and-permissions/">AWS IAM Basics: Users, Roles, and Permissions - Business Compass</a></li>
+</ul>
+
+<div class="foot">← <a href="../../index.html">Phase 1 ルーター</a> ／ <a href="../../main.md">Markdown 目次</a></div>
+</main></body></html>

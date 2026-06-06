@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 リファレンス / Q&A</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 リファレンス / Q&amp;A · <a href="../../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>SameSite Cookie と現代のブラウザ側 CSRF 防御</h1>
+
+<blockquote>
+<p>種別: ユーザー議論・Q&amp;A の記録（Phase 1 / Task 3）<br>
+関連教材: <a href="../01-lambda-response-format-and-cors.md">01-lambda-response-format-and-cors.md</a><br>
+関連reference: <a href="cors-only-blocks-reads-not-writes.md">cors-only-blocks-reads-not-writes.md</a></p>
+</blockquote>
+
+<h2>論点</h2>
+
+<p>「CORS は読み取り防御、書き込み防御は別の層」の議論の中で、補足として:</p>
+
+<blockquote>
+<p>現代では SameSite Cookie のデフォルト Lax 化で、ブラウザ側からも書き込み攻撃をある程度防ぐようになった</p>
+</blockquote>
+
+<p>と述べた。これを掘り下げる。</p>
+
+<p>ユーザーの直前の理解:</p>
+
+<blockquote>
+<p>ブラウザがサーバ側で何を守っているか知らないといけないわけだから本質的にリクエストが成功する</p>
+</blockquote>
+
+<p>ブラウザは「ドメインロジック」を知らないので、<strong>機械的に判定できる境界線でしか守れない</strong>。SameSite Cookie はその境界線の選び方を「<strong>Cookie の発行元 vs リクエストの起点</strong>」に置いた、ブラウザ側の書き込み防御の代表例。</p>
+
+<h2>Q&amp;A</h2>
+
+<p><strong>Q1: SameSite Cookie とは何で、どう動く？</strong></p>
+
+<p>Cookie に付ける属性で、「この Cookie はどんなコンテキストでブラウザが自動送信していいか」を Cookie 発行者（サーバ）が宣言する仕組み。</p>
+
+<pre><code>Set-Cookie: sessionId=abc123; SameSite=Lax; Secure; HttpOnly</code></pre>
+
+<p>3つの値:</p>
+
+<table>
+<thead>
+<tr><th>値</th><th>動き</th><th>用途</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Strict</strong></td><td>同一サイトからの遷移にしか送らない</td><td>銀行など最高セキュリティ</td></tr>
+<tr><td><strong>Lax</strong> (デフォルト)</td><td>トップレベル GET 遷移は例外で送る、それ以外は同一サイトのみ</td><td>一般的なログインセッション</td></tr>
+<tr><td><strong>None</strong></td><td>全部送る（クロスサイト含む）。<code>Secure</code> 必須</td><td>埋め込みウィジェット、3rd-party 統合</td></tr>
+</tbody>
+</table>
+
+<p><strong>Q2: それぞれの値で具体的にどう振る舞いが変わる？</strong></p>
+
+<p><code>bank.com</code> にログイン中（Cookie 発行済み）状態でのシナリオ:</p>
+
+<table>
+<thead>
+<tr><th>シナリオ</th><th>Strict</th><th>Lax</th><th>None</th></tr>
+</thead>
+<tbody>
+<tr><td><code>bank.com</code> 内で別ページに遷移</td><td>✅ 送る</td><td>✅ 送る</td><td>✅ 送る</td></tr>
+<tr><td>Google 検索結果から <code>bank.com</code> をクリック</td><td>❌ 送らない</td><td>✅ 送る (GET)</td><td>✅ 送る</td></tr>
+<tr><td><code>evil.com</code> の <code>&lt;form method="POST"&gt;</code> で <code>bank.com</code> に送信</td><td>❌ 送らない</td><td>❌ 送らない</td><td>✅ 送る</td></tr>
+<tr><td><code>evil.com</code> の <code>fetch("bank.com/api")</code></td><td>❌ 送らない</td><td>❌ 送らない</td><td>✅ 送る</td></tr>
+<tr><td><code>evil.com</code> の <code>&lt;img src="bank.com/logo"&gt;</code></td><td>❌ 送らない</td><td>❌ 送らない</td><td>✅ 送る</td></tr>
+</tbody>
+</table>
+
+<p><code>Lax</code> は「ユーザーが意図的にリンクをクリックして遷移するのは正当」という考えで、Top-level GET 遷移だけは例外で許可している。POST やフレーム経由の送信は遮断される。</p>
+
+<p><strong>Q3: なぜ Lax がデフォルトになったのか？</strong></p>
+
+<p>歴史:</p>
+
+<pre><code>〜 2020年初頭:        SameSite 未指定 = None 扱い（全部送る）
+                       ↓
+2020年2月 Chrome 80:  SameSite 未指定 = Lax 扱いに変更
+                       ↓
+                       Firefox, Edge も追随
+                       ↓
+現在:                  ほぼ全主要ブラウザで Lax がデフォルト</code></pre>
+
+<p>これにより、<strong>サーバが何も書かなくても自動的に Lax が効く</strong>ようになった。古い広告系の Cookie が動かなくなる副作用があったほどの大きな変更。</p>
+
+<p>「ブラウザ側からの書き込み攻撃防御」のメインの仕掛けとなり、サーバ側で CSRF トークンを実装しなくても CSRF 攻撃の大半が防がれるようになった。<strong>ブラウザ側がドメインロジックを知らずに守れる、機械的な境界線</strong>として「Cookie の発行元 vs リクエストの起点」を採用したのがポイント。</p>
+
+<p><strong>Q4: "Same-Site" と "Same-Origin" の違いは？</strong></p>
+
+<p>両者は別概念:</p>
+
+<table>
+<thead>
+<tr><th>概念</th><th>一致条件</th><th>例</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Same Origin</strong> (CORS)</td><td>scheme + host + port が<strong>完全一致</strong></td><td><code>https://app.example.com</code> ≠ <code>https://api.example.com</code></td></tr>
+<tr><td><strong>Same Site</strong> (Cookie)</td><td><strong>登録可能ドメイン</strong> (eTLD+1) が一致</td><td><code>https://app.example.com</code> = <code>https://api.example.com</code></td></tr>
+</tbody>
+</table>
+
+<p>eTLD+1 = 「公開接尾辞リスト (Public Suffix List) の 1 段下」。<code>example.com</code> は eTLD+1、<code>app.example.com</code> はその子サブドメイン。</p>
+
+<pre><code>example.com / app.example.com / api.example.com
+  → 全部 same-site
+  → でも互いに cross-origin
+
+example.com / other.com
+  → cross-site（= cross-origin でもある）</code></pre>
+
+<p>なぜ違う粒度なのか:</p>
+
+<ul>
+<li><strong>Cookie は会社単位の信頼境界で扱いたい</strong>: app と api がサブドメインで分かれていてもセッションを共有したい → eTLD+1 で同じ扱い</li>
+<li><strong>CORS は JS のレスポンス読み取りで厳格に扱いたい</strong>: 同じ会社内でも別オリジンなら明示的に許可させる → 完全一致</li>
+</ul>
+
+<p>セキュリティ機構ごとに保護対象が違うので、信頼境界の引き方も違う。</p>
+
+<p><strong>Q5: SameSite=Lax で防げる / 防げないものは？</strong></p>
+
+<p>防げる:</p>
+
+<ul>
+<li>evil.com の <code>&lt;form action="bank.com/transfer" method="POST"&gt;</code> 自動送信</li>
+<li>evil.com の <code>fetch("bank.com/api", {method: "POST"})</code> (CORS 以前に Cookie が無い)</li>
+<li>evil.com の <code>&lt;img src="bank.com/logout"&gt;</code>（GET でも top-level でない）</li>
+<li>iframe 経由の Cookie 送信全般</li>
+</ul>
+
+<p>防げない:</p>
+
+<ul>
+<li><strong>同一サイト内の XSS</strong> から API を呼ばれる（同一 site なので Cookie 送られる）</li>
+<li><strong>Google 検索からのクリックで GET アクション</strong>（<code>/delete-account?id=123</code> のような GET API は Lax でも危険）</li>
+<li><strong>サブドメイン乗っ取り</strong> (<code>evil.example.com</code> が乗っ取られたら same-site）</li>
+</ul>
+
+<p>実装面の含意:</p>
+
+<ol>
+<li><strong>状態改変は POST/PUT/DELETE で行う</strong>（GET でやらない）← REST の原則と同じ</li>
+<li><strong>同一サイト内の XSS 対策は別途必要</strong>（CSP など）</li>
+<li><strong>サブドメインを安易に増やさない・サブドメイン乗っ取りに注意</strong></li>
+</ol>
+
+<p><strong>Q6: 今回のプロジェクトで SameSite Cookie は関係ある？</strong></p>
+
+<p>ほぼ関係ない。<strong>Cookie を使わず、JWT を <code>Authorization: Bearer</code> ヘッダで送る方式</strong>を採用しているため。</p>
+
+<pre><code>Cookie 認証を選んでいたら:
+  → SameSite=Lax + Secure + HttpOnly が必須設定
+  → 状態改変 API なら CSRF トークンも検討
+
+JWT in Authorization 方式（採用）:
+  → Cookie が無い → SameSite 不要
+  → ブラウザは JWT を「自動で」付けない → CSRF リスクは構造的にゼロ
+  → CORS の設定だけ正しければ守られる</code></pre>
+
+<p><strong>Q7: Cookie 方式と JWT 方式、どちらが優れている？</strong></p>
+
+<p>トレードオフがあり、用途次第。</p>
+
+<table>
+<thead>
+<tr><th>観点</th><th>Cookie + SameSite + HttpOnly</th><th>JWT in Authorization</th></tr>
+</thead>
+<tbody>
+<tr><td>CSRF 耐性</td><td>SameSite=Lax で大半防げる</td><td>構造的にゼロ</td></tr>
+<tr><td>XSS 耐性</td><td>HttpOnly で JS から読めない（強い）</td><td>localStorage 保管なら JS から読める（弱い）</td></tr>
+<tr><td>実装難度</td><td>サーバ側でセッション管理</td><td>JWT 署名検証だけ</td></tr>
+<tr><td>サードパーティ統合</td><td>SameSite=None + Secure 必須</td><td>Authorization ヘッダで簡単</td></tr>
+<tr><td>サーバレス相性</td><td>セッションストア必要</td><td>ステートレスで完璧</td></tr>
+<tr><td>トークン失効</td><td>サーバ側で無効化可（強い）</td><td>短命にして頻繁に再発行</td></tr>
+</tbody>
+</table>
+
+<p><strong>サーバレス + SPA + JWT</strong> がモダンなデフォルトになった理由:</p>
+
+<ul>
+<li>CSRF 不要（構造的に）</li>
+<li>ステートレス（Lambda と相性良い）</li>
+<li>水平スケール容易（セッションストア共有不要）</li>
+</ul>
+
+<p>ただし XSS 耐性は Cookie + HttpOnly の方が強い。XSS 対策（CSP、サニタイズ）と JWT 短命化で対処するのが定石。</p>
+
+<h2>結論 / 整理</h2>
+
+<p>CORS は「読み取り防御」だが、書き込み防御の一部はブラウザ側でも進化している。それが <strong>SameSite Cookie のデフォルト Lax 化</strong>。</p>
+
+<ul>
+<li>ブラウザはドメインロジックを知らない → <strong>機械的な境界線</strong>で守るしかない</li>
+<li>SameSite が選んだ境界線: 「Cookie 発行元の eTLD+1 と一致するか」</li>
+<li>これにより、サーバ側で CSRF トークンを実装しなくても CSRF の大半が防がれる</li>
+<li>ただし「機械的境界線」の限界として、同一サイト内 XSS や GET ベース API は守れない</li>
+</ul>
+
+<p><strong>今回の AtCoder Review は Cookie を使わない JWT 方式</strong>なので SameSite は不要。CSRF 耐性は方式選択で構造的に獲得している。</p>
+
+<p>「Cookie + SameSite + HttpOnly」と「JWT in Authorization」は別のトレードオフがあり、サーバレス + SPA では後者がモダンなデフォルト。</p>
+
+<h2>比較表 / 具体例</h2>
+
+<h3>Site と Origin の信頼境界</h3>
+
+<pre><code>[Origin 単位] (CORS の領域)
+  https://app.example.com   ─┐
+  https://api.example.com   ─┼─ 全部別オリジン
+  https://example.com       ─┘
+
+[Site 単位] (SameSite Cookie の領域)
+  https://app.example.com   ─┐
+  https://api.example.com   ─┼─ すべて same-site (eTLD+1 = example.com)
+  https://example.com       ─┘</code></pre>
+
+<h3>Lax の動作判定フロー</h3>
+
+<pre><code>リクエスト発生
+   ↓
+Cookie の発行元の eTLD+1 と
+リクエストを発生させたページの eTLD+1 が一致？
+   ↓
+   YES → Cookie 送る（same-site）
+   NO  → さらに判定
+        ↓
+        トップレベルナビゲーション (window.location)
+        かつ メソッドが GET か？
+           ↓
+           YES → Cookie 送る（Lax の例外）
+           NO  → Cookie 送らない（cross-site の遮断）</code></pre>
+
+<h2>よくある誤解</h2>
+
+<ul>
+<li><strong>誤解: SameSite=Strict が一番安全だから常に使うべき</strong>
+  <ul><li>実際: Strict だと「Google からのリンク経由でログイン状態が消える」UX 問題が起きる。Lax がバランスのデフォルト</li></ul>
+</li>
+<li><strong>誤解: Same-site と Same-origin は同じ意味</strong>
+  <ul><li>実際: 別概念。Same-site は eTLD+1、Same-origin は scheme+host+port 完全一致</li></ul>
+</li>
+<li><strong>誤解: SameSite=Lax にすれば CSRF 完全に防げる</strong>
+  <ul><li>実際: GET ベース API や同一サイト XSS は防げない。状態改変は POST 等で、XSS は別途対策</li></ul>
+</li>
+<li><strong>誤解: JWT は安全だから XSS 対策しなくていい</strong>
+  <ul><li>実際: localStorage の JWT は XSS で盗まれうる。むしろ Cookie + HttpOnly より弱い面もある</li></ul>
+</li>
+</ul>
+
+<h2>参考文献</h2>
+
+<ul>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite">Set-Cookie - SameSite - MDN Web Docs</a> — Strict/Lax/None の正確な仕様（閲覧 2026-04-25）</li>
+<li><a href="https://web.dev/articles/samesite-cookies-explained">SameSite cookies explained - web.dev</a> — Chrome 80 の Lax デフォルト化の背景説明（閲覧 2026-04-25）</li>
+<li><a href="https://publicsuffix.org/">Public Suffix List</a> — eTLD+1 判定に使われる公式リスト（閲覧 2026-04-25）</li>
+<li><a href="https://web.dev/articles/samesite-cookie-recipes">SameSite cookie recipes - web.dev</a> — 実装パターン集、3rd party Cookie 対応（閲覧 2026-04-25）</li>
+</ul>
+
+<hr>
+
+<p><em>Saved at 2026-04-25 via /learning-flow:reference</em></p>
+
+<div class="foot">← <a href="../../index.html">Phase 1 ルーター</a> ／ <a href="../../main.md">Markdown 目次</a></div>
+</main></body></html>

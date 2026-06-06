@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 リファレンス / Q&A</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 リファレンス / Q&amp;A · <a href="../../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Terraform 基礎</h1>
+
+<h2>解説</h2>
+
+<h3>Terraform とは</h3>
+
+<p>AWSのリソース（DynamoDBテーブル、Lambda関数、API Gateway等）をコードで定義し、コマンド一発で作成・変更・削除するツール。IaC（Infrastructure as Code）。</p>
+
+<p>手動（AWSコンソールでポチポチ）との違い:</p>
+<ul>
+  <li>コードなのでGit管理できる（変更履歴、レビュー）</li>
+  <li>同じコードから同じ環境を何度でも作れる（再現性）</li>
+  <li><code>terraform plan</code> で事前に差分を確認できる</li>
+</ul>
+
+<h3>ファイル構造</h3>
+
+<pre><code>terraform/
+├── main.tf          ← プロバイダ設定（AWS接続情報）
+├── variables.tf     ← 変数の定義
+├── outputs.tf       ← 外部に公開する値
+├── modules.tf       ← モジュールの呼び出し・接続
+├── bootstrap/       ← Terraform状態管理用（初回のみ）
+└── modules/
+    ├── cognito/
+    ├── api_gateway/
+    └── dynamodb/    ← Task 1 で作成</code></pre>
+
+<h3>各ファイルの役割</h3>
+
+<table>
+  <thead>
+    <tr><th>ファイル</th><th>役割</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>main.tf</code></td><td>リソースの定義（「何を作るか」）</td></tr>
+    <tr><td><code>variables.tf</code></td><td>外から渡すパラメータ（「変えられる部分」）</td></tr>
+    <tr><td><code>outputs.tf</code></td><td>他に渡す値（「作った結果の情報」）</td></tr>
+  </tbody>
+</table>
+
+<h3>モジュール分離の理由</h3>
+
+<p>全部1ファイルに書くと影響範囲が不明確になる。モジュールに分けることで:</p>
+<ul>
+  <li>DynamoDBの変更はdynamodbモジュール内で完結</li>
+  <li>outputs でテーブル名やARNを公開し、他モジュールから参照できる</li>
+</ul>
+
+<h3>HCLの基本構文</h3>
+
+<pre><code>resource "aws_dynamodb_table" "users" { ... }
+# → resource "リソースの種類" "Terraform内の名前" { 設定項目 }
+
+variable "project_name" { type = string; default = "atcoder-review" }
+# → 外部から渡せるパラメータ。var.project_name で参照
+
+output "users_table_name" { value = aws_dynamodb_table.users.name }
+# → モジュールの外に値を公開
+
+module "cognito" { source = "./modules/cognito"; project_name = var.project_name }
+# → モジュールの呼び出し。module.cognito.user_pool_id で出力を参照</code></pre>
+
+<h3>Terraformのコマンド</h3>
+
+<table>
+  <thead>
+    <tr><th>コマンド</th><th>やること</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>terraform init</code></td><td>初期化（プロバイダのダウンロード等）</td></tr>
+    <tr><td><code>terraform plan</code></td><td>差分のプレビュー（変更しない）</td></tr>
+    <tr><td><code>terraform apply</code></td><td>実際にAWSリソースを作成・変更</td></tr>
+    <tr><td><code>terraform validate</code></td><td>コードの構文チェック</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>質疑応答</h2>
+
+<h3>Q1: variableブロックのプロパティは自由に設定可能か？</h3>
+
+<p>variable ブロックのプロパティ（description, type, default 等）はTerraformが定めた固定のものだけ。自由に追加はできない。</p>
+
+<p>使えるプロパティ: <code>description</code>, <code>type</code>, <code>default</code>, <code>nullable</code>, <code>sensitive</code>, <code>validation</code>。<br>
+実際によく使うのは <code>description</code>, <code>type</code>, <code>default</code> の3つ。</p>
+
+<p>一方、変数の「名前」は自由。型のバリエーションは string, number, bool, list, map, object。</p>
+
+<p>resource ブロックのプロパティはリソースの種類ごとにAWSの仕様で決まる（aws_dynamodb_table なら name, billing_mode, hash_key 等）。</p>
+
+<h3>Q2: backend "s3" とは何か？</h3>
+
+<p><strong>Terraformの「状態ファイル（terraform.tfstate）」をS3に保存する設定。</strong></p>
+
+<p>状態ファイル = 「今AWSに何が存在しているか」の記録。Terraformはコード（.tf）と状態ファイルを比較して差分を検知する。状態ファイルがないと毎回全部作り直そうとする。</p>
+
+<pre><code>backend "s3" {
+  bucket         = "atcoder-review-tfstate"     # 保存先S3バケット
+  key            = "terraform.tfstate"           # ファイルパス
+  region         = "ap-northeast-1"              # リージョン
+  dynamodb_table = "atcoder-review-tflock"       # ロック用テーブル
+  encrypt        = true                          # 暗号化
+}</code></pre>
+
+<p><strong>dynamodb_table（ロック）</strong>: 複数人が同時に <code>terraform apply</code> しても状態ファイルが壊れないようにするための排他制御。個人開発では恩恵薄いが、チーム開発では必須。</p>
+
+<p><strong>bootstrapとの関係</strong>: このS3バケットとロック用DynamoDBテーブルは <code>terraform/bootstrap/main.tf</code> で事前に作成したもの。「Terraformで管理するインフラの状態を保存するために、Terraformの外で先に作るインフラ」= bootstrap。鶏と卵の問題の解決策。</p>
+
+<div class="foot">← <a href="../../index.html">Phase 1 ルーター</a> ／ <a href="../../main.md">Markdown 目次</a></div>
+</main></body></html>

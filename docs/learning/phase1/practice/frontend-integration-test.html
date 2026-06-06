@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 リファレンス / Q&A</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 リファレンス / Q&A · <a href="../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>01. Frontend 結合テスト手順</h1>
+
+<blockquote>
+<p>出典:</p>
+<ul>
+<li><a href="https://nextjs.org/docs/app/guides/environment-variables">Next.js - Environment Variables</a></li>
+<li><a href="https://docs.amplify.aws/javascript/build-a-backend/auth/">AWS Amplify Auth - JavaScript</a></li>
+</ul>
+<p>閲覧日 2026-05-09</p>
+</blockquote>
+
+<h2>概要</h2>
+
+<p>Phase 1 の最後の確認。Frontend (<code>localhost:3000</code>) から本番デプロイ済みの API Gateway を叩いて、認証 → 設定登録 → 同期 → 一覧 → 詳細の <strong>end-to-end フロー</strong> が動くことを確認する。</p>
+
+<h2>手順</h2>
+
+<h3>Step 1: Terraform output の値を <code>.env.local</code> に転記</h3>
+
+<p>ルート <code>Makefile</code> の sync-env ターゲットが <code>terraform output -raw</code> から値を取り出して <code>frontend/.env.local</code> に書き出す:</p>
+
+<pre><code>make sync-env</code></pre>
+
+<p>実行内容:</p>
+<ol>
+<li><code>terraform output -raw cognito_user_pool_id</code></li>
+<li><code>terraform output -raw cognito_user_pool_client_id</code></li>
+<li><code>terraform output -raw api_gateway_url</code></li>
+<li>これらを <code>NEXT_PUBLIC_*</code> 接頭辞付きで <code>frontend/.env.local</code> に書き込み</li>
+</ol>
+
+<h3>Step 2: Frontend 起動</h3>
+
+<pre><code>cd frontend
+npm install   # 初回のみ
+npm run dev</code></pre>
+
+<p>→ <code>http://localhost:3000</code> でアクセス可能。</p>
+
+<h3>Step 3: ログイン</h3>
+
+<p><code>http://localhost:3000</code> を開くと <strong>Authenticator (Amplify UI)</strong> のログイン画面。
+Task 17 で作った Cognito ユーザー (例: <code>test@example.com</code> / <code>RealPass123!</code>) でログインする。</p>
+
+<h3>Step 4: 設定 → 同期 → 一覧 のフロー</h3>
+
+<ol>
+<li>ナビの「設定」→ AtCoder ユーザー名（自分のもの or <code>chokudai</code> 等）を入力 → 保存
+<ul>
+<li>期待: 緑のメッセージ「保存しました: {username}」</li>
+</ul>
+</li>
+<li>ナビの「提出一覧」→「AtCoder と同期」ボタン
+<ul>
+<li>期待: 「N 件取得しました」とテーブル表示</li>
+</ul>
+</li>
+<li>テーブルの「詳細」リンク → <code>/submissions/{submission_id}</code>
+<ul>
+<li>期待: 提出詳細表示</li>
+</ul>
+</li>
+</ol>
+
+<h3>Step 5: ブラウザ DevTools で CORS / レスポンス確認</h3>
+
+<p>DevTools Network タブで:</p>
+<ul>
+<li><code>OPTIONS /users/me</code> が 200 を返している (preflight 成功)</li>
+<li><code>POST /users/me</code> の応答ヘッダに <code>Access-Control-Allow-Origin: *</code> がある</li>
+<li><code>Authorization: Bearer eyJ...</code> ヘッダが送信されている</li>
+</ul>
+
+<p>ここがちゃんと出来ていれば Phase 1 完成。</p>
+
+<h2>想定トラブル</h2>
+
+<table>
+<thead>
+<tr><th>症状</th><th>当たり</th></tr>
+</thead>
+<tbody>
+<tr><td>Authenticator が表示されない</td><td><code>NEXT_PUBLIC_COGNITO_*</code> の値ミス</td></tr>
+<tr><td>ログイン後 fetch で CORS エラー</td><td>Lambda or API Gateway 側の <code>Access-Control-Allow-Origin</code> 漏れ</td></tr>
+<tr><td>401 Unauthorized</td><td>JWT 期限切れ → 一度ログアウトして再ログイン</td></tr>
+<tr><td><code>/sync</code> が <code>USER_NOT_CONFIGURED</code></td><td>先に設定で AtCoder username を登録する</td></tr>
+<tr><td><code>/submissions</code> 空配列</td><td>sync 未実行 or 該当ユーザーに submission ゼロ</td></tr>
+<tr><td>TypeError: undefined is not an object</td><td>env 変数が反映されていない → <code>npm run dev</code> を再起動</td></tr>
+</tbody>
+</table>
+
+<h2>環境変数の流れ</h2>
+
+<pre><code>[Terraform output (state)]
+       │
+       │ terraform output -raw
+       ↓
+[.env.local (local file, gitignore)]
+       │
+       │ Next.js が起動時に読み込み
+       ↓
+[process.env.NEXT_PUBLIC_*]
+       │
+       │ ビルド時にクライアント JS に埋め込み
+       ↓
+[ブラウザの JS]</code></pre>
+
+<p><strong><code>NEXT_PUBLIC_</code> 接頭辞</strong>は Next.js の規約。これを付けると <strong>クライアント JS にバンドルされる</strong>。
+Cognito User Pool ID 等は公開しても安全（DDoS の懸念のみで、認証情報自体ではない）なので問題ない。
+<strong>シークレット類 (DB password 等) は絶対に <code>NEXT_PUBLIC_</code> を付けない</strong>。</p>
+
+<h2>重要ポイント</h2>
+
+<ul>
+<li>環境変数は <strong>Terraform output → <code>.env.local</code> → Next.js process</strong> の 3 段階</li>
+<li><code>NEXT_PUBLIC_</code> 接頭辞 = クライアント露出。それ以外はサーバ専用</li>
+<li>CORS は <strong>2 系統で揃える</strong>: API Gateway OPTIONS (preflight) + Lambda 応答 (本リクエスト) の両方</li>
+<li>DevTools Network タブで Authorization ヘッダ・CORS ヘッダ・status code を最終確認</li>
+</ul>
+
+<h2>関連</h2>
+
+<ul>
+<li>議論・Q&amp;A: （<code>lesson</code> 中に発生したら <code>reference/</code> 配下にリンクが追加されます）</li>
+<li>関連 Task: Task 17 (Terraform apply で値を取得), Task 11 (API クライアントが env を読む実装)</li>
+</ul>
+
+<hr>
+
+<p><em>Auto-generated at 2026-05-09 via /learning-flow:material（公式 docs 駆動）</em></p>
+
+<div class="foot">← <a href="../index.html">Phase 1 ルーター</a> ／ <a href="../main.md">Markdown 目次</a></div>
+</main></body></html>

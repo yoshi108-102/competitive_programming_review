@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 リファレンス / Q&A</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 リファレンス / Q&A · <a href="../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>02. Python <code>requests</code> ライブラリと <code>requests-mock</code> テスト</h1>
+
+<blockquote>
+<p>出典:</p>
+<ul>
+<li><a href="https://requests.readthedocs.io/en/latest/user/quickstart/">Requests: Quickstart - Read the Docs</a>（閲覧日 2026-05-09）</li>
+<li><a href="https://requests-mock.readthedocs.io/en/latest/">requests-mock documentation</a>（閲覧日 2026-05-09）</li>
+</ul>
+<p>このノートは公式ドキュメントの該当章を起点に、Claude が自動生成した教材です。</p>
+</blockquote>
+
+<h2>概要</h2>
+
+<p>Lambda から外部 API（AtCoder Problems）を叩くために <code>requests</code> を使う。本ノートでは:</p>
+
+<ul>
+<li><code>requests</code> の最低限の作法（<code>get</code>, <code>params</code>, <code>raise_for_status</code>, <code>timeout</code>）</li>
+<li><code>requests-mock</code> で外部 API を叩かずにテストする方法</li>
+</ul>
+
+<p>を扱う。HTTP クライアントの責務として <strong>タイムアウト必須</strong> と <strong>異常系のテスト</strong>を強調する。</p>
+
+<h2>公式 docs に沿った解説</h2>
+
+<h3>A. リクエストを作る（<code>requests.get</code>）</h3>
+
+<p>最小例:</p>
+
+<pre><code>import requests
+
+r = requests.get("https://api.example.com/users")</code></pre>
+
+<p>公式 docs より:</p>
+
+<blockquote>
+<p>Making a request with Requests is very simple.</p>
+</blockquote>
+
+<p>戻り値は <code>Response</code> オブジェクト。中身は以下のプロパティで取り出す:</p>
+
+<table>
+<thead>
+<tr><th>プロパティ / メソッド</th><th>用途</th></tr>
+</thead>
+<tbody>
+<tr><td><code>r.status_code</code></td><td>HTTP ステータス（200, 404, 500 など）</td></tr>
+<tr><td><code>r.text</code></td><td>本文（文字列、自動デコード）</td></tr>
+<tr><td><code>r.json()</code></td><td>JSON をパース。失敗時は <code>JSONDecodeError</code></td></tr>
+<tr><td><code>r.headers</code></td><td>レスポンスヘッダ（dict-like、case-insensitive）</td></tr>
+<tr><td><code>r.raise_for_status()</code></td><td>4xx/5xx で <code>HTTPError</code> を raise</td></tr>
+</tbody>
+</table>
+
+<h3>B. クエリパラメータの渡し方（<code>params=</code>）</h3>
+
+<p>URL に <code>?key=value&amp;...</code> を手で書かず、<code>params</code> キーワードで dict を渡す:</p>
+
+<pre><code>payload = {"user": "chokudai", "from_second": 0}
+r = requests.get("https://kenkoooo.com/.../user/submissions", params=payload)
+print(r.url)
+# https://kenkoooo.com/.../user/submissions?user=chokudai&amp;from_second=0</code></pre>
+
+<p>公式 docs より:</p>
+
+<blockquote>
+<p>Requests allows you to provide these arguments as a dictionary of strings, using the <code>params</code> keyword argument.</p>
+</blockquote>
+
+<p>メリット:</p>
+<ul>
+<li><strong>URL エンコードを自動でやってくれる</strong>（日本語ユーザー名や記号でも安全）</li>
+<li>値が <code>None</code> のキーは <strong>自動で省略</strong>される（オプショナルパラメータ管理が楽）</li>
+<li>値にリストを渡すと <code>?k=v1&amp;k=v2</code> のような複数値も自動展開</li>
+</ul>
+
+<h3>C. JSON レスポンスの取得（<code>r.json()</code>）</h3>
+
+<pre><code>r = requests.get(url)
+data = r.json()  # dict or list を返す</code></pre>
+
+<p>公式 docs より、<strong>重要な注意</strong>:</p>
+
+<blockquote>
+<p>It should be noted that the success of the call to <code>r.json()</code> does <strong>not</strong> indicate the success of the response. Some servers may return a JSON object in a failed response (e.g. error details with HTTP 500). Such JSON will be decoded and returned. To check that a request is successful, use <code>r.raise_for_status()</code> or check <code>r.status_code</code> is what you expect.</p>
+</blockquote>
+
+<p>つまり「<strong><code>r.json()</code> 成功 = リクエスト成功」ではない</strong>。500 エラーでも JSON が返ってくれば parse は成功する。<strong><code>raise_for_status()</code> を先に呼ぶか、<code>status_code</code> を別途チェック</strong>する。</p>
+
+<h3>D. <code>raise_for_status()</code> — 異常系の早期検出</h3>
+
+<pre><code>r = requests.get(url)
+r.raise_for_status()  # 4xx/5xx なら HTTPError 例外
+data = r.json()</code></pre>
+
+<p>公式 docs:</p>
+
+<blockquote>
+<p>If we made a bad request (a 4XX client error or 5XX server error response), we can raise it with <code>Response.raise_for_status()</code>.</p>
+</blockquote>
+
+<p><strong>呼ばないと</strong>: 200 OK でも 500 Internal Server Error でも黙って <code>r.json()</code> の結果を進めてしまう → バグの温床。<br>
+<strong>呼ぶと</strong>: 4xx/5xx なら <code>requests.exceptions.HTTPError</code> が飛び、<code>try/except</code> で拾える or 上に伝播して Lambda が失敗扱いになる。</p>
+
+<h3>E. <code>timeout</code> — 必ず指定すること</h3>
+
+<pre><code>r = requests.get(url, timeout=30)  # 30 秒以内に最初のバイトが来なかったら Timeout 例外</code></pre>
+
+<p>公式 docs（<strong>強い警告</strong>）:</p>
+
+<blockquote>
+<p>Nearly all production code should use this parameter in nearly all requests. Failure to do so can cause your program to hang indefinitely.</p>
+<p>If no timeout is specified explicitly, requests do not time out.</p>
+</blockquote>
+
+<p>つまり <strong><code>timeout</code> 未指定だと無限に待つ</strong>。Lambda の場合:</p>
+<ul>
+<li>Lambda の実行時間制限（最大 15 分）まで何もせず待ってしまう</li>
+<li>Lambda は最終的にタイムアウトして料金は満額発生 + リクエストは失敗</li>
+<li>同期処理の場合、上流（API Gateway）も巻き込んで遅延</li>
+</ul>
+
+<p><strong>Lambda では <code>timeout</code> 必須</strong>。Lambda 関数自身のタイムアウトより<strong>短い値</strong>を指定する（例: Lambda が 30 秒なら <code>requests.get(..., timeout=20)</code>）。</p>
+
+<h3>F. 例外階層</h3>
+
+<p>公式 docs より:</p>
+
+<table>
+<thead>
+<tr><th>例外</th><th>発生条件</th></tr>
+</thead>
+<tbody>
+<tr><td><code>requests.exceptions.ConnectionError</code></td><td>DNS 解決失敗、接続拒否</td></tr>
+<tr><td><code>requests.exceptions.Timeout</code></td><td>タイムアウト</td></tr>
+<tr><td><code>requests.exceptions.HTTPError</code></td><td><code>raise_for_status()</code> 経由で 4xx/5xx</td></tr>
+<tr><td><code>requests.exceptions.TooManyRedirects</code></td><td>リダイレクトしすぎ</td></tr>
+</tbody>
+</table>
+
+<p>すべて <code>requests.exceptions.RequestException</code> を継承しているので、まとめて捕まえたい時はこれをキャッチする。</p>
+
+<h3>G. <code>requests-mock</code> で HTTP モックテスト</h3>
+
+<p>外部 API への実アクセスを伴わないテストのため、<code>requests-mock</code> を使う。<code>requests</code> ライブラリの呼び出しをインターセプトして、事前登録したレスポンスを返す。</p>
+
+<h4>基本パターン（コンテキストマネージャ）</h4>
+
+<pre><code>import requests
+import requests_mock
+
+
+def test_get_submissions_returns_list():
+    with requests_mock.Mocker() as m:
+        # 「このURLが叩かれたらこの JSON を返す」と事前登録
+        m.get(
+            "https://kenkoooo.com/atcoder/atcoder-api/v3/user/submissions",
+            json=[{"id": 1, "result": "AC"}],
+        )
+
+        # 実装側を呼ぶ（内部で requests.get が呼ばれるが、モックが応答する）
+        r = requests.get(
+            "https://kenkoooo.com/atcoder/atcoder-api/v3/user/submissions",
+            params={"user": "testuser"},
+        )
+
+        assert r.json() == [{"id": 1, "result": "AC"}]</code></pre>
+
+<h4>異常系のモック</h4>
+
+<pre><code>with requests_mock.Mocker() as m:
+    m.get(url, status_code=500)
+    # raise_for_status() を呼ぶ実装なら HTTPError が飛ぶことを確認
+    with pytest.raises(requests.exceptions.HTTPError):
+        client.get_submissions("testuser")</code></pre>
+
+<h4>呼ばれた URL の検証</h4>
+
+<p><code>m.last_request</code> で最後にインターセプトされたリクエストを取得できる:</p>
+
+<pre><code>with requests_mock.Mocker() as m:
+    m.get(url, json=[])
+    client.get_submissions("testuser", from_second=1700000000)
+
+    assert "from_second=1700000000" in m.last_request.url
+    assert "user=testuser" in m.last_request.url</code></pre>
+
+<p>これで「正しいパラメータで呼ばれたか」を検証できる。</p>
+
+<h4>モック対象の見え方</h4>
+
+<p><code>requests-mock</code> は <code>requests</code> ライブラリの <strong>トランスポート層</strong> に介入する。<code>requests.adapters.HTTPAdapter</code> を差し替える形なので、テスト対象コードを<strong>改変せずに</strong>モックできる（依存性注入を組まなくてよい）。</p>
+
+<blockquote>
+<p>補足（公式 docs には記載なし）: pytest 専用 fixture 版（<code>requests_mock</code> を関数引数として受け取る）も使える。本プロジェクトのテストでは context manager 形式を採用（既存 conftest.py との整合上シンプル）。</p>
+</blockquote>
+
+<h2>重要ポイント</h2>
+
+<ul>
+<li><code>requests.get(url, params=dict, timeout=int)</code> の <strong>3 点セット</strong>を必ず守る</li>
+<li><strong><code>r.json()</code> 成功 ≠ リクエスト成功</strong>。<code>raise_for_status()</code> を先に呼ぶか <code>status_code</code> を確認</li>
+<li><strong><code>timeout</code> 未指定 = 無限待機</strong>。Lambda では絶対指定。Lambda 関数自身のタイムアウトより短く</li>
+<li>例外は <code>requests.exceptions.RequestException</code> を頂点とした階層</li>
+<li><code>requests-mock</code> の <code>Mocker()</code> で外部 API を叩かずにテスト</li>
+<li><code>m.get(url, json=...)</code> / <code>m.get(url, status_code=500)</code> で正常・異常を作り分け</li>
+<li><code>m.last_request.url</code> で「正しい URL/パラメータで呼ばれたか」を検証</li>
+</ul>
+
+<h2>コード例（このプロジェクトの想定）</h2>
+
+<p><code>shared/atcoder_client.py</code>:</p>
+
+<pre><code>import requests
+
+ATCODER_PROBLEMS_API = "https://kenkoooo.com/atcoder/atcoder-api/v3"
+
+
+class AtCoderClient:
+    def __init__(self, timeout: int = 30):
+        self._timeout = timeout
+
+    def get_submissions(self, username: str, from_second: int = 0) -&gt; list[dict]:
+        resp = requests.get(
+            f"{ATCODER_PROBLEMS_API}/user/submissions",
+            params={"user": username, "from_second": from_second},
+            timeout=self._timeout,
+        )
+        resp.raise_for_status()  # 4xx/5xx は例外に変換
+        return resp.json()</code></pre>
+
+<p>テスト（<code>tests/test_atcoder_client.py</code>）:</p>
+
+<pre><code>import pytest
+import requests
+import requests_mock
+
+from shared.atcoder_client import AtCoderClient
+
+
+def test_get_submissions_returns_list():
+    client = AtCoderClient()
+    with requests_mock.Mocker() as m:
+        m.get(
+            "https://kenkoooo.com/atcoder/atcoder-api/v3/user/submissions",
+            json=[{"id": 1, "result": "AC"}],
+        )
+        result = client.get_submissions("testuser")
+    assert result == [{"id": 1, "result": "AC"}]
+
+
+def test_get_submissions_raises_on_5xx():
+    client = AtCoderClient()
+    with requests_mock.Mocker() as m:
+        m.get(
+            "https://kenkoooo.com/atcoder/atcoder-api/v3/user/submissions",
+            status_code=500,
+        )
+        with pytest.raises(requests.exceptions.HTTPError):
+            client.get_submissions("testuser")</code></pre>
+
+<h2>関連</h2>
+
+<ul>
+<li>議論・Q&amp;A: （<code>lesson</code> 中に発生したら <code>reference/</code> 配下にリンクが追加されます）</li>
+<li>前の教材: <a href="01-atcoder-problems-api.md">01-atcoder-problems-api.md</a> — AtCoder Problems API の仕様</li>
+<li>関連 Task: Task 7 （<code>sync_submissions</code> で実際にこのクライアントを使う）</li>
+</ul>
+
+<hr>
+
+<p><em>Auto-generated at 2026-05-09 via /learning-flow:material（公式 docs 駆動）</em></p>
+
+<div class="foot">← <a href="../index.html">Phase 1 ルーター</a> ／ <a href="../main.md">Markdown 目次</a></div>
+</main></body></html>

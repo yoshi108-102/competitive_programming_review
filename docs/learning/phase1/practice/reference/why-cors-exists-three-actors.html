@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 リファレンス / Q&A</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 リファレンス / Q&A · <a href="../../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>なぜ CORS が必要なのか — 「サーバが許可してサーバが防ぐ」ではない3者構造</h1>
+
+<blockquote>
+<p>種別: ユーザー議論・Q&amp;A の記録（Phase 1 / Task 3）<br>
+関連教材: <a href="../01-lambda-response-format-and-cors.md">01-lambda-response-format-and-cors.md</a><br>
+関連reference: <a href="cors-only-blocks-reads-not-writes.md">cors-only-blocks-reads-not-writes.md</a>, <a href="samesite-cookie-and-csrf-defense.md">samesite-cookie-and-csrf-defense.md</a></p>
+</blockquote>
+
+<h2>論点</h2>
+
+<p>ユーザーが CORS の本質に対する違和感を表明:</p>
+
+<blockquote>
+<p>CORS ヘッダが必要な理由がわからないというか、自分で許可して自分で防ぐということなの</p>
+</blockquote>
+
+<p>サーバ自身がレスポンスヘッダで「許可するオリジン」を書き、それでサーバ自身が守られているように見えるが、本当にそうなら「サーバが自分のルールでサーバ自身を守ってる」だけで、攻撃者は別経路で攻めればいいのではないか、という構造的な疑問。</p>
+
+<p>実はこの違和感は正しく、<strong>CORS の登場人物は3者</strong>で、誰が誰を守っているのかを正しく分解しないと「自己完結したお遊び」に見えてしまう。</p>
+
+<h2>Q&amp;A</h2>
+
+<p><strong>Q1: CORS は「サーバが自分で許可して自分で防ぐ」だけのものなのか？</strong></p>
+
+<p>違う。<strong>3者の協調</strong>で成立する仕組み。</p>
+
+<table>
+<thead><tr><th>役</th><th>何をしているか</th></tr></thead>
+<tbody>
+<tr><td><strong>サーバ</strong></td><td>「誰が読んでいいか」を<strong>宣言</strong>する（レスポンスヘッダで）</td></tr>
+<tr><td><strong>ブラウザ</strong></td><td>サーバの宣言を読んで、<strong>ユーザーのために執行</strong>する</td></tr>
+<tr><td><strong>ユーザー</strong></td><td><strong>守られる対象</strong>（自分のログイン中のセッションが悪用されないように）</td></tr>
+</tbody>
+</table>
+
+<pre><code>サーバ:   「読んでいいのは app.example.com からだけ」と宣言
+ブラウザ: 「じゃあ evil.com の JS にはレスポンスを渡さない」と実行
+ユーザー: 知らないうちに守られている</code></pre>
+
+<p>「サーバが許可してサーバが防ぐ」ではなく <strong>「サーバが宣言、ブラウザが執行、守られるのはユーザー」</strong>。守る側と守られる側が分離している。</p>
+
+<p><strong>Q2: なぜサーバは自分で防げないのか？</strong></p>
+
+<p>サーバは「JS の出どころ」を確実には判定できないから。</p>
+
+<p>サーバから見えるリクエスト:</p>
+
+<pre><code>GET /submissions HTTP/1.1
+Host: api.example.com
+Origin: https://evil.com    ← 自己申告。curl で偽装可能
+Authorization: Bearer eyJxxx...
+Cookie: sessionId=abc123</code></pre>
+
+<p><code>Origin</code> ヘッダはブラウザが付けるが、curl や Postman なら任意の値を付けられる:</p>
+
+<pre><code>curl -H "Origin: https://app.example.com" https://api.example.com/...</code></pre>
+
+<p>つまりサーバが Origin ヘッダを見て弾いても<strong>意味がない</strong>（攻撃側は直接 curl を使えばいい）。</p>
+
+<p>そもそもサーバ単独でクロスオリジン攻撃を防ぐのは不可能で、<strong>「JS の出どころを唯一確実に知っているのはブラウザ」</strong>。だから防御をブラウザに任せる構造になっている。</p>
+
+<p><strong>Q3: ブラウザはなぜ JS の出どころを確実に知れるのか？</strong></p>
+
+<p>JS を実行しているのがブラウザ自身だから。</p>
+
+<pre><code>window.location = https://evil.com    ← ブラウザは自分で知っている
+   ↓
+JS が fetch("https://api.example.com")
+   ↓
+ブラウザ: 「fetch を呼んだのは evil.com の JS だ」 ← 確定情報
+   ↓
+レスポンスが到着、サーバは Allow-Origin: https://app.example.com と返した
+   ↓
+ブラウザ: 「evil.com 経由だから JS には渡さない」</code></pre>
+
+<p>ブラウザ内部の状態として「今 JS を実行しているページのオリジン」が保持されている。これは外部から偽装しようがない。</p>
+
+<p>サーバから見るとリクエストは「ブラウザが付けた Origin ヘッダ」しか手がかりがない（その Origin も非ブラウザクライアントなら任意）。一方、ブラウザは内部状態として確実に知っている。</p>
+
+<p><strong>Q4: もし CORS が完全に無い世界だとどうなる？</strong></p>
+
+<p>3パターンを並べると CORS の存在意義が見える:</p>
+
+<table>
+<thead><tr><th>状態</th><th>動作</th><th>結果</th></tr></thead>
+<tbody>
+<tr><td><strong>CORS 無し / SOP 厳格</strong></td><td>クロスオリジン fetch を全部禁止</td><td>正当な CDN・地図API・OAuth・決済が全部死ぬ → Web 崩壊</td></tr>
+<tr><td><strong>CORS あり (今)</strong></td><td>サーバが許可リストを宣言、ブラウザが執行</td><td>正当な通信 OK、攻撃遮断</td></tr>
+<tr><td><strong>CORS で <code>*</code> 全許可</strong></td><td>サーバが「誰でも OK」と宣言</td><td>防御ゼロ、ログイン中ユーザーがデータ漏洩</td></tr>
+</tbody>
+</table>
+
+<p><code>CORS あり</code> は「<strong>サーバが能動的に正しい設定をする</strong>」ことが前提のシステム。<code>*</code> にしたら意味がないし、何も書かなければデフォルト deny で正当な通信もできない。<strong>サーバが意識的に許可宣言する</strong>のがポイント。</p>
+
+<p><strong>Q5: 結局 <code>*</code> にしたら意味ないなら、CORS は無意味では？</strong></p>
+
+<p>仕様レベルで <code>*</code> を制限する仕組みが入っている:</p>
+
+<ol>
+<li><strong><code>Allow-Origin: *</code> + <code>Allow-Credentials: true</code> は仕様で禁止</strong>
+<ul>
+<li>Cookie や Authorization をクロスオリジンで送るときは、必ず具体的なオリジンを指定する必要がある</li>
+<li>認証情報を伴う場合の <code>*</code> をブラウザが拒否する</li>
+</ul>
+</li>
+<li><strong>本番では具体的なオリジンを指定するのが原則</strong>
+<ul>
+<li>開発の <code>*</code> は「あらゆる localhost ポート」「自動デプロイ環境のドメイン」のような開発時の利便性のため</li>
+<li>本番デプロイ時は許可オリジンの限定が運用ルール</li>
+</ul>
+</li>
+<li><strong>CSP (<code>frame-ancestors</code> など) との組み合わせで多層防御</strong></li>
+</ol>
+
+<p>つまり CORS 単体で見ると「サーバの設定次第で骨抜きになる」のは事実だが、<strong>仕様で <code>*</code> の濫用を防ぎ、運用ルールで限定を強制する</strong>ことで実効的な防御になる設計。</p>
+
+<p><strong>Q6: メタな構図で整理すると？</strong></p>
+
+<p>ブラウザは<strong>ユーザーの代理人</strong>。</p>
+
+<pre><code>[ユーザー]
+   ↓ 「私の代わりに Web を見て、危ない情報は JS に渡さないで」
+[ブラウザ]
+   ↓ サーバの Allow-Origin を読む
+[サーバ]
+   ↓ 「私のフロントだけが読んでいい」</code></pre>
+
+<ul>
+<li><strong>サーバは自分の都合</strong>を表明する（誰に見せていいか）</li>
+<li><strong>ブラウザはユーザーの都合</strong>を実装する（変なサイトに自分のデータを盗まれたくない）</li>
+<li><strong>両者が協力して初めて成立</strong>するシステム</li>
+</ul>
+
+<p>「サーバが許可して、サーバが防ぐ」のではなく「<strong>サーバが宣言し、ブラウザがユーザーのために執行する</strong>」と理解すると違和感が消える。</p>
+
+<p>サーバの宣言は「外向きの policy」、ブラウザの執行は「ユーザーの代理人としての判断」、という非対称な役割分担。</p>
+
+<h2>結論 / 整理</h2>
+
+<p>CORS は <strong>3者協調システム</strong>:</p>
+
+<ol>
+<li><strong>サーバ</strong> = 政策決定者（誰に見せるか）</li>
+<li><strong>ブラウザ</strong> = 執行者（policy を読んでユーザーを守る）</li>
+<li><strong>ユーザー</strong> = 受益者（守られる対象）</li>
+</ol>
+
+<p>「自分で許可して自分で防ぐ」と見えるのは、サーバ＝防御主体と勘違いしているから。実際は <strong>守られているのはユーザー、執行者はブラウザ、サーバはルールを公開してるだけ</strong>。</p>
+
+<p>サーバは JS の出どころを判定できない（Origin ヘッダ偽装可能）→ ブラウザに執行を委ねざるを得ない、という非対称性が CORS の根本的な構造。</p>
+
+<h2>比較表 / 具体例</h2>
+
+<h3>各登場人物の責務</h3>
+
+<table>
+<thead><tr><th>登場人物</th><th>責務</th><th>できないこと</th></tr></thead>
+<tbody>
+<tr><td>サーバ</td><td>「許可するオリジン・メソッド・ヘッダ」を宣言</td><td>JS の出どころを判定する（Origin 偽装可能なので）</td></tr>
+<tr><td>ブラウザ</td><td>サーバの宣言を読み、JS にレスポンスを渡すか判定</td><td>サーバの policy を勝手に決める</td></tr>
+<tr><td>ユーザー</td><td>認証セッションを持つ</td><td>CORS の判定に介入する（自動的に守られる）</td></tr>
+</tbody>
+</table>
+
+<h3>防御の主体は誰か（攻撃別）</h3>
+
+<table>
+<thead><tr><th>攻撃</th><th>防御主体</th><th>防御手段</th></tr></thead>
+<tbody>
+<tr><td>クロスオリジン読み取り</td><td>ブラウザ（サーバの宣言に基づく）</td><td>CORS / SOP</td></tr>
+<tr><td>クロスオリジン書き込み (CSRF)</td><td>ブラウザ + サーバ</td><td>SameSite Cookie / CSRF トークン / JWT in Header</td></tr>
+<tr><td>同一サイト内 XSS</td><td>サーバ + ブラウザ</td><td>CSP / 入力サニタイズ</td></tr>
+<tr><td>サーバへの直接 API 攻撃 (curl)</td><td>サーバのみ</td><td>認証 / Rate Limit / WAF</td></tr>
+</tbody>
+</table>
+
+<p>CORS が効くのは「ブラウザを介した攻撃」のみ。curl で直接叩く攻撃には CORS は無力で、別の防御（認証、WAF）が必要。</p>
+
+<h3>「自己完結に見える」を払拭する考え方</h3>
+
+<pre><code>誤った見方:
+  サーバ → CORS ヘッダ → サーバを守る （自己完結）
+
+正しい見方:
+  サーバ → CORS ヘッダ → ブラウザに policy 通知
+                         ↓
+                       ブラウザ → ユーザーのセッションを守る</code></pre>
+
+<p>policy の宣言と執行が別主体に分離されている、という非対称性が CORS の本質。</p>
+
+<h2>よくある誤解</h2>
+
+<ul>
+<li><strong>誤解: CORS はサーバが自分で防御する仕組み</strong>
+<ul>
+<li>実際: サーバが policy を宣言し、ブラウザが執行する。守られるのはユーザー</li>
+</ul>
+</li>
+<li><strong>誤解: サーバが Origin ヘッダを見て弾けば CORS と同じ防御になる</strong>
+<ul>
+<li>実際: Origin は curl で偽装可能。ブラウザでないと信頼できる判定はできない</li>
+</ul>
+</li>
+<li><strong>誤解: CORS でサーバ自体のセキュリティが上がる</strong>
+<ul>
+<li>実際: サーバは curl で叩けば直接アクセスできる。CORS が守るのはブラウザ越しのユーザー</li>
+</ul>
+</li>
+<li><strong>誤解: <code>*</code> で全許可にしておけば便利かつ安全</strong>
+<ul>
+<li>実際: <code>Allow-Credentials: true</code> と <code>*</code> は併用禁止。認証付きでは具体オリジン指定が必須</li>
+</ul>
+</li>
+</ul>
+
+<h2>参考文献</h2>
+
+<ul>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS">Cross-Origin Resource Sharing (CORS) - MDN Web Docs</a> — CORS の仕組み、ブラウザ側の執行ポイント（閲覧 2026-04-25）</li>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/Security/Same-origin_policy">Same-origin policy - MDN Web Docs</a> — SOP がブラウザ側の制限であることの公式説明（閲覧 2026-04-25）</li>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Origin">Origin header - MDN Web Docs</a> — Origin ヘッダはブラウザが付けるが偽装可能性は仕様の前提（閲覧 2026-04-25）</li>
+<li><a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/how-to-cors.html">CORS for REST APIs in API Gateway - AWS Docs</a> — サーバ側で CORS ヘッダを返す設定（閲覧 2026-04-25）</li>
+</ul>
+
+<hr>
+
+<p><em>Saved at 2026-04-25 via /learning-flow:reference</em></p>
+
+<div class="foot">← <a href="../../index.html">Phase 1 ルーター</a> ／ <a href="../../main.md">Markdown 目次</a></div>
+</main></body></html>

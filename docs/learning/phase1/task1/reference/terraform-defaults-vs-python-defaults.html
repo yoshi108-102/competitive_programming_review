@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 リファレンス / Q&A</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 リファレンス / Q&amp;A · <a href="../../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Terraform variable の <code>default</code> と Python 関数 default 引数の違い</h1>
+
+<h2>概要</h2>
+
+<p>Terraform のモジュールを書いているとき、「<code>variable</code> ブロックに <code>default</code> を書くべきかどうか」で迷う場面がよくある。Python の関数なら <code>def f(x="default")</code> のようにほぼ常に default を書くのに、Terraform のモジュールでは「default を書かない」ことが推奨されるケースが多い。</p>
+
+<p>このリファレンスは、両者の <strong>default の意味論が根本的に違う</strong> ことを整理する。要点を先に書くと:</p>
+
+<ul>
+  <li><strong>Python の default = 「省略可能な引数」のシグナル</strong>。関数は再利用される部品でも default を書くのが普通。</li>
+  <li><strong>Terraform の default = 「呼び出し側に明示を強制しない」というシグナル</strong>。再利用されるモジュールでは default を<strong>書かない</strong>方が安全になる場面が多い。</li>
+</ul>
+
+<p>両者の差は「何が変数か」「呼び出しコストは何か」「事故ったときの被害は何か」の違いから来る。</p>
+
+<h2>詳細</h2>
+
+<h3>Terraform: <code>default</code> ありなしの意味</h3>
+
+<p>HashiCorp 公式の振る舞い:</p>
+
+<blockquote>
+<p>"If a variable does not have a default value, such as the <code>subnet_id</code> variable, then Terraform prompts the user to assign a value before it generates a plan."<br>
+— <a href="https://developer.hashicorp.com/terraform/language/values/variables">Terraform Docs: Input Variables</a></p>
+</blockquote>
+
+<p>つまり Terraform では:</p>
+
+<table>
+  <thead>
+    <tr><th><code>default</code></th><th>振る舞い</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>あり</td><td><strong>optional</strong>。呼び出し側が省略すると default 値が使われる</td></tr>
+    <tr><td>なし</td><td><strong>required</strong>。呼び出し側が値を渡さないと <code>terraform plan</code> がエラー（または対話プロンプト）になる</td></tr>
+  </tbody>
+</table>
+
+<p><code>default</code> の優先順位は最下位:</p>
+
+<blockquote>
+<p>"The variable's <code>default</code> argument is at the lowest level of precedence."</p>
+</blockquote>
+
+<p>CLI フラグ（<code>-var</code>）、<code>.tfvars</code>、環境変数、HCP Terraform の設定がすべて勝つ。<code>default</code> はあくまで「何も指定されなかったときの fallback」。</p>
+
+<h3>Terraform: Root module と Child module は性質が違う</h3>
+
+<p>公式の表現:</p>
+
+<blockquote>
+<p>"Add <code>variables</code> blocks to your root module to let consumers pass values into the module at run time. Defining a <code>variable</code> block in a child module lets a parent module pass values into the child module at run time."</p>
+</blockquote>
+
+<p>メンタルモデル:</p>
+
+<table>
+  <thead>
+    <tr><th></th><th>Root module</th><th>Child module</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>役割</td><td>アプリ固有のスタックの<strong>入り口</strong>。<code>terraform</code> CLI が直接実行する場所</td><td>再利用される<strong>部品</strong>。別のスタックから <code>module "x" { source = "..." }</code> で呼ばれる</td></tr>
+    <tr><td>値の供給元</td><td>CLI の <code>-var</code>、<code>.tfvars</code>、環境変数、HCP の workspace</td><td>親モジュールの <code>module</code> ブロック内の引数</td></tr>
+    <tr><td><code>default</code> の典型的な扱い</td><td><strong>書く</strong>（<code>-var</code> を毎回打つのが煩雑なため）</td><td><strong>書かない</strong>（呼び出し側に明示を強制）</td></tr>
+  </tbody>
+</table>
+
+<p>このプロジェクト（<code>atcoder-review</code>）の例:</p>
+
+<pre><code class="language-hcl"># terraform/variables.tf （ルート）
+# default あり: このスタックでは値が固定なので CLI 省略可にする
+variable "project_name" {
+  type    = string
+  default = "atcoder-review"
+}
+
+# terraform/modules/dynamodb/variables.tf （子モジュール）
+# default なし: 汎用部品なので、呼び出し側で必ず指定させる
+variable "table_name_prefix" {
+  type        = string
+  description = "DynamoDBテーブル名のプレフィックス"
+  # default を書かない → ルート側で明示する責任を負わせる
+}</code></pre>
+
+<h3>Terraform: 「default を書くべき/書くべきでない」の判断基準</h3>
+
+<p>業界の best practice をまとめると、軸は <strong>環境依存性</strong> と <strong>「呼び出し側が考えるべきか」</strong>:</p>
+
+<table>
+  <thead>
+    <tr><th>値の種類</th><th>default を書くか</th><th>例</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>環境非依存・ほぼ固定</td><td><strong>書く</strong></td><td><code>enable_logging = true</code>、<code>max_retries = 3</code></td></tr>
+    <tr><td>optional な collection</td><td><strong>書く（空コレクション）</strong></td><td><code>tags = {}</code>, <code>subnet_ids = []</code></td></tr>
+    <tr><td>プロバイダ側に default がある optional 設定</td><td><strong>書く（<code>null</code>）</strong></td><td><code>kms_key_id = null</code></td></tr>
+    <tr><td>環境ごとに変わる</td><td><strong>書かない</strong></td><td><code>project_id</code>, <code>environment</code>, <code>region</code></td></tr>
+    <tr><td>セキュリティに関わる</td><td><strong>書かない</strong></td><td>credentials, 公開範囲, IAM 主体</td></tr>
+    <tr><td>利用者が必ず意識すべき</td><td><strong>書かない</strong></td><td>環境名、課金が発生するサイズ系</td></tr>
+  </tbody>
+</table>
+
+<p>env0 / Spacelift / scalr の表現を要約すると:</p>
+
+<blockquote>
+<p>"For variables that have environment-independent values (such as <code>disk_size</code>), provide default values. For variables that have environment-specific values (such as <code>project_id</code>), don't provide default values."</p>
+</blockquote>
+
+<blockquote>
+<p>"Leave out defaults for values that the caller should always think about — like environment names and credentials."</p>
+</blockquote>
+
+<p>書かないことには「<strong>事故防止</strong>」と「<strong>意図の明示</strong>」という積極的な意味がある:</p>
+
+<ul>
+  <li>呼び出し側が variable の存在に気付かないまま意図しない値で <code>apply</code> する事故を防ぐ</li>
+  <li>モジュール作者が「この値はあなたが決めるべき」とシグナルを送れる</li>
+</ul>
+
+<h3>Python: 関数の default 引数</h3>
+
+<p>Python では default は関数の <strong>シグネチャ</strong> に書くのが基本。</p>
+
+<pre><code class="language-python">def fetch(url, timeout=10, headers=None):
+    if headers is None:
+        headers = {}
+    ...</code></pre>
+
+<p>意味は明確に「<strong>省略可能な引数</strong>」。呼び出し側は <code>fetch("https://...")</code> と書くだけで済む。</p>
+
+<p>ただし有名なおとし穴がある: <strong>mutable default の罠</strong>。</p>
+
+<pre><code class="language-python">def append_item(item, items=[]):  # ❌
+    items.append(item)
+    return items
+
+append_item(1)  # → [1]
+append_item(2)  # → [1, 2] ←前回の状態が残る！</code></pre>
+
+<p>これは Python の言語仕様で:</p>
+
+<blockquote>
+<p>"Python's default arguments are evaluated once when the function is defined, not each time the function is called."<br>
+— <a href="https://docs.python-guide.org/writing/gotchas/">The Hitchhiker's Guide to Python: Common Gotchas</a></p>
+</blockquote>
+
+<p>default 値は関数定義時に <strong>1回だけ</strong> 評価され、関数オブジェクトに紐付くオブジェクトとして共有される。list/dict などの mutable を default にすると、呼び出しごとに同じオブジェクトが使い回される。</p>
+
+<p>回避策の慣習:</p>
+
+<pre><code class="language-python">def append_item(item, items=None):
+    if items is None:
+        items = []  # 呼び出しごとに新規生成
+    items.append(item)
+    return items</code></pre>
+
+<p>つまり Python の default は「<strong>便利だが意味論が単純ではない</strong>」もので、書くこと自体が問題というより「何を書くか」に注意が必要。</p>
+
+<h3>なぜ「書く/書かない」の哲学が違うのか</h3>
+
+<table>
+  <thead>
+    <tr><th>観点</th><th>Python</th><th>Terraform</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>関数/モジュールの目的</td><td><strong>ロジック</strong> の再利用</td><td><strong>インフラ構成</strong> の再利用</td></tr>
+    <tr><td>呼び出しコスト</td><td>軽い（メモリ上の関数呼び出し）</td><td>重い（クラウドリソースの作成・課金・データ消失リスク）</td></tr>
+    <tr><td>「省略」の被害</td><td>多くの場合は単に「よくある引数で実行される」</td><td>意図しない環境にリソースが作られる、上書きされる、消える</td></tr>
+    <tr><td>default の評価タイミング</td><td>関数定義時に1回（罠あり）</td><td><code>terraform plan</code> 時に毎回（罠なし）</td></tr>
+    <tr><td>「再利用部品」の典型</td><td>標準ライブラリの関数（default あり）</td><td>child module（default なしが推奨）</td></tr>
+  </tbody>
+</table>
+
+<p>Terraform で default を控えめにするのは、<strong>「事故ったときの被害が大きいから」</strong> が本質。Python の関数で <code>timeout=10</code> をデフォルトにしても、最悪のケースは「タイムアウトが意図と違った」だけ。Terraform で <code>instance_type = "m5.24xlarge"</code> をデフォルトにしてしまうと、呼び出し側が気付かないまま月数千ドル課金される、というレベルの事故になり得る。</p>
+
+<p>逆に言うと、Terraform でも <strong>「事故にならない値」</strong> には積極的に default を書いてよい。<code>enable_versioning = true</code>、<code>tags = {}</code>、<code>kms_key_id = null</code> のような値は default を書く方が利用者に親切。</p>
+
+<h2>比較表</h2>
+
+<table>
+  <thead>
+    <tr><th>軸</th><th>Python 関数 default</th><th>Terraform module default</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>書く位置</td><td>関数定義のシグネチャ</td><td><code>variable</code> ブロック内</td></tr>
+    <tr><td><code>default</code> ありの意味</td><td>optional 引数</td><td>optional な変数</td></tr>
+    <tr><td><code>default</code> なしの意味</td><td>必須引数</td><td>必須変数（plan 時にエラー or プロンプト）</td></tr>
+    <tr><td>評価タイミング</td><td><strong>関数定義時に1回</strong>（mutable は共有される罠あり）</td><td>plan 実行時に毎回（基本は値なのでこの罠なし）</td></tr>
+    <tr><td>「再利用部品」での慣習</td><td>多用される（mutable の罠を避けつつ）</td><td>控えめ（環境依存・セキュリティ系には書かない）</td></tr>
+    <tr><td>省略時の被害</td><td>ロジックが想定外の挙動</td><td>リソースが意図せず作成・破壊される可能性</td></tr>
+    <tr><td>優先順位</td><td>呼び出し側の引数 &gt; default</td><td>CLI/tfvars/env &gt; default（default は最下位）</td></tr>
+  </tbody>
+</table>
+
+<h2>よくある誤解</h2>
+
+<ul>
+  <li><strong>誤解: 「再利用される部品なら default を書くべき」</strong>
+    <ul>
+      <li>実際: Terraform の child module はその逆。再利用部品<strong>だからこそ</strong> default を書かず、呼び出し側に明示を強制するのが安全側。</li>
+    </ul>
+  </li>
+  <li><strong>誤解: 「Terraform は何も書かないと動かないので default を書いておくのが親切」</strong>
+    <ul>
+      <li>実際: <code>default</code> を書いた瞬間 optional 扱いになり、CLI の補完や IDE の警告で「未指定」を検出できなくなる。むしろ <strong>明示を強制した方が事故を防げる</strong>。</li>
+    </ul>
+  </li>
+  <li><strong>誤解: 「ルートモジュールも default なしで書くのが正統」</strong>
+    <ul>
+      <li>実際: ルートは特定プロジェクト専用で、毎回 <code>-var</code> を渡すコストが大きい。default を書いて省略可にする方が現実的。</li>
+    </ul>
+  </li>
+  <li><strong>誤解: 「Python の default はいつでも安全」</strong>
+    <ul>
+      <li>実際: mutable default（list, dict）は関数定義時に1回だけ評価され共有される。<code>None</code> 経由で関数内で生成するのが定石。</li>
+    </ul>
+  </li>
+</ul>
+
+<h2>まとめ</h2>
+
+<ul>
+  <li>Terraform の <code>default</code> は「optional / required」を切り替えるスイッチ。<strong>書かない＝呼び出し側に強制</strong>。</li>
+  <li>Python の default は「省略可能なシグネチャ」のシグナル。<strong>書く＝呼び出し側を楽にする</strong>。</li>
+  <li>同じ "default" でも、<strong>事故時の被害サイズと再利用の文脈</strong> が違うので使い分ける哲学が逆転している。</li>
+  <li>ルート（アプリ固有）= default あり、子モジュール（汎用部品）= default なし、が Terraform の典型パターン。</li>
+  <li>Python では mutable default の罠（定義時1回評価）に注意。<code>None</code> を default にして関数内で生成。</li>
+</ul>
+
+<h2>参考文献</h2>
+
+<ul>
+  <li><a href="https://developer.hashicorp.com/terraform/language/values/variables">Input Variables — Terraform Docs (HashiCorp)</a> — default の振る舞いと優先順位、root/child module の使い分けの一次情報。閲覧日 2026-04-25。</li>
+  <li><a href="https://cloud.google.com/docs/terraform/best-practices/root-modules">Best practices for root modules — Terraform on Google Cloud</a> — service module で「環境固有のものだけ variable に出し、共通値は hard-code する」原則。閲覧日 2026-04-25。</li>
+  <li><a href="https://www.env0.com/blog/terraform-modules">Terraform Modules Guide: Best Practices &amp; Examples — env0</a> — 「環境非依存には default、環境依存には書かない」「呼び出し側が考えるべき値（環境名、credentials）には default を書かない」のガイドライン。閲覧日 2026-04-25。</li>
+  <li><a href="https://spacelift.io/blog/how-to-use-terraform-variables">How to Use Terraform Variables: Examples &amp; Best Practices — Spacelift</a> — 開発フレンドリーな default、optional な list/map には空コレクション、optional な引数には <code>null</code> の使い分け。閲覧日 2026-04-25。</li>
+  <li><a href="https://docs.python-guide.org/writing/gotchas/">The Hitchhiker's Guide to Python: Common Gotchas</a> — Python の default が定義時に1回だけ評価される仕様の説明。閲覧日 2026-04-25。</li>
+  <li><a href="https://florimond.dev/en/posts/2018/08/python-mutable-defaults-are-the-source-of-all-evil">Python Mutable Defaults Are The Source of All Evil — Florimond Manca</a> — mutable default の具体例と回避策。閲覧日 2026-04-25。</li>
+</ul>
+
+<hr>
+
+<p><em>Saved at 2026-04-25 via /learning-flow:reference</em></p>
+
+<div class="foot">← <a href="../../index.html">Phase 1 ルーター</a> ／ <a href="../../main.md">Markdown 目次</a></div>
+</main></body></html>

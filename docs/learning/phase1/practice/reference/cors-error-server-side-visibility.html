@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 リファレンス / Q&A</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 リファレンス / Q&amp;A · <a href="../../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>CORS エラー時、サーバ側（CloudWatch）には届いているのか？</h1>
+
+<blockquote>
+<p>種別: ユーザー議論・Q&amp;A の記録（Phase 1 / Task 3）<br>
+関連教材: <a href="../01-lambda-response-format-and-cors.md">01-lambda-response-format-and-cors.md</a></p>
+</blockquote>
+
+<h2>論点</h2>
+
+<p>「CORS はブラウザ側のセキュリティ機能」と説明された直後、ユーザーから次の問いが出た:</p>
+
+<blockquote>
+<p>ブラウザのセキュリティだったのか。ということは、CORSエラーが発生した時に CloudWatch 見ても信号は届いていないわけね</p>
+</blockquote>
+
+<p>直感的には自然な解釈だが、<strong>実際は逆で「ほとんどのケースで届いている」</strong>。これが CORS デバッグの典型的な落とし穴。</p>
+
+<p>「ブラウザが守る」 = 「リクエストがブラウザから出ない」と誤解されやすいが、実際は「リクエストは出る、でもレスポンスを JS に渡さない」という事後制御。</p>
+
+<h2>Q&amp;A</h2>
+
+<p><strong>Q1: CORS エラーが出たとき、サーバ（Lambda / CloudWatch）には何も届いていない？</strong></p>
+
+<p>ほとんどのケースで<strong>届いている</strong>。CORS の仕組みを正確に分解するとこう:</p>
+
+<pre><code>1. ブラウザは fetch を呼ぶ
+2. ブラウザはリクエストを送信する  ← ★ ここで届く
+3. サーバは普通にリクエストを処理してレスポンスを返す
+4. ブラウザがレスポンスのヘッダを見る
+5. Access-Control-Allow-Origin が合わない
+6. ブラウザが「JS にレスポンスを渡さない」 → CORS エラー</code></pre>
+
+<p>リクエスト自体は送られていて、Lambda は普通に動く。CloudWatch には:</p>
+
+<ul>
+  <li>API Gateway のアクセスログ → 記録あり</li>
+  <li>Lambda の実行ログ → 普通に実行された記録あり</li>
+  <li>DynamoDB に書き込みする処理だったら、<strong>実データが書き込まれている</strong></li>
+</ul>
+
+<p>ブラウザが「JS にレスポンスを渡さない」のは事後処理なので、サーバ側からは「成功して 200 を返した」ようにしか見えない。</p>
+
+<p><strong>Q2: じゃあ「ブラウザのセキュリティ機能」とはどういう意味？</strong></p>
+
+<p><strong>「リクエストの送信を止める」のではなく、「レスポンスを JS に読ませない」</strong>ことで防御している、という意味。</p>
+
+<p>SOP / CORS は元々、悪意あるサイト（evil.com）が他サイトのデータを「読み取って盗む」ことを防ぐのが目的。だから「読み取り」を止めれば目的は達成される。リクエスト自体を止めようとすると、画像表示・フォーム送信など正当な機能まで巻き添えになる。</p>
+
+<p>「データ漏洩防止」を「読み取り制御」で実現している、というのが CORS / SOP の設計思想。</p>
+
+<p><strong>Q3: デバッグのときに気をつけることは？</strong></p>
+
+<p>「フロント側 CORS エラー / バックエンド側 200 OK」が<strong>両方同時に正しい</strong>状況がある、と知っておく。典型的な噛み合わない会話:</p>
+
+<pre><code>フロント開発者: 「CORS エラーで失敗してる」
+バックエンド開発者: 「CloudWatch 見たら 200 で正常終了してる」
+                    → 両者の言い分が噛み合わない</code></pre>
+
+<p>これは両方正しい。サーバから見れば 200、ブラウザから見れば レスポンスをブロックされてエラー、という状態が同時に成立している。</p>
+
+<p>確認方法はブラウザの DevTools:</p>
+
+<ul>
+  <li><strong>Network タブ</strong>: リクエストが送られている（Status 200 になってる）</li>
+  <li><strong>Console タブ</strong>: <code>CORS policy: ...</code> エラーが出ている</li>
+</ul>
+
+<p>「Network 200 / Console エラー」が CORS エラーの典型的な見え方。</p>
+
+<p><strong>Q4: 例外はある？</strong></p>
+
+<p>ある。<strong>Preflight (OPTIONS) で弾かれるケース</strong>は本リクエストが送られない:</p>
+
+<ul>
+  <li><code>Authorization: Bearer ...</code> のようなカスタムヘッダ付きリクエストでは、ブラウザが事前に OPTIONS を送る</li>
+  <li>OPTIONS のレスポンスに正しい <code>Access-Control-Allow-*</code> が無いと、ブラウザは「許可されていない」と判断</li>
+  <li>このとき<strong>本リクエスト (GET / POST) 自体を送らない</strong></li>
+</ul>
+
+<p>CloudWatch には OPTIONS だけが記録され、本来の API 呼び出しは記録されない。</p>
+
+<h2>結論 / 整理</h2>
+
+<p>CORS エラー時のサーバ側可視性は、リクエストの種類によって2パターンに分かれる:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>パターン</th>
+      <th>サーバへの到達</th>
+      <th>CloudWatch 記録</th>
+      <th>副作用（DB書き込み等）</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>本リクエストのレスポンスヘッダが不正</td>
+      <td>届く</td>
+      <td>本リクエストが記録される</td>
+      <td><strong>発生する</strong>（注意！）</td>
+    </tr>
+    <tr>
+      <td>Preflight (OPTIONS) で弾かれる</td>
+      <td>OPTIONS のみ</td>
+      <td>OPTIONS のみ記録</td>
+      <td>発生しない</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong>特に1つ目が怖い</strong>: 「フロントから見ると失敗してるのに DB には書かれてる」状態が起きうる。</p>
+
+<blockquote>
+<p>CORS は通信成立後の表示制御であって、副作用は止められない。</p>
+</blockquote>
+
+<p>「冪等でない API（POST / DELETE 等）+ CORS 設定ミス」のコンボは整合性バグの温床。フロントの fetch が catch されたからといって、サーバに何も起きていないとは限らない。</p>
+
+<h2>比較表 / 具体例</h2>
+
+<h3>「ブラウザが守る」とよく言われる仕組みの違い</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>仕組み</th>
+      <th>何を止めるか</th>
+      <th>サーバへ届くか</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>SOP / CORS</strong></td>
+      <td>レスポンスを JS に渡すのを止める</td>
+      <td><strong>届く</strong>（GET/POST 本体）/ 届かない（preflight 失敗時）</td>
+    </tr>
+    <tr>
+      <td><strong>Mixed Content ブロック</strong></td>
+      <td>HTTPS ページから HTTP リソース取得を止める</td>
+      <td>届かない</td>
+    </tr>
+    <tr>
+      <td><strong>CSP (Content-Security-Policy)</strong></td>
+      <td>スクリプト読み込みやインライン実行を止める</td>
+      <td>届かない（読み込み自体が発生しない）</td>
+    </tr>
+    <tr>
+      <td><strong>HSTS</strong></td>
+      <td>HTTPS 強制</td>
+      <td>リクエストは飛ぶが http→https にアップグレード</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>CORS は「届くけど読ませない」、CSP は「そもそも届かせない」と性質が違う。</p>
+
+<h3>CloudWatch / DevTools 観察の対応関係</h3>
+
+<pre><code>CORS エラー（本リクエストのレスポンスヘッダ不正）:
+  - DevTools Network: GET /submissions → 200 OK
+  - DevTools Console: CORS policy: No 'Access-Control-Allow-Origin' header...
+  - CloudWatch: API Gateway access log にリクエスト記録あり
+                Lambda 実行ログあり
+                DynamoDB の Get/Put 実行されている
+
+CORS エラー（Preflight 失敗）:
+  - DevTools Network: OPTIONS /submissions → 200 OK or 4xx
+                       GET /submissions → (没)
+  - DevTools Console: CORS policy: Response to preflight request...
+  - CloudWatch: OPTIONS のログのみ
+                本来の GET/POST のログは無い</code></pre>
+
+<h2>よくある誤解</h2>
+
+<ul>
+  <li><strong>誤解: CORS エラーが出ているなら、サーバには何も到達していない</strong>
+    <ul>
+      <li>実際: 本リクエスト型のエラーなら届いている。OPTIONS で弾かれた場合のみ届かない</li>
+    </ul>
+  </li>
+  <li><strong>誤解: CORS エラーなら副作用は発生しない</strong>
+    <ul>
+      <li>実際: POST が CORS エラーでも、レスポンスヘッダ起因なら DB 書き込みは完了している可能性がある</li>
+    </ul>
+  </li>
+  <li><strong>誤解: バックエンド側の問題だから CloudWatch を直せばいい</strong>
+    <ul>
+      <li>実際: サーバは正常動作している。修正するのは「レスポンスに Access-Control-Allow-Origin を含める」というレスポンス側の話で、ロジックの問題ではない</li>
+    </ul>
+  </li>
+</ul>
+
+<h2>参考文献</h2>
+
+<ul>
+  <li><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS">Cross-Origin Resource Sharing (CORS) - MDN Web Docs</a> — CORS の仕様、preflight、シンプルリクエストの定義（閲覧 2026-04-25）</li>
+  <li><a href="https://developer.mozilla.org/en-US/docs/Web/Security/Same-origin_policy">Same-origin policy - MDN Web Docs</a> — SOP がブラウザ側の制限であることの公式説明（閲覧 2026-04-25）</li>
+  <li><a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/how-to-cors.html">CORS for REST APIs in API Gateway - AWS Docs</a> — API Gateway 側で CORS ヘッダを返す設定（閲覧 2026-04-25）</li>
+</ul>
+
+<hr>
+
+<p><em>Saved at 2026-04-25 via /learning-flow:reference</em></p>
+
+<div class="foot">← <a href="../../index.html">Phase 1 ルーター</a> ／ <a href="../../main.md">Markdown 目次</a></div>
+</main></body></html>

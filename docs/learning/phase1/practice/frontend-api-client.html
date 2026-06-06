@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 リファレンス / Q&A</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 リファレンス / Q&amp;A · <a href="../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>01. Frontend API クライアントパターン</h1>
+
+<blockquote>
+<p>出典:</p>
+<ul>
+  <li><a href="https://docs.amplify.aws/javascript/build-a-backend/auth/manage-user-session/">AWS Amplify v6 - fetchAuthSession</a></li>
+  <li><a href="https://nextjs.org/docs/app/getting-started/server-and-client-components">Next.js 16 - Server and Client Components</a></li>
+  <li><a href="https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API">MDN - Fetch API</a></li>
+</ul>
+<p>閲覧日 2026-05-09</p>
+</blockquote>
+
+<h2>概要</h2>
+
+<p>Backend が返す <code>{ data, meta }</code> / <code>{ error: { code, message } }</code> 形式（Task 3 / 03 で設計）に合わせて、TypeScript 側で型 + fetch ラッパーを書く。</p>
+
+<p>このプロジェクトの Frontend は Next.js 16 の <strong>App Router</strong>を使っており、認証関連は <strong>Client Components</strong> ( <code>"use client"</code> ) で動かす（Cognito の JWT 取得と React の state 管理が必要なため）。</p>
+
+<h2>公式 docs に沿った解説</h2>
+
+<h3>A. Backend レスポンス型のミラー</h3>
+
+<p>Backend <code>shared/response.py::success/error</code> の戻り値を TS で表現:</p>
+
+<pre><code>// Backend が返す JSON 形式（Task 3 / 03）
+export type ApiSuccess&lt;T&gt; = {
+  data: T;
+  meta: Record&lt;string, unknown&gt; | null;
+};
+
+export type ApiError = {
+  error: {
+    code: string;
+    message: string;
+  };
+};</code></pre>
+
+<p>ハンドラごとに <code>data</code> の型は違うので、ジェネリクス <code>T</code> で受ける。</p>
+
+<p>ドメイン型（DynamoDB の item 形）:</p>
+
+<pre><code>export type Submission = {
+  user_id: string;
+  submission_id: string;
+  problem_id: string;
+  contest_id: string;
+  language: string;
+  point: string;          // Decimal が default=str で文字列化されている (Task 3 / 02)
+  length: number;
+  result: string;
+  execution_time: number | null;
+  epoch_second: number;
+};
+
+export type User = {
+  user_id: string;
+  atcoder_username: string;
+  last_sync_epoch?: number;
+};</code></pre>
+
+<p><strong>重要</strong>: <code>point</code> を <code>string</code> で型定義している。これは Backend が <code>Decimal</code> を <code>default=str</code> で文字列化するため。フロント側で数値演算したいなら <code>parseFloat(point)</code> する必要がある（Task 3 / 02 §C で触れた制約）。</p>
+
+<h3>B. JWT トークンの取得 (Amplify v6)</h3>
+
+<p>Amplify v6 から API が変わり、トークンは <code>fetchAuthSession()</code> で取る:</p>
+
+<pre><code>import { fetchAuthSession } from "aws-amplify/auth";
+
+async function getIdToken(): Promise&lt;string&gt; {
+  const session = await fetchAuthSession();
+  const token = session.tokens?.idToken?.toString();
+  if (!token) {
+    throw new Error("Not authenticated");
+  }
+  return token;
+}</code></pre>
+
+<p><code>idToken</code> を使う理由:</p>
+<ul>
+  <li>API Gateway の Cognito Authorizer は <strong><code>id_token</code> の検証</strong>をデフォルトで行う</li>
+  <li><code>accessToken</code> でも検証できる構成があるが、Cognito User Pool のクレーム（<code>sub</code>, <code>email</code> 等）が確実に入っているのは <code>idToken</code></li>
+</ul>
+
+<h3>C. fetch ラッパー</h3>
+
+<p>毎ハンドラ呼び出しで以下を繰り返さないよう 1 箇所に閉じ込める:</p>
+
+<ol>
+  <li>JWT 取得 → <code>Authorization: Bearer ...</code> ヘッダ追加</li>
+  <li><code>Content-Type: application/json</code> 設定</li>
+  <li>レスポンスを JSON にパース</li>
+  <li><code>response.ok = false</code> のとき <code>ApiError</code> を読んで <code>Error</code> 例外に変換</li>
+</ol>
+
+<pre><code>class ApiCallError extends Error {
+  constructor(
+    public code: string,
+    message: string,
+    public status: number,
+  ) {
+    super(message);
+  }
+}
+
+async function apiFetch&lt;T&gt;(
+  path: string,
+  init: RequestInit = {},
+): Promise&lt;T&gt; {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (!baseUrl) throw new Error("NEXT_PUBLIC_API_URL not set");
+
+  const token = await getIdToken();
+
+  const res = await fetch(`${baseUrl}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      ...(init.headers ?? {}),
+    },
+  });
+
+  const json = await res.json();
+
+  if (!res.ok) {
+    const err = json as ApiError;
+    throw new ApiCallError(
+      err.error?.code ?? "UNKNOWN",
+      err.error?.message ?? "Unknown error",
+      res.status,
+    );
+  }
+
+  return (json as ApiSuccess&lt;T&gt;).data;
+}</code></pre>
+
+<p>ポイント:</p>
+<ul>
+  <li>戻り値は <strong><code>data</code> 部分だけ</strong>を返す（呼び出し側で <code>body.data</code> する手間を省く）</li>
+  <li>異常系は <strong>例外に変換</strong>（呼び出し側は <code>try/catch</code> で扱う）</li>
+  <li><code>meta</code> は別 API として欲しい場合は別関数を切る or 戻り値を <code>{data, meta}</code> に変える</li>
+</ul>
+
+<h3>D. ハンドラごとの公開関数</h3>
+
+<p>低レイヤの <code>apiFetch</code> を呼ぶ高レイヤを 1 ハンドラ 1 関数で公開:</p>
+
+<pre><code>export const api = {
+  saveAtcoderUsername: (atcoderUsername: string) =&gt;
+    apiFetch&lt;User&gt;("/users/me", {
+      method: "POST",
+      body: JSON.stringify({ atcoder_username: atcoderUsername }),
+    }),
+
+  syncSubmissions: () =&gt;
+    apiFetch&lt;{ synced_count: number; from_second: number }&gt;(
+      "/sync",
+      { method: "POST" },
+    ),
+
+  listSubmissions: (params?: { limit?: number; nextToken?: string }) =&gt; {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.nextToken) qs.set("nextToken", params.nextToken);
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return apiFetch&lt;Submission[]&gt;(`/submissions${suffix}`);
+  },
+
+  getSubmission: (submissionId: string) =&gt;
+    apiFetch&lt;Submission&gt;(`/submissions/${encodeURIComponent(submissionId)}`),
+};</code></pre>
+
+<p>このオブジェクトを Component から <code>import { api } from "@/lib/api"</code> で呼ぶと、UI 層は HTTP の細部を見ずに済む。</p>
+
+<h3>E. 環境変数 (NEXT_PUBLIC_API_URL)</h3>
+
+<p><code>process.env.NEXT_PUBLIC_API_URL</code> は <strong><code>NEXT_PUBLIC_</code> 接頭辞</strong>でクライアント側に露出する。
+Cognito の値も同様に <code>NEXT_PUBLIC_COGNITO_USER_POOL_ID</code> 等 (既存設定ファイル <code>app/lib/amplify-config.ts</code>)。</p>
+
+<blockquote>
+<p>補足（公式 docs には記載なし）: <code>NEXT_PUBLIC_*</code> でない環境変数は <strong>サーバ側のみ</strong>で読める。クライアント JS から漏れない。シークレット類 (DB credential 等) は <code>NEXT_PUBLIC_</code> を付けない。</p>
+</blockquote>
+
+<p><code>.env.local</code> (gitignore) に開発用、<code>.env.local.example</code> (commit) に雛形を置く。値は Terraform apply 後に <code>terraform output</code> から取得（Task 17 + 18）。</p>
+
+<h2>重要ポイント</h2>
+
+<ul>
+  <li>Backend の <code>{data, meta}</code> / <code>{error}</code> 形式を TS で型化、fetch ラッパーは <code>data</code> 部分のみ返す</li>
+  <li>JWT は <strong><code>fetchAuthSession().tokens.idToken</code></strong> から取得 (Amplify v6)</li>
+  <li>API Gateway の Cognito Authorizer は <strong><code>id_token</code></strong> を検証する（<code>access_token</code> ではない）</li>
+  <li>異常系は <code>ApiCallError</code> 例外に変換して上に投げる</li>
+  <li><code>Decimal</code> フィールド (<code>point</code>) は <strong>TS では <code>string</code></strong>。数値演算は <code>parseFloat</code></li>
+  <li><code>NEXT_PUBLIC_*</code> 接頭辞でクライアント露出。それ以外はサーバ専用</li>
+</ul>
+
+<h2>関連</h2>
+
+<ul>
+  <li>議論・Q&amp;A: （<code>lesson</code> 中に発生したら <code>reference/</code> 配下にリンクが追加されます）</li>
+  <li>関連 Task: Task 12〜15（このクライアントを使ってページを書く）</li>
+</ul>
+
+<hr>
+
+<p><em>Auto-generated at 2026-05-09 via /learning-flow:material（公式 docs 駆動）</em></p>
+
+<div class="foot">← <a href="../index.html">Phase 1 ルーター</a> ／ <a href="../main.md">Markdown 目次</a></div>
+</main></body></html>

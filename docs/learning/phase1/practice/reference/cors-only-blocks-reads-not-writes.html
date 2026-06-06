@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 リファレンス / Q&A</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 リファレンス / Q&amp;A · <a href="../../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>CORS は「読み取り」しか防がない — 書き込み攻撃 (CSRF) は別の層で守る</h1>
+
+<blockquote>
+<p>種別: ユーザー議論・Q&amp;A の記録（Phase 1 / Task 3）<br>
+関連教材: <a href="../01-lambda-response-format-and-cors.md">01-lambda-response-format-and-cors.md</a><br>
+関連reference: <a href="cors-error-server-side-visibility.md">cors-error-server-side-visibility.md</a></p>
+</blockquote>
+
+<h2>論点</h2>
+
+<p>「CORS エラー時もサーバには届いている」という話の直後、ユーザーが鋭い違和感を表明:</p>
+
+<blockquote>
+<p>サーバのレスポンスがフロントのブラウザで弾かれるだけということ？ということは、さっきのSOPの例でいくと、取引自体は成立するがこちらからはエラーに見えるということだろ。UX として不自然な仕様じゃないか？</p>
+</blockquote>
+
+<p>これは CORS / SOP の設計思想を理解する上で<strong>核心的な指摘</strong>。</p>
+
+<p>「悪意ある evil.com の JS が bank.com に送金 POST を送る」という攻撃を考えると:</p>
+
+<ul>
+  <li>レスポンスは JS に渡されない（CORS で防げる）</li>
+  <li>でも<strong>送金自体は成立してしまう</strong>（ブラウザはリクエストを送ったから）</li>
+  <li>被害者は「失敗した」と認識するが、サーバ側では送金完了している</li>
+</ul>
+
+<p>つまり CORS は <strong>「データ漏洩」しか防がない</strong>。状態改変系の攻撃 (CSRF) は CORS の射程外。これは「設計ミス」ではなく<strong>意図的な分業</strong>。</p>
+
+<h2>Q&amp;A</h2>
+
+<p><strong>Q1: 結局 CORS は何を防いでるの？</strong></p>
+
+<p><strong>「クロスオリジンの読み取り (reading)」だけ</strong>を防いでいる。書き込み (writing / 状態改変) は防がない。</p>
+
+<table>
+  <thead>
+    <tr><th>攻撃の目的</th><th>CORS で防げるか</th><th>理由</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>口座情報を盗む（読み取り）</td><td>✅ 防げる</td><td>レスポンスを JS に渡さないので、データが evil.com に渡らない</td></tr>
+    <tr><td>送金させる（書き込み・なりすまし）</td><td>❌ 防げない</td><td>送金はリクエスト送信時点で成立、レスポンス読めなくても被害は発生</td></tr>
+  </tbody>
+</table>
+
+<p><strong>Q2: なぜリクエスト自体を止める設計にしなかった？UX 的に不自然じゃないか？</strong></p>
+
+<p>意図的にそうしている。理由は3つ。</p>
+
+<p><strong>(a) Web の歴史的経緯 — クロスオリジン POST が元々あった</strong></p>
+
+<p>SOP が導入される前から、Web には正当なクロスオリジン POST があった:</p>
+
+<pre><code>&lt;!-- example.com 上のフォームから他社決済へ --&gt;
+&lt;form action="https://payment.example.com/pay" method="POST"&gt;
+  &lt;input name="amount"&gt;
+  &lt;button&gt;決済&lt;/button&gt;
+&lt;/form&gt;</code></pre>
+
+<p>これは正当な機能。フォーム送信、外部決済、リダイレクト、画像読み込みなど、Web の根幹を支えている。「クロスオリジン書き込みを全部禁止」したら Web が壊れる。</p>
+
+<p><strong>(b) 攻撃の種類で分業 — CORS は「漏洩」担当</strong></p>
+
+<table>
+  <thead>
+    <tr><th>攻撃</th><th>必要な情報</th><th>防御の対象</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>情報漏洩</td><td>レスポンスの中身</td><td>読み取りを止める ← CORS / SOP</td></tr>
+    <tr><td>なりすまし操作</td><td>Cookie 等の認証情報</td><td>送信時に区別 ← Cookie / CSRF対策</td></tr>
+  </tbody>
+</table>
+
+<p>CORS は射程を絞って「データ漏洩」を担当。書き込み攻撃は別の層が担当する分業設計。</p>
+
+<p><strong>(c) 書き込み攻撃 (CSRF) は Cookie 側で対処された</strong></p>
+
+<p>CSRF の本質は「<strong>Cookie が勝手に送られる</strong>」こと。だから対策はリクエスト側ではなく Cookie の方に入った:</p>
+
+<pre><code>Set-Cookie: sessionId=abc; SameSite=Lax</code></pre>
+
+<p><code>SameSite=Lax</code>（Chrome 80 以降のデフォルト）だと、別オリジンからの POST には Cookie が<strong>そもそも送られない</strong>。これで CSRF はかなり防げるようになった。</p>
+
+<p><strong>Q3: じゃあ Web セキュリティはどう構成されている？</strong></p>
+
+<p>CORS は1つの層に過ぎず、<strong>複数層の組み合わせ</strong>で初めて成立する:</p>
+
+<pre><code>レイヤー1: SOP / CORS
+  └─ クロスオリジンの「読み取り」を防ぐ
+  └─ 主に情報漏洩対策
+
+レイヤー2: SameSite Cookie / CSRF トークン
+  └─ クロスオリジンの「書き込み (なりすまし)」を防ぐ
+  └─ 主に状態改変対策
+
+レイヤー3: CSP (Content-Security-Policy)
+  └─ 危険なスクリプト実行を防ぐ
+  └─ XSS 対策
+
+レイヤー4: X-Frame-Options / frame-ancestors
+  └─ Clickjacking を防ぐ
+
+レイヤー5: HTTPS / HSTS
+  └─ 通信路の盗聴・改竄を防ぐ</code></pre>
+
+<p>「CORS だけで何でも守れる」と思うと不完全に見えるが、<strong>それぞれ別の攻撃を担当</strong>しているので、CORS が漏洩担当なのは正しい。</p>
+
+<p><strong>Q4: 今回の AtCoder Review プロジェクトでは CSRF を意識する必要は？</strong></p>
+
+<p>ほぼ不要。理由は <strong>Cognito の JWT を <code>Authorization: Bearer ...</code> ヘッダで送る方式</strong>を採用しているため。</p>
+
+<pre><code>✅ Cookie を使わない
+   ↓
+✅ ブラウザが認証情報を「自動で」付けることがない
+   ↓
+✅ evil.com の JS が API を呼んでも、JWT ヘッダを付けられない
+   （自分の JWT 持ってないから）
+   ↓
+✅ なりすまし送金が成立しない = CSRF リスクほぼゼロ</code></pre>
+
+<p>「Cookie 方式だと CSRF 対策が必要、JWT 方式だと CORS 設定だけで実質守られる」というのが、現代の SPA + API Gateway 構成で JWT が好まれる理由の1つ。</p>
+
+<h2>結論 / 整理</h2>
+
+<p>ユーザーの違和感「<strong>CORS だけ見ていると不完全に見える</strong>」は正しい。<strong>CORS は読み取り防御専門で、書き込み防御は別の機構が担う</strong>、という分業を理解すると整理できる。</p>
+
+<p>教材で「SOP は壁、CORS は壁の扉」と表現したが、より正確には:</p>
+
+<blockquote>
+<p>その壁は「読み取り」という1方向にしか効かない壁。書き込みは壁を素通りする。</p>
+</blockquote>
+
+<p>実務上の含意:</p>
+
+<ol>
+  <li><strong>「CORS エラーが出てるから安全」と思わない</strong> — 副作用は発生している可能性がある (前 reference 参照)</li>
+  <li><strong>JWT in Authorization ヘッダ方式は CSRF 対策込み</strong> — Cookie 方式と違い、CSRF トークンを別途用意する必要がない</li>
+  <li><strong>本番でオリジンを <code>*</code> にしない</strong> — 漏洩防御が無効化される</li>
+  <li><strong>状態改変系 API (POST/PUT/DELETE) は冪等性 / 認証ヘッダ確認 を意識する</strong> — CORS だけに頼らない</li>
+</ol>
+
+<h2>比較表 / 具体例</h2>
+
+<h3>CORS だけで守れる攻撃 / 守れない攻撃</h3>
+
+<table>
+  <thead>
+    <tr><th>攻撃</th><th>CORS で防御</th><th>別途必要な対策</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>evil.com から bank.com の口座情報を<strong>読む</strong></td><td>✅ できる</td><td>—</td></tr>
+    <tr><td>evil.com から bank.com に<strong>送金 POST</strong> を送る</td><td>❌ できない</td><td>SameSite Cookie / CSRF トークン / JWT in Header</td></tr>
+    <tr><td>evil.com に bank.com を iframe 埋め込みして偽クリック (Clickjacking)</td><td>❌ できない</td><td>X-Frame-Options / frame-ancestors</td></tr>
+    <tr><td>自サイト内に注入された XSS が API を呼ぶ</td><td>❌ できない</td><td>CSP / XSS 対策 / 入力サニタイズ</td></tr>
+    <tr><td>ネットワーク盗聴</td><td>❌ できない</td><td>HTTPS / HSTS</td></tr>
+  </tbody>
+</table>
+
+<h3>Cookie 認証 vs JWT 認証 (CSRF 観点)</h3>
+
+<pre><code>[Cookie 認証]
+   ブラウザが自動的に Cookie を付ける
+       ↓
+   evil.com の JS が POST を投げると Cookie が付く
+       ↓
+   サーバはログイン中ユーザーからのリクエストと誤認
+       → CSRF 攻撃成立しうる
+   対策: SameSite=Lax 以上 / CSRF トークン
+
+[JWT in Authorization ヘッダ]
+   JWT は localStorage / メモリに保管
+       ↓
+   evil.com の JS は別オリジン → 自分のオリジンの localStorage しか読めない
+       ↓
+   bank.com の JWT を取得できない → ヘッダに付けられない
+       → CSRF 攻撃成立しない
+   対策: CORS の正しい設定だけで足りる</code></pre>
+
+<h2>よくある誤解</h2>
+
+<ul>
+  <li><strong>誤解: CORS が通ったら安全、CORS で弾かれたら攻撃失敗</strong>
+    <ul>
+      <li>実際: CORS は「読み取り防御」だけ。書き込み攻撃 (CSRF) は CORS とは無関係に成立しうる</li>
+    </ul>
+  </li>
+  <li><strong>誤解: CORS 設定を厳しくすれば CSRF も防げる</strong>
+    <ul>
+      <li>実際: 部分的に防げるが完全ではない。CSRF は SameSite Cookie や認証ヘッダ方式（JWT）など別の層で対処する</li>
+    </ul>
+  </li>
+  <li><strong>誤解: SOP がリクエストを止めるから安全</strong>
+    <ul>
+      <li>実際: SOP はリクエストを止めない、レスポンスの読み取りを止めるだけ</li>
+    </ul>
+  </li>
+  <li><strong>誤解: フロントが CORS エラーで失敗したから DB は変わってない</strong>
+    <ul>
+      <li>実際: 本リクエスト型の CORS エラーなら、DB 書き込みは完了している可能性が高い</li>
+    </ul>
+  </li>
+</ul>
+
+<h2>参考文献</h2>
+
+<ul>
+  <li><a href="https://developer.mozilla.org/en-US/docs/Web/Security/Same-origin_policy">Same-origin policy - MDN Web Docs</a> — SOP は読み取り制御中心であることの公式説明（閲覧 2026-04-25）</li>
+  <li><a href="https://owasp.org/www-community/attacks/csrf">Cross-Site Request Forgery (CSRF) - OWASP</a> — CSRF の定義と SOP では防げない理由（閲覧 2026-04-25）</li>
+  <li><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite">SameSite cookies - MDN Web Docs</a> — Cookie 側の CSRF 対策（閲覧 2026-04-25）</li>
+  <li><a href="https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html">Cross-Site Request Forgery Prevention Cheat Sheet - OWASP</a> — JWT in Header 方式が CSRF 耐性を持つ理由（閲覧 2026-04-25）</li>
+</ul>
+
+<hr>
+
+<p><em>Saved at 2026-04-25 via /learning-flow:reference</em></p>
+
+<div class="foot">← <a href="../../index.html">Phase 1 ルーター</a> ／ <a href="../../main.md">Markdown 目次</a></div>
+</main></body></html>

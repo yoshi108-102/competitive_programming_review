@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 リファレンス / Q&A</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 リファレンス / Q&amp;A · <a href="../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>03. <code>shared/response.py</code> の設計ノート — <code>success()</code> / <code>error()</code> が吸収する責務</h1>
+
+<blockquote>
+<p>出典: 本稿は <strong>公式ドキュメントに直接対応する章を持たない設計ノート</strong>。<br>
+設計の根拠となる一次資料は以下:</p>
+<ul>
+  <li><a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-output-format">Lambda Proxy Integration 戻り値仕様</a>（閲覧日 2026-05-09）</li>
+  <li><a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/how-to-cors.html">CORS in API Gateway</a>（閲覧日 2026-05-09）</li>
+  <li><a href="https://docs.python.org/3/library/json.html#json.dumps">Python <code>json.dumps</code> の <code>default</code> 引数</a>（閲覧日 2026-05-09）</li>
+  <li>関連教材: <a href="01-lambda-response-format-and-cors.md">01-lambda-response-format-and-cors.md</a>、<a href="02-json-dumps-default-and-decimal.md">02-json-dumps-default-and-decimal.md</a></li>
+</ul>
+<p>このノートは Claude が自動生成した<strong>設計教材</strong>であり、公式 docs の写し取りではない（<code>&gt; 補足（公式docsには記載なし）:</code> ブロックで一次資料との関係を明示する形で書いた）。</p>
+</blockquote>
+
+<h2>概要</h2>
+
+<p>このプロジェクトの全 Lambda ハンドラは API Gateway Proxy Integration を経由するため、戻り値が</p>
+
+<ol>
+  <li><code>statusCode</code> / <code>headers</code> / <code>body</code> の <strong>3 要素 dict</strong> であること</li>
+  <li><code>body</code> は <strong>文字列</strong>であること（dict 直渡しは 502 で落ちる）</li>
+  <li>CORS 用ヘッダ（<code>Access-Control-Allow-Origin</code> 等）が付いていること</li>
+  <li>body 内に <code>Decimal</code> や <code>datetime</code> が混じっても落ちないこと</li>
+</ol>
+
+<p>を毎回満たさねばならない。これらを 4 行ベタ書きするとハンドラ毎に「書き忘れ」「微妙に違う形式」「CORS ヘッダ漏れ」が発生する。<code>shared/response.py</code> はこの 4 つを <strong>1 関数呼び出しに集約</strong>して、ハンドラ側の責務を「ビジネスロジックの成功 / 失敗を返す」だけに削ぐためのモジュール。</p>
+
+<h2>公式 docs に沿った前提（既習）</h2>
+
+<ul>
+  <li><strong>Lambda Proxy Integration の戻り値形式</strong>: <code>{ statusCode, headers, body, isBase64Encoded? }</code> の dict。<code>body</code> は文字列必須。詳細は <a href="01-lambda-response-format-and-cors.md">01-lambda-response-format-and-cors.md §A</a></li>
+  <li><strong>CORS ヘッダ</strong>: ブラウザからのクロスオリジンアクセスを許可するために <code>Access-Control-Allow-Origin</code> 等を返す。詳細は <a href="01-lambda-response-format-and-cors.md">01-lambda-response-format-and-cors.md §B</a></li>
+  <li><strong><code>json.dumps(default=...)</code></strong>: 標準で JSON 化できない型（<code>Decimal</code> / <code>datetime</code> 等）に出会った時のフォールバック。詳細は <a href="02-json-dumps-default-and-decimal.md">02-json-dumps-default-and-decimal.md</a></li>
+</ul>
+
+<h2>設計目標</h2>
+
+<blockquote>
+<p>補足（公式 docs には記載なし）: 以下は本プロジェクト固有の設計判断。</p>
+</blockquote>
+
+<table>
+  <thead>
+    <tr><th>#</th><th>目標</th><th>理由</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>1</td><td>ハンドラ側で <code>json.dumps</code> を<strong>書かせない</strong></td><td><code>default=str</code> の付け忘れで Decimal が混入し 500 になる事故を構造的に防ぐ</td></tr>
+    <tr><td>2</td><td>CORS ヘッダを<strong>毎回必ず付与</strong></td><td>ヘッダ漏れがあるとフロントは「謎の CORS エラー」だけ見えてサーバ側ログには痕跡が残らない（<a href="reference/cors-error-server-side-visibility.md">reference/cors-error-server-side-visibility.md</a>）</td></tr>
+    <tr><td>3</td><td>成功 / エラー応答の <strong>形を 2 種類に統一</strong></td><td>フロント側で「成功は <code>data.foo</code>、失敗は <code>error.code</code> を見る」と一貫した分岐ロジックが書ける</td></tr>
+    <tr><td>4</td><td>状態コードの <strong>デフォルト値を持つ</strong></td><td>成功は 200、エラーは 400/500 系を呼び出し側が選ぶだけで済む</td></tr>
+    <tr><td>5</td><td>テスト可能な純関数として書く</td><td>I/O を持たず、入力 → 出力が一対一。pytest で容易に検証できる</td></tr>
+  </tbody>
+</table>
+
+<h2>関数インターフェース</h2>
+
+<h3><code>success(data, meta=None, status_code=200)</code></h3>
+
+<p>成功レスポンスを <code>{ statusCode, headers, body }</code> の dict として返す。<code>body</code> は</p>
+
+<pre><code class="language-json">{
+  "data": &lt;data&gt;,
+  "meta": &lt;meta or null&gt;
+}</code></pre>
+
+<p>を <code>json.dumps(..., default=str)</code> した文字列。</p>
+
+<p><strong>シグネチャ</strong>:</p>
+
+<pre><code class="language-python">def success(
+    data: Any,
+    meta: dict | None = None,
+    status_code: int = 200,
+) -&gt; dict:
+    ...</code></pre>
+
+<p><strong>設計上の判断</strong>:</p>
+
+<ul>
+  <li><code>data</code> の型は <code>Any</code>。<code>dict</code> / <code>list</code> / プリミティブのいずれでも受ける（API ごとに形が違うため）</li>
+  <li><code>meta</code> は <code>None</code> を許容。多くの API では使わない</li>
+  <li><code>meta=None</code> のとき <code>body</code> の <code>meta</code> フィールドを <strong>省略</strong>するか <strong><code>null</code> を入れる</strong>かはプロジェクト判断:
+    <ul>
+      <li>省略派 → JSON サイズが小さくなる</li>
+      <li>入れる派 → クライアントが <code>body.meta</code> の存在を前提にできる</li>
+      <li>本プロジェクトは「<strong><code>null</code> を明示的に入れる</strong>」を採用（フロント側の <code>if (body.meta) ...</code> 分岐を不要にする）</li>
+    </ul>
+  </li>
+</ul>
+
+<h3><code>error(code, message, status_code=400)</code></h3>
+
+<p>エラーレスポンスを返す。<code>body</code> は</p>
+
+<pre><code class="language-json">{
+  "error": {
+    "code": &lt;code&gt;,
+    "message": &lt;message&gt;
+  }
+}</code></pre>
+
+<p><strong>シグネチャ</strong>:</p>
+
+<pre><code class="language-python">def error(
+    code: str,
+    message: str,
+    status_code: int = 400,
+) -&gt; dict:
+    ...</code></pre>
+
+<p><strong>設計上の判断</strong>:</p>
+
+<ul>
+  <li><code>code</code> は <code>"VALIDATION_ERROR"</code> / <code>"NOT_FOUND"</code> のような <strong>マシン可読な短い識別子</strong>。フロントの分岐用</li>
+  <li><code>message</code> は <strong>人間可読</strong>。フロントが画面表示にそのまま使える日本語</li>
+  <li><code>status_code</code> のデフォルトは 400（クライアント起因が最頻）。500 系は呼び出し側で明示</li>
+  <li>HTTP の statusCode と <code>body.error.code</code> は<strong>両方持つ</strong>。前者はミドルウェア（API Gateway / CloudFront 等）の判断に使われ、後者は意味論的なクライアント分岐に使う</li>
+</ul>
+
+<h2>内部で吸収する 4 つの責務（再掲）</h2>
+
+<ol>
+  <li><strong>戻り値の三要素化</strong>: <code>{ statusCode, headers, body }</code> を組み立てる</li>
+  <li><strong><code>body</code> の文字列化</strong>: <code>json.dumps(payload, default=str)</code> を必ず通す</li>
+  <li><strong>CORS ヘッダ付与</strong>: <code>Access-Control-Allow-Origin</code> 等を常時 merge</li>
+  <li><strong>シリアライズ層の隠蔽</strong>: <code>Decimal</code> / <code>datetime</code> を呼び出し側が意識しなくて良い</li>
+</ol>
+
+<h2>ヘッダ部分の扱い</h2>
+
+<p>CORS ヘッダはモジュール定数として 1 箇所に集約する。例:</p>
+
+<pre><code class="language-python">_CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",          # MVP段階。後で Cognito ドメインに絞る
+    "Access-Control-Allow-Headers": "Content-Type,Authorization",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+    "Content-Type": "application/json",
+}</code></pre>
+
+<blockquote>
+<p>補足（公式 docs には記載なし）: <code>Access-Control-Allow-Origin: "*"</code> は MVP 用。本番では Cognito ドメインへ絞る運用が必要（<a href="reference/cors-rules-are-universal-not-per-site.md">reference/cors-rules-are-universal-not-per-site.md</a>）。Phase 5（CloudFront / WAF）で固定化する予定。</p>
+</blockquote>
+
+<h2>想定実装スケッチ</h2>
+
+<blockquote>
+<p>補足（公式 docs には記載なし）: 以下はあくまで設計スケッチ。実装時は lesson でレビューしながら調整する。</p>
+</blockquote>
+
+<pre><code class="language-python"># backend/shared/response.py
+import json
+from typing import Any
+
+# CORS ヘッダはここに集約。Lambda ハンドラ側で個別指定しない。
+# → 設計理由: docs/learning/phase1/practice/shared-response-helper-design.md
+_CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type,Authorization",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+    "Content-Type": "application/json",
+}
+
+
+def success(data: Any, meta: dict | None = None, status_code: int = 200) -&gt; dict:
+    body = {"data": data, "meta": meta}
+    return {
+        "statusCode": status_code,
+        "headers": _CORS_HEADERS,
+        # default=str は Decimal / datetime 等を文字列化するため必須
+        # → 設計理由: docs/learning/phase1/practice/json-dumps-default-str.md
+        "body": json.dumps(body, default=str),
+    }
+
+
+def error(code: str, message: str, status_code: int = 400) -&gt; dict:
+    body = {"error": {"code": code, "message": message}}
+    return {
+        "statusCode": status_code,
+        "headers": _CORS_HEADERS,
+        "body": json.dumps(body, default=str),
+    }</code></pre>
+
+<h2>ハンドラ側の使い心地</h2>
+
+<h3>Before（ヘルパーなし）</h3>
+
+<pre><code class="language-python">def lambda_handler(event, context):
+    item = table.get_item(Key={"PK": "USER#1"})["Item"]
+    return {
+        "statusCode": 200,
+        "headers": {
+            "Access-Control-Allow-Origin": "*",
+            "Content-Type": "application/json",
+            # ↑ 書き忘れがちで CORS バグの温床
+        },
+        "body": json.dumps({"data": item}, default=str),
+        # ↑ default=str を忘れて 500 になる事故が起きる
+    }</code></pre>
+
+<h3>After（ヘルパーあり）</h3>
+
+<pre><code class="language-python">from shared.response import success, error
+
+def lambda_handler(event, context):
+    item = table.get_item(Key={"PK": "USER#1"}).get("Item")
+    if item is None:
+        return error("NOT_FOUND", "ユーザーが見つかりません", status_code=404)
+    return success(data=item)</code></pre>
+
+<p>ハンドラの読みやすさが「ビジネスロジックの分岐」だけに集中できる点に注目。</p>
+
+<h2>テスト観点（pytest 視点）</h2>
+
+<blockquote>
+<p>補足（公式 docs には記載なし）: Task 4 で実際に書く想定の観点リスト。</p>
+</blockquote>
+
+<ul>
+  <li><code>success({"foo": 1})</code> の戻り値が <code>statusCode=200</code> であること</li>
+  <li><code>headers</code> に CORS 系 4 ヘッダがすべて含まれていること</li>
+  <li><code>body</code> をパースし直したら <code>{"data": {"foo": 1}, "meta": null}</code> になること</li>
+  <li><code>Decimal("1.5")</code> を含む dict を渡しても例外を出さず、<code>body</code> 内で <code>"1.5"</code> 文字列に変換されていること</li>
+  <li><code>error("VALIDATION_ERROR", "入力不正")</code> の <code>statusCode</code> がデフォルトで 400 であること</li>
+  <li><code>body.error.code</code> / <code>body.error.message</code> が正しく設定されていること</li>
+  <li>副作用がないこと（呼び出し前後で <code>_CORS_HEADERS</code> が変化していない）</li>
+</ul>
+
+<h2>重要ポイント</h2>
+
+<ul>
+  <li><code>shared/response.py</code> は <strong>API Gateway 側の制約 (3 要素 / body 文字列)、CORS ヘッダ運用、<code>json.dumps</code> のシリアライズ救済</strong> を 1 関数呼び出しに統合するためのアダプタ</li>
+  <li>ハンドラ側は「成功なら <code>success(...)</code>、失敗なら <code>error(...)</code>」の 2 択だけで済むようにする</li>
+  <li><code>default=str</code> は MVP 段階のシンプルな選択。後で型ごとに厳密に処理したくなったら <code>JSONEncoder</code> サブクラス化に差し替え可能（インターフェースを変えずに内部置換）</li>
+  <li>CORS ヘッダはモジュール定数で集約し、ハンドラは個別指定しない（漏れ防止）</li>
+  <li>状態コードはキーワード引数で上書きでき、デフォルトは「成功 200 / エラー 400」</li>
+</ul>
+
+<h2>関連</h2>
+
+<ul>
+  <li>前: <a href="02-json-dumps-default-and-decimal.md">02-json-dumps-default-and-decimal.md</a> — <code>json.dumps(default=str)</code> の挙動と Decimal 問題</li>
+  <li>Task 全体目次: <a href="main.md">main.md</a></li>
+  <li>議論・Q&amp;A: （<code>lesson</code> 中に発生したら <code>reference/</code> 配下にリンクが追加されます）</li>
+</ul>
+
+<hr>
+
+<p><em>Auto-generated at 2026-05-09 via /learning-flow:material（設計ノート — 公式 docs の写し取りではない）</em></p>
+
+<div class="foot">← <a href="../index.html">Phase 1 ルーター</a> ／ <a href="../main.md">Markdown 目次</a></div>
+</main></body></html>

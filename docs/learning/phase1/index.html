@@ -88,6 +88,39 @@ ul.mat li .d{color:var(--muted);font-size:12px;margin-top:2px}
     <li><a href="./task1/08-terraform-state-locking.html">Terraform の状態ロック機構</a><a href="./task1/08-terraform-state-locking.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
     <li><a href="./task1/09-dynamodb-as-hashtable.html">DynamoDB = 分散ハッシュテーブルという視点</a><a href="./task1/09-dynamodb-as-hashtable.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
   </ul>
+  <p class="sec">実装 Q&A（practice）</p>
+  <ul class="mat">
+    <li><a href="./practice/README.md">Phase 1 / practice</a><div class="d">Markdown 教材</div></li>
+    <li><a href="./practice/atcoder-problems-api.html">01. AtCoder Problems API — User Submissions エンドポイントとアクセス指針</a><a href="./practice/atcoder-problems-api.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./practice/frontend-api-client.html">01. Frontend API クライアントパターン</a><a href="./practice/frontend-api-client.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./practice/frontend-integration-test.html">01. Frontend 結合テスト手順</a><a href="./practice/frontend-integration-test.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./practice/json-dumps-default-str.html">02. json.dumps の default パラメータと DynamoDB Decimal 問題</a><a href="./practice/json-dumps-default-str.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./practice/lambda-handler-skeleton.html">01. Lambda ハンドラの構造パターン</a><a href="./practice/lambda-handler-skeleton.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./practice/moto-and-aws-test-credentials.html">moto と AWS テスト用ダミー認証情報</a><a href="./practice/moto-and-aws-test-credentials.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./practice/nextjs-client-pages.html">01. Next.js 16 のクライアントページ + 認証 + API 呼び出しパターン</a><a href="./practice/nextjs-client-pages.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./practice/pytest-fixtures-for-aws.html">pytest fixtures for AWS — Lambda + moto のテスト設計パターン</a><a href="./practice/pytest-fixtures-for-aws.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./practice/python-requests-and-mock.html">02. Python `requests` ライブラリと `requests-mock` テスト</a><a href="./practice/python-requests-and-mock.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./practice/shared-response-helper-design.html">03. `shared/response.py` の設計ノート — `success()` / `error()` が吸収する責務</a><a href="./practice/shared-response-helper-design.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./practice/terraform-apply-walkthrough.html">01. Terraform apply 手順と動作確認</a><a href="./practice/terraform-apply-walkthrough.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+  </ul>
+  <p class="sec">CORS・CSRF の議論（reference）</p>
+  <ul class="mat">
+    <li><a href="./practice/reference/cors-error-server-side-visibility.html">CORS エラー時、サーバ側（CloudWatch）には届いているのか？</a><a href="./practice/reference/cors-error-server-side-visibility.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./practice/reference/cors-only-blocks-reads-not-writes.html">CORS は「読み取り」しか防がない — 書き込み攻撃 (CSRF) は別の層で守る</a><a href="./practice/reference/cors-only-blocks-reads-not-writes.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./practice/reference/cors-rules-are-universal-not-per-site.html">ブラウザの CORS ルールは「サイト独立・普遍適用」のホワイトリスト方式</a><a href="./practice/reference/cors-rules-are-universal-not-per-site.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./practice/reference/preflight-bypass-via-simple-post.html">Preflight をシンプル POST で回避する設計のセキュリティ・レイテンシトレードオフ</a><a href="./practice/reference/preflight-bypass-via-simple-post.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./practice/reference/samesite-cookie-and-csrf-defense.html">SameSite Cookie と現代のブラウザ側 CSRF 防御</a><a href="./practice/reference/samesite-cookie-and-csrf-defense.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./practice/reference/why-cors-exists-three-actors.html">なぜ CORS が必要なのか — 「サーバが許可してサーバが防ぐ」ではない3者構造</a><a href="./practice/reference/why-cors-exists-three-actors.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+  </ul>
+  <p class="sec">基礎リファレンス（深掘り）</p>
+  <ul class="mat">
+    <li><a href="./task1/reference/aws-authentication.html">AWS認証のベストプラクティス（2026年現在）</a><a href="./task1/reference/aws-authentication.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./task1/reference/dynamo-paper-dht.html">Dynamo 論文と分散ハッシュテーブル（DHT）の内部実装</a><a href="./task1/reference/dynamo-paper-dht.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./task1/reference/dynamodb-keys-vs-rdb.html">DynamoDB キー設計 vs RDB — 比較リファレンス</a><a href="./task1/reference/dynamodb-keys-vs-rdb.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./task1/reference/iam-overview.html">AWS IAM（Identity and Access Management）概要</a><a href="./task1/reference/iam-overview.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./task1/reference/terraform-basics.html">Terraform 基礎</a><a href="./task1/reference/terraform-basics.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./task1/reference/terraform-defaults-vs-python-defaults.html">Terraform variable の `default` と Python 関数 default 引数の違い</a><a href="./task1/reference/terraform-defaults-vs-python-defaults.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+  </ul>
 
   <div class="foot">Markdown 目次は <a href="./main.md">main.md</a> ／ 設計は <code>docs/superpowers/specs/2026-05-31-aws-phase-sandboxes-design.md</code><br>これは学習用ページです。実 AWS の <code>apply</code> / <code>destroy</code> はご自身で実行してください（Claude は実行しません）。</div>
 </div>

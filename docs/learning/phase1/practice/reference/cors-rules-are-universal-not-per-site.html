@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 リファレンス / Q&A</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 リファレンス / Q&A · <a href="../../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>ブラウザの CORS ルールは「サイト独立・普遍適用」のホワイトリスト方式</h1>
+
+<blockquote>
+<p>種別: ユーザー議論・Q&amp;A の記録（Phase 1 / Task 3）<br>
+関連教材: <a href="../01-lambda-response-format-and-cors.md">01-lambda-response-format-and-cors.md</a><br>
+関連reference: <a href="why-cors-exists-three-actors.md">why-cors-exists-three-actors.md</a></p>
+</blockquote>
+
+<h2>論点</h2>
+
+<p>ユーザーが Preflight の議論の流れで2つの根本的な問いを立てた:</p>
+
+<ol>
+  <li><strong>Preflight = ハンドシグナルだとすると、状態変更系メソッドの整合性は保たれるのか？</strong></li>
+  <li><strong>ブラウザ側の設定は evil.com の存在と独立しているのか？Chrome 設定でいじれる類のものなのか？</strong></li>
+</ol>
+
+<p>特に2つ目は CORS の本質を理解する上で重要。「Chrome に悪意あるサイトのリストがあって、それを参照して弾いてる」と誤解すると CORS の設計思想が見えなくなる。</p>
+
+<p>実際は <strong>「クロスオリジンを全部疑う / サーバが許可宣言したものだけ通す」というホワイトリスト型ルールがブラウザに普遍適用</strong>されており、サイト個別の設定は存在しない。</p>
+
+<h2>Q&amp;A</h2>
+
+<p><strong>Q1: Preflight はハンドシグナルだと考えていい？状態変更メソッドでも整合性は保たれる？</strong></p>
+
+<p>ほぼ Yes。Preflight は本リクエスト前の「許可確認のハンドシェイク」と理解して OK。</p>
+
+<p>整理:</p>
+
+<table>
+  <thead>
+    <tr><th>リクエスト種別</th><th>preflight</th><th>状態変更時の整合性</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>Content-Type: application/json</code> の POST/PUT/DELETE</td><td>✅ あり</td><td>✅ 保たれる（弾かれたら本リクエストは送られない）</td></tr>
+    <tr><td>カスタムヘッダ (<code>Authorization</code> 等) 付き</td><td>✅ あり</td><td>✅ 保たれる</td></tr>
+    <tr><td>HTML フォーム互換のシンプル POST</td><td>❌ なし</td><td>❌ 副作用発生しうる（古典的 CSRF 経路）</td></tr>
+  </tbody>
+</table>
+
+<p><strong>シンプルリクエストの例外</strong>:</p>
+
+<pre><code class="language-html">&lt;form action="https://bank.com/transfer" method="POST"&gt;
+  &lt;input name="amount" value="100"&gt;
+  &lt;input name="to" value="attacker"&gt;
+&lt;/form&gt;</code></pre>
+
+<p>これはメソッド POST、<code>Content-Type: application/x-www-form-urlencoded</code>、カスタムヘッダ無し → <strong>シンプル判定 → preflight 無し</strong>。本リクエストがいきなり飛び、CORS でレスポンスは JS に渡らないが、サーバ側の送金処理は完了している（CSRF 攻撃経路）。</p>
+
+<p><strong>今回のプロジェクトの含意</strong>:</p>
+
+<p><code>Authorization: Bearer &lt;JWT&gt;</code> を必須にしているため、全リクエストが非シンプル → preflight 対象 → 整合性は構造的に保たれる。これも JWT 認証方式の利点の1つ。</p>
+
+<p><strong>Q2: ブラウザの CORS ルールは evil.com の存在と独立か？Chrome 設定でいじれる？</strong></p>
+
+<p>完全に独立。<strong>ブラウザに「evil.com リスト」のようなものは存在しない</strong>。</p>
+
+<p>ブラウザがやってるのは1つのルールだけ:</p>
+
+<pre><code>全クロスオリジン fetch について:
+  「サーバが Access-Control-Allow-Origin で許可してない限り、
+   レスポンスを JS に渡さない」</code></pre>
+
+<p>サイト名は一切関係ない。<code>evil.com</code> も <code>legit-partner.com</code> も同じルールで判定される。判定基準は「クロスオリジンか否か」と「サーバが許可宣言したか」だけ。</p>
+
+<p><strong>Q3: ルールはどこに保管されているのか？</strong></p>
+
+<p>3つの層に分かれている:</p>
+
+<table>
+  <thead>
+    <tr><th>何</th><th>どこに保管</th><th>誰が決める</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>CORS のアルゴリズム本体</strong></td><td>ブラウザのバイナリ（ハードコード）</td><td>ブラウザ開発元 (Google, Mozilla 等)</td></tr>
+    <tr><td><strong>各サイトの許可オリジン</strong></td><td>各サーバのレスポンスヘッダ（毎リクエスト動的に）</td><td>サーバの開発者</td></tr>
+    <tr><td><strong>ユーザー設定</strong></td><td>Chrome 設定画面（ほぼ存在しない）</td><td>エンドユーザー</td></tr>
+  </tbody>
+</table>
+
+<p>つまり:</p>
+
+<ul>
+  <li><strong>ルールの形</strong>は Chrome のコードに焼き付き（全ユーザー共通・サイト独立）</li>
+  <li><strong>許可されるオリジンの中身</strong>は毎回サーバから動的に送られる</li>
+  <li><strong>ユーザーが Chrome 設定でいじれる箇所はほぼない</strong></li>
+</ul>
+
+<p>「Chrome の設定で evil.com をブロックする」みたいな項目は CORS の文脈では存在しない。CORS は完全にプロトコルレベルのルールで、ユーザー設定とは切り離されている。</p>
+
+<p><strong>Q4: なぜ「evil.com を特別扱いしない」のに防げるのか？</strong></p>
+
+<p>ホワイトリスト方式だから。</p>
+
+<pre><code>ブラックリスト方式（やらない）:
+  「悪意あるサイトをリストアップして弾く」
+  → 新種の悪意サイトに対処できない
+  → リストの管理コストが大きい
+
+ホワイトリスト方式（CORS の選択）:
+  「全クロスオリジンを疑い、許可されたものだけ通す」
+  → 新種でも自動的に弾かれる
+  → 個別管理が不要</code></pre>
+
+<p>evil.com は「自分が許可されてる」と主張できない（できても、許可宣言はサーバ側のレスポンスから来るので偽装不可）ので、bank.com からのレスポンスは JS に渡らない。</p>
+
+<p><strong>Q5: Chrome の設定でいじれる項目はあるのか？</strong></p>
+
+<p>通常のエンドユーザーが使う項目はほぼない。ただし以下の例外:</p>
+
+<table>
+  <thead>
+    <tr><th>項目</th><th>影響</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>拡張機能 (Chrome Extension)</strong></td><td>manifest で <code>host_permissions</code> を宣言すれば一部 API は CORS バイパス可能</td></tr>
+    <tr><td><strong><code>--disable-web-security</code> フラグ</strong></td><td>Chrome を CORS 無視で起動するデバッグ用フラグ。本番ユーザーは使わない（Chromium 開発者向け）</td></tr>
+    <tr><td><strong>3rd party Cookie をブロック</strong></td><td>Cookie 系の判定に影響（CORS そのものではない）</td></tr>
+    <tr><td><strong>拡張機能ポリシー (企業管理)</strong></td><td>IT 管理者が一部のサイトを除外する等。これも CORS 設定とは別軸</td></tr>
+  </tbody>
+</table>
+
+<p>普通のユーザーは <strong>CORS 設定を一切意識しない</strong>。サーバ側の設定ミスは「Web サイトが壊れてるように見える」エラーとしてユーザーに表れる。</p>
+
+<p><strong>Q6: 結局、誰が責任を持っているのか？</strong></p>
+
+<p>役割分担:</p>
+
+<table>
+  <thead>
+    <tr><th>主体</th><th>責務</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>ブラウザ開発元</td><td>CORS アルゴリズムを正しく実装する（バグ無く・仕様通り）</td></tr>
+    <tr><td>サーバ開発者</td><td><code>Access-Control-Allow-*</code> を正しく設定する（過度に緩めない）</td></tr>
+    <tr><td>エンドユーザー</td><td>何もする必要がない（自動的に守られる）</td></tr>
+  </tbody>
+</table>
+
+<p>「ユーザーが意識せず守られる」のが CORS の理想形で、サーバ開発者がしっかり設定する責任を負っている、という設計。</p>
+
+<h2>結論 / 整理</h2>
+
+<p><strong>Preflight について</strong>:</p>
+
+<ul>
+  <li>状態変更系（PUT/DELETE/JSON POST/カスタムヘッダ付き）は preflight 対象 → 弾かれたら本リクエストが送られない → 整合性が保たれる</li>
+  <li>シンプル POST（HTML フォーム互換）は preflight 無しなので副作用発生しうる</li>
+  <li>今回のプロジェクトは <code>Authorization</code> 必須 → 全て preflight 対象 → 整合性 OK</li>
+</ul>
+
+<p><strong>ブラウザの CORS ルールについて</strong>:</p>
+
+<ul>
+  <li>サイト名 (evil.com 等) は一切関係ない</li>
+  <li>「クロスオリジンは全部疑う / サーバ許可があれば通す」のホワイトリスト方式</li>
+  <li>ルールはブラウザのバイナリにハードコード、許可オリジンはサーバから動的に来る</li>
+  <li>ユーザー設定でいじれる項目はほぼない（責任はサーバ開発者）</li>
+</ul>
+
+<p>CORS は「ブラウザ ↔ サーバ」のプロトコル合意であり、ユーザーの介入や個別サイトのリスト管理は不要、という普遍的な仕組み。</p>
+
+<h2>比較表 / 具体例</h2>
+
+<h3>ブラックリスト方式 vs ホワイトリスト方式</h3>
+
+<pre><code>[ブラックリスト方式 (採用してない)]
+
+  「悪意あるサイトをリストアップ」
+       ↓
+  evil.com, malware.example, ... を Chrome がリスト化
+       ↓
+  該当サイトからの fetch を弾く
+       ↓
+  問題: 新種に対応できない / リスト管理コストが大きい
+
+[ホワイトリスト方式 (CORS の採用)]
+
+  「全クロスオリジンを疑い、許可されたものだけ通す」
+       ↓
+  サーバが Access-Control-Allow-Origin: https://app.example.com を返す
+       ↓
+  ブラウザ: 「自分のオリジンが一致するなら通す、しないなら弾く」
+       ↓
+  evil.com は許可宣言できない（サーバ側のレスポンスから来るので偽装不可）
+       ↓
+  自動的に弾かれる</code></pre>
+
+<h3>CORS と他の「ブラウザ側セキュリティ」の比較</h3>
+
+<table>
+  <thead>
+    <tr><th>機構</th><th>リスト保管場所</th><th>サイト独立か</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>CORS / SOP</strong></td><td>ブラウザコード（アルゴリズムのみ）</td><td>✅ 独立（普遍ルール）</td></tr>
+    <tr><td><strong>HSTS</strong></td><td>Chrome の HSTS Preload List + サーバの HSTS ヘッダ</td><td>△ 部分的（Preload はリスト）</td></tr>
+    <tr><td><strong>Safe Browsing</strong></td><td>Google が管理する悪意サイトリスト</td><td>❌ サイト個別（ブラックリスト）</td></tr>
+    <tr><td><strong>Mixed Content Block</strong></td><td>プロトコル判定のみ</td><td>✅ 独立（普遍ルール）</td></tr>
+    <tr><td><strong>CSP</strong></td><td>サーバの CSP ヘッダ</td><td>✅ 独立（サーバ宣言）</td></tr>
+  </tbody>
+</table>
+
+<p>CORS は「サイト個別リスト不要・サーバ宣言で動的に決まる」というシンプルな設計。Safe Browsing のようなリスト方式とは性質が違う。</p>
+
+<h3>Preflight キャッシュ (Access-Control-Max-Age)</h3>
+
+<pre><code>1回目のリクエスト: OPTIONS → 本リクエスト の2通信
+                   サーバが Access-Control-Max-Age: 3600 を返す
+   ↓
+2回目以降（1時間以内）:
+                   ブラウザがキャッシュ参照 → 本リクエストのみ
+                   2通信 → 1通信に節約</code></pre>
+
+<p>ブラウザごとの上限:</p>
+
+<table>
+  <thead>
+    <tr><th>ブラウザ</th><th>最大値</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Chromium 系</td><td>7200 秒 (2時間)</td></tr>
+    <tr><td>Firefox</td><td>86400 秒 (24時間)</td></tr>
+    <tr><td>Safari</td><td>600 秒 (10分)</td></tr>
+  </tbody>
+</table>
+
+<p>10分以上の値は Safari ではクランプされる。</p>
+
+<h2>よくある誤解</h2>
+
+<ul>
+  <li><strong>誤解: Chrome に悪意あるサイトのリストがあり、それで CORS を判定している</strong>
+    <ul>
+      <li>実際: そんなリストはない。「クロスオリジンは全て疑う」という普遍ルールだけ</li>
+    </ul>
+  </li>
+  <li><strong>誤解: ユーザーが Chrome の設定で CORS をいじる</strong>
+    <ul>
+      <li>実際: 通常設定にはない。<code>--disable-web-security</code> フラグはあるが開発者向け</li>
+    </ul>
+  </li>
+  <li><strong>誤解: Preflight は全リクエストで発動する</strong>
+    <ul>
+      <li>実際: シンプルリクエスト条件を満たす場合は preflight 不要。HTML フォーム互換が境界</li>
+    </ul>
+  </li>
+  <li><strong>誤解: Preflight があれば全ての CSRF が防げる</strong>
+    <ul>
+      <li>実際: シンプル POST には preflight が無いので、フォーム送信型 CSRF は別途対策必要</li>
+    </ul>
+  </li>
+</ul>
+
+<h2>参考文献</h2>
+
+<ul>
+  <li><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS">Cross-Origin Resource Sharing (CORS) - MDN Web Docs</a> — Preflight、シンプルリクエストの判定基準（閲覧 2026-04-25）</li>
+  <li><a href="https://developer.mozilla.org/en-US/docs/Glossary/Preflight_request">Preflight request - MDN Web Docs</a> — Preflight の正確な仕様（閲覧 2026-04-25）</li>
+  <li><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Access-Control-Max-Age">Access-Control-Max-Age - MDN Web Docs</a> — Preflight キャッシュの上限値（閲覧 2026-04-25）</li>
+  <li><a href="https://fetch.spec.whatwg.org/">Fetch Standard - WHATWG</a> — Fetch の CORS アルゴリズム本体（閲覧 2026-04-25）</li>
+</ul>
+
+<hr>
+
+<p><em>Saved at 2026-04-25 via /learning-flow:reference</em></p>
+
+<div class="foot">← <a href="../../index.html">Phase 1 ルーター</a> ／ <a href="../../main.md">Markdown 目次</a></div>
+</main></body></html>

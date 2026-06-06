@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 リファレンス / Q&A</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 リファレンス / Q&amp;A · <a href="../../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Dynamo 論文と分散ハッシュテーブル（DHT）の内部実装</h1>
+
+<h2>概要</h2>
+
+<p>2007年のSOSPで発表された <strong>"Dynamo: Amazon's Highly Available Key-value Store"</strong> は、分散ハッシュテーブル（Distributed Hash Table, DHT）の商用実装を世に広めた古典論文である。Amazon.comのショッピングカートのような「<strong>絶対に止まってはいけない</strong>」サービスを支えるために、既知のアルゴリズム（Consistent Hashing、Vector Clock、Quorum、Gossip Protocol）を<strong>組み合わせて一つのシステムに仕上げた</strong>ことが論文の本質的な貢献である。</p>
+
+<p>この論文は DynamoDB の直接の起源だが、<strong>DynamoDB と Dynamo は別物</strong>であることに注意が必要。DynamoDB は2012年の立ち上げ以降、論文の設計から大きく進化し、2022年の USENIX ATC で発表された後継論文で中身が公開されている。本リファレンスは (1) Dynamo論文が提唱した4つのコアアルゴリズム、(2) Dynamo → DynamoDB の進化、をソース付きで整理する。</p>
+
+<h2>詳細</h2>
+
+<h3>1. Dynamo 論文の位置づけ</h3>
+
+<ul>
+  <li><strong>発表</strong>: SOSP 2007（Symposium on Operating Systems Principles）</li>
+  <li><strong>著者</strong>: Giuseppe DeCandia, Deniz Hastorun, Madan Jampani, Gunavardhan Kakulapati, Avinash Lakshman, Alex Pilchin, Swaminathan Sivasubramanian, Peter Vosshall, <strong>Werner Vogels</strong>（Amazon CTO）</li>
+  <li><strong>目的</strong>: Amazon.com の「always-on（常に書き込める）」要件を満たす分散KVストアの設計</li>
+  <li><strong>設計哲学</strong>: 可用性（Availability）と分断耐性（Partition tolerance）を最優先し、<strong>強整合性を犠牲にする</strong>（CAP定理で言えば AP 寄り）</li>
+</ul>
+
+<p>論文の一文で要約すると:</p>
+
+<blockquote>
+  <p>"Dynamo uses a synthesis of well known techniques to achieve scalability and availability."<br>
+  — <em>DeCandia et al., SOSP 2007</em></p>
+</blockquote>
+
+<p><strong>新しいアルゴリズムを発明したのではなく、既存の技術を組み合わせて商用に耐えるシステムを作った</strong>点が貢献。</p>
+
+<p>論文の影響で生まれた分散DB:</p>
+
+<ul>
+  <li><strong>Apache Cassandra</strong>（Facebook、Dynamo + BigTable の合成）</li>
+  <li><strong>Riak</strong>（Basho）</li>
+  <li><strong>Voldemort</strong>（LinkedIn）</li>
+  <li><strong>ScyllaDB</strong>（Cassandra 互換の C++ 実装）</li>
+</ul>
+
+<h3>2. Consistent Hashing（一貫性ハッシュ法）</h3>
+
+<h4>問題意識</h4>
+
+<p>素朴な <code>hash(key) % N</code> によるシャーディングは、サーバー追加/削除時にほぼ全データの再配置が発生する:</p>
+
+<pre><code>N=3 → N=4 に変更:
+  key="user-123": hash % 3 = 0 → サーバーA
+  key="user-123": hash % 4 = 3 → サーバーD（移動）
+
+ほぼ全キーが別のサーバーに移動 → 大規模な再配置が必要</code></pre>
+
+<h4>Consistent Hashing のアイデア</h4>
+
+<p>ハッシュ値空間を<strong>円環（リング）</strong>として扱う:</p>
+
+<pre><code>      0 / 2^32
+      ┌───┴───┐
+   サーバーA          サーバーB
+      │                │
+      └───┐       ┌────┘
+          サーバーC
+
+- サーバーも key も同じハッシュ関数で円上に配置
+- key を時計回りに探索し、最初に見つかったサーバーが担当</code></pre>
+
+<p>サーバー追加時の再配置量:</p>
+
+<ul>
+  <li>従来: <code>O(K)</code> （全データが再配置される可能性）</li>
+  <li>Consistent Hashing: <strong>約 <code>K/N</code></strong> （新サーバーが担当する区間のデータだけ）</li>
+</ul>
+
+<h4>制約と Virtual Node</h4>
+
+<p>素朴な実装では、ノードが円上に偏在すると負荷が偏る。これを解決するのが <strong>Virtual Node（仮想ノード）</strong>:</p>
+
+<ul>
+  <li>1つの物理ノードを円上の<strong>複数位置</strong>（典型的に 100〜1000 点）に配置する</li>
+  <li>ハッシュ関数により位置がランダム化されるため、物理ノード単位で見ると負荷が平均化される</li>
+  <li>ノード障害時もデータが複数の隣接ノードに分散して担当される</li>
+</ul>
+
+<p>現在の商用 DHT 実装（DynamoDB、Cassandra、ScyllaDB）は全て Virtual Node を採用している。</p>
+
+<h3>3. Vector Clock（ベクトル時計）</h3>
+
+<h4>問題意識</h4>
+
+<p>分散システムでは「書き込みの順序」が難しい問題になる:</p>
+
+<pre><code>時刻 T1: クライアントA が「item X を追加」
+時刻 T2: クライアントB が「item Y を追加」
+時刻 T3: ネットワーク分断が発生、2つのレプリカが別々に更新される
+
+結果:
+  レプリカ1: [X]       （クライアントAの更新を受けた）
+  レプリカ2: [Y]       （クライアントBの更新を受けた）
+  → どちらが「正しい」?</code></pre>
+
+<p>物理時計（タイムスタンプ）は NTP 同期でも数ミリ秒ズレるので、<strong>厳密な順序判定</strong>には使えない。</p>
+
+<h4>Vector Clock の構造</h4>
+
+<p>各オブジェクトは <code>(node_id, counter)</code> のペアのリストを持つ:</p>
+
+<pre><code>item X の vector clock: [(A, 2), (B, 1)]
+  → ノードA上で2回、ノードB上で1回更新された
+
+item X の新バージョン: [(A, 3), (B, 1)]
+  → ノードAで更に1回更新された（= 旧バージョンの子孫）</code></pre>
+
+<h4>因果関係の判定</h4>
+
+<p>2つのバージョン V1, V2 の関係:</p>
+
+<table>
+  <thead>
+    <tr><th>関係</th><th>判定</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>V1 が V2 の祖先</td><td>V1 の全 counter ≤ V2 の全 counter、かつ少なくとも1つは &lt;</td></tr>
+    <tr><td>V2 が V1 の祖先</td><td>逆</td></tr>
+    <tr><td><strong>並行（conflict）</strong></td><td>どちらでもない（両方を保持して後で解決）</td></tr>
+  </tbody>
+</table>
+
+<h4>Dynamo での使われ方</h4>
+
+<pre><code>ショッピングカートへの並行書き込み:
+  クライアントA: カートに本を追加 → [A:1]
+  クライアントB: 同時にカートに音楽を追加 → [B:1]
+
+→ Vector Clock の比較で「並行更新」と判定
+→ システムは両方保持し、次回の読み取り時にクライアントに両バージョンを返す
+→ クライアントは「本 + 音楽」にマージして書き戻す</code></pre>
+
+<p><strong>semantic reconciliation（意味的和解）</strong> と呼ばれる。Amazon のショッピングカートで「削除したアイテムが復活することはあっても、追加したアイテムが消えることはない」挙動の技術的根拠がこれ。</p>
+
+<h3>4. Quorum ベース複製（N, R, W）</h3>
+
+<h4>3つのパラメータ</h4>
+
+<table>
+  <thead>
+    <tr><th>記号</th><th>意味</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>N</strong></td><td>データを複製するノード数（レプリカ数）</td></tr>
+    <tr><td><strong>R</strong></td><td>読み取り成功に必要な応答ノード数</td></tr>
+    <tr><td><strong>W</strong></td><td>書き込み成功に必要な応答ノード数</td></tr>
+  </tbody>
+</table>
+
+<h4>強整合性の条件</h4>
+
+<p><strong>W + R &gt; N</strong> を満たせば、読み書きするノード集合が必ず重なる → 最新データを含むノードから読める:</p>
+
+<pre><code>N=3, W=2, R=2 の場合:
+  W=2 → 書き込み時は 3ノード中 2ノード以上に書く
+  R=2 → 読み取り時も 2ノード以上から読む
+  → 書いたノードと読むノードの集合が必ず1つ以上重なる
+  → 最新値が読める</code></pre>
+
+<h4>可用性との tradeoff</h4>
+
+<table>
+  <thead>
+    <tr><th>設定</th><th>整合性</th><th>可用性</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>W=N, R=1</td><td>強（読み高速）</td><td>書き込みが1ノード障害で失敗</td></tr>
+    <tr><td>W=1, R=N</td><td>強（書き高速）</td><td>読み取りが1ノード障害で失敗</td></tr>
+    <tr><td><strong>W=(N/2)+1, R=(N/2)+1</strong></td><td>強（バランス）</td><td>過半数が生きていればOK</td></tr>
+    <tr><td>W=1, R=1</td><td>結果整合性のみ</td><td>最高（1ノードでもOK）</td></tr>
+  </tbody>
+</table>
+
+<p>Dynamo 論文ではデフォルト <code>N=3, W=2, R=2</code> が採用されている。</p>
+
+<h3>5. Gossip Protocol（流言プロトコル）</h3>
+
+<h4>目的</h4>
+
+<ul>
+  <li>クラスタのメンバーシップ情報の共有（どのノードが生きているか）</li>
+  <li>障害検出（どのノードが死んだか）</li>
+</ul>
+
+<h4>仕組み</h4>
+
+<pre><code>1. 各ノードは定期的（例: 1秒ごと）にランダムな別ノードを選ぶ
+2. 選んだノードと「自分が知っている全ノードの状態」を交換
+3. 新しい情報を得たら自分の状態を更新
+
+→ 対数時間（O(log N)）でクラスタ全体に情報が伝播</code></pre>
+
+<p>中央集権的な管理ノードを持たないため、<strong>単一障害点がない</strong>。疫病の伝播モデルに似ているため "Gossip" や "Epidemic" と呼ばれる。</p>
+
+<h3>6. Dynamo vs DynamoDB の決定的な違い</h3>
+
+<p>DynamoDB（2012年〜）は Dynamo論文の設計を<strong>多くの点で変更している</strong>。2022年 USENIX ATC の論文 "Amazon DynamoDB: A Scalable, Predictably Performant, and Fully Managed NoSQL Database Service" で詳細が公開された。</p>
+
+<h4>主要な相違点</h4>
+
+<table>
+  <thead>
+    <tr><th>観点</th><th>Dynamo（2007論文）</th><th>DynamoDB（2012〜）</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>複製モデル</strong></td><td>リーダーレス（Quorum）</td><td><strong>単一リーダー（Multi-Paxos）</strong></td></tr>
+    <tr><td><strong>整合性の選択</strong></td><td>結果整合性のみ</td><td><strong>強整合性 or 結果整合性</strong>（クライアントが選択）</td></tr>
+    <tr><td><strong>パーティション管理</strong></td><td>P2P ハッシュリング（Gossip）</td><td><strong>中央集権的なパーティションマップ + 配置サービス</strong></td></tr>
+    <tr><td><strong>テナンシー</strong></td><td>シングルテナント（社内サービスごとに別クラスタ）</td><td><strong>マルチテナント</strong>（共通インフラで多数顧客を捌く）</td></tr>
+    <tr><td><strong>Vector Clock</strong></td><td>あり</td><td><strong>なし</strong>（単一リーダーなので不要）</td></tr>
+    <tr><td><strong>運用モデル</strong></td><td>各チームが自前運用</td><td><strong>フルマネージドサービス</strong></td></tr>
+    <tr><td><strong>SKの存在</strong></td><td>なし（純粋KV）</td><td><strong>あり</strong>（Partition Key + Sort Key + GSI）</td></tr>
+  </tbody>
+</table>
+
+<h4>なぜ変わったのか</h4>
+
+<p>Dynamo 論文の設計は研究として優れていたが、<strong>商用マネージドサービス</strong>として運用するには問題があった:</p>
+
+<ol>
+  <li><strong>Vector Clock の複雑さ</strong>: semantic reconciliation をクライアント側に押し付けるので、開発者体験が悪い</li>
+  <li><strong>結果整合性のみの制限</strong>: 「書いた直後に読めない」挙動がアプリケーション開発を難しくする</li>
+  <li><strong>P2P Gossip の運用難</strong>: メンバーシップ情報の不整合がトラブルの原因になりやすい</li>
+  <li><strong>マルチテナント要求</strong>: 一顧客の暴走が他顧客に波及しないよう、厳密なリソース分離が必要</li>
+</ol>
+
+<p>こうした課題を解決するため、DynamoDB は「Dynamo論文の設計思想（ハッシュ分散、水平スケール）」を継承しつつ、<strong>中身の実装を大幅に再設計</strong>した。</p>
+
+<h3>7. DHT の制約が DynamoDB 仕様に残した影響</h3>
+
+<p>DynamoDB が Dynamo論文から離れた部分は多いが、<strong>DHTという根本構造は引き継いでいる</strong>。そのため DynamoDB の仕様制約のほとんどは「DHT であることの必然」である:</p>
+
+<table>
+  <thead>
+    <tr><th>DynamoDB の仕様</th><th>DHT 由来の理由</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PK は完全一致のみ</td><td>ハッシュ関数で物理配置を決めるため、範囲検索不可</td></tr>
+    <tr><td>PK 変更不可</td><td>値を変えるとハッシュ値が変わる = 置き場所が変わる</td></tr>
+    <tr><td>PK のカーディナリティが重要</td><td>ハッシュ分散が偏るとホットパーティションになる</td></tr>
+    <tr><td>GSI は「コピー」</td><td>別のキーで分散し直すため、物理的に別のデータが必要</td></tr>
+    <tr><td>JOIN 不可</td><td>ハッシュテーブルは関係演算のための構造ではない</td></tr>
+    <tr><td>横断 Scan は高コスト</td><td>全パーティションに聞きに行く必要がある</td></tr>
+  </tbody>
+</table>
+
+<p>DynamoDB で「なぜこの制約があるのか?」と迷ったら、<strong>「ハッシュテーブルの性質」に立ち戻る</strong>と大抵の疑問が解ける。</p>
+
+<h2>比較表</h2>
+
+<h3>Dynamo 系 DB の系譜</h3>
+
+<table>
+  <thead>
+    <tr><th>DB</th><th>開発元</th><th>リリース</th><th>特徴</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Dynamo</td><td>Amazon</td><td>2007（論文）</td><td>社内専用、P2P、リーダーレス</td></tr>
+    <tr><td>Voldemort</td><td>LinkedIn</td><td>2009</td><td>オープンソース、Dynamo風</td></tr>
+    <tr><td>Cassandra</td><td>Facebook→Apache</td><td>2008</td><td>Dynamo + BigTable、広く普及</td></tr>
+    <tr><td>Riak</td><td>Basho</td><td>2009</td><td>純粋な Dynamo クローン、開発終了</td></tr>
+    <tr><td>DynamoDB</td><td>Amazon</td><td>2012</td><td>マネージド、単一リーダー、SK追加</td></tr>
+    <tr><td>ScyllaDB</td><td>ScyllaDB Inc</td><td>2015</td><td>Cassandra 互換、C++ 実装で高速</td></tr>
+  </tbody>
+</table>
+
+<h3>DHT 4大アルゴリズムまとめ</h3>
+
+<table>
+  <thead>
+    <tr><th>アルゴリズム</th><th>解決する問題</th><th>DynamoDBでの採用</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Consistent Hashing</td><td>データ配置と再配置の最小化</td><td>✅（内部で採用）</td></tr>
+    <tr><td>Vector Clock</td><td>並行更新の因果判定</td><td>❌（単一リーダーで不要）</td></tr>
+    <tr><td>Quorum (NRW)</td><td>可用性と整合性のtrade-off</td><td>部分採用（強整合性オプションで変化）</td></tr>
+    <tr><td>Gossip Protocol</td><td>クラスタメンバーシップの共有</td><td>❌（中央集権的な配置サービス）</td></tr>
+  </tbody>
+</table>
+
+<h2>よくある誤解</h2>
+
+<ul>
+  <li><p><strong>誤解: DynamoDB は Dynamo論文の実装そのもの</strong><br>
+  実際: DynamoDB は Dynamo論文の設計から大きく変わっており、特に<strong>複製モデル（リーダーレス → 単一リーダー）</strong>と<strong>整合性モデル（結果整合性のみ → 強整合性も選択可能）</strong>が根本的に異なる。論文の設計思想（ハッシュ分散、水平スケール、マネージド運用の前身）は引き継いでいるが、内部実装は別物と考えた方が正確。</p></li>
+
+  <li><p><strong>誤解: Consistent Hashing はサーバー数が変わっても一切再配置しない</strong><br>
+  実際: 全く再配置しないわけではなく、<strong>全体の約 K/N 程度</strong>のデータが再配置される。ただし素朴なハッシュ分散の「ほぼ全データ移動」と比べると遥かに少ない。</p></li>
+
+  <li><p><strong>誤解: Vector Clock があれば全ての conflict が解決できる</strong><br>
+  実際: Vector Clock は<strong>因果関係の判定</strong>をするだけで、<strong>並行更新の自動解決はしない</strong>。最終的な conflict 解決はクライアント側の semantic reconciliation か、システム側のポリシー（last-write-wins など）に任される。</p></li>
+
+  <li><p><strong>誤解: DynamoDB の GSI は内部的に別テーブルだからコストが倍</strong><br>
+  実際: 「内部的に別テーブル」は正しいが、コストが「倍」というより<strong>GSIの数に応じて倍々</strong>。GSI 3本なら元テーブルのストレージとWCUが合計で約4倍（元1 + GSI3）になる。</p></li>
+
+  <li><p><strong>誤解: Quorum は Paxos や Raft と同じ</strong><br>
+  実際: Quorum はより素朴な仕組みで、Paxos/Raft は<strong>線形化可能性</strong>を保証する本格的な合意アルゴリズム。DynamoDB は内部で Multi-Paxos を使っていて、単なる Quorum よりも強い整合性保証を得ている。</p></li>
+</ul>
+
+<h2>まとめ</h2>
+
+<ul>
+  <li>Dynamo論文（SOSP 2007）は <strong>既知の分散アルゴリズム（Consistent Hashing、Vector Clock、Quorum、Gossip）を組み合わせて商用DHTを作った</strong>論文。新しいアルゴリズムの発明ではなく、<strong>商用レベルの統合</strong>が貢献。</li>
+  <li>Consistent Hashing は「ハッシュ値空間を円環として扱い、近接するサーバーに key を配置する」手法。サーバー追加/削除時の再配置を <code>K/N</code> に抑える。Virtual Node で負荷を平均化。</li>
+  <li>Vector Clock は並行更新の因果判定。Dynamo ではショッピングカートの semantic reconciliation で活用された。</li>
+  <li>Quorum（N, R, W）は <code>W + R &gt; N</code> で強整合性を達成できる。<code>N=3, W=2, R=2</code> が古典的なバランス設定。</li>
+  <li><strong>DynamoDB は Dynamo論文とは実装が別物</strong>。単一リーダー（Multi-Paxos）、中央集権的パーティション管理、マルチテナントアーキテクチャを採用している。論文の設計思想は継承しているが、中身は2012年以降大きく進化した。</li>
+  <li>それでも <strong>DynamoDB の制約の大部分は「DHT であること」から導かれる</strong>。PK完全一致のみ、PK変更不可、ホットパーティション問題、GSIがコピー、JOIN不可、Scanが高コスト — 全てハッシュテーブルの性質の直接の帰結。</li>
+</ul>
+
+<h2>参考文献</h2>
+
+<ul>
+  <li><a href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf">Dynamo: Amazon's Highly Available Key-value Store (SOSP 2007 PDF)</a> — 原論文、Werner Vogels の公式PDF配布。閲覧日 2026-04-18</li>
+  <li><a href="https://dl.acm.org/doi/10.1145/1294261.1294281">Dynamo paper - ACM Digital Library</a> — ACM 公式掲載。閲覧日 2026-04-18</li>
+  <li><a href="https://www.usenix.org/system/files/atc22-elhemali.pdf">Amazon DynamoDB: A Scalable, Predictably Performant, and Fully Managed NoSQL Database Service (USENIX ATC 2022)</a> — DynamoDB の現行アーキテクチャを詳述した後継論文。閲覧日 2026-04-18</li>
+  <li><a href="https://en.wikipedia.org/wiki/Consistent_hashing">Consistent hashing - Wikipedia</a> — Consistent Hashing の定義、Virtual Node の一般的実装。閲覧日 2026-04-18</li>
+  <li><a href="https://en.wikipedia.org/wiki/Dynamo_(storage_system)">Dynamo (storage system) - Wikipedia</a> — Dynamo 自体の整理。DynamoDB との違いにも言及。閲覧日 2026-04-18</li>
+  <li><a href="https://www.alexdebrie.com/posts/dynamodb-paper/">Key Takeaways from the DynamoDB Paper - Alex DeBrie</a> — USENIX 2022 論文の要約と Dynamo との比較。閲覧日 2026-04-18</li>
+  <li><a href="https://brooker.co.za/blog/2022/07/12/dynamodb.html">The DynamoDB paper - Marc Brooker's Blog</a> — AWSプリンシパルエンジニアによるUSENIX論文解説。閲覧日 2026-04-18</li>
+  <li><a href="https://brooker.co.za/blog/2025/08/15/dynamo-dynamodb-dsql.html">Dynamo, DynamoDB, and Aurora DSQL - Marc Brooker's Blog</a> — Dynamo系DBの系譜と現代の AWS DB ラインナップ。閲覧日 2026-04-18</li>
+  <li><a href="https://www.dynamodbguide.com/the-dynamo-paper/">The Dynamo Paper - DynamoDB Guide</a> — Alex DeBrie による Dynamo 論文の章解説。閲覧日 2026-04-18</li>
+  <li><a href="https://www.educative.io/answers/how-are-vector-clocks-used-in-dynamo">How are vector clocks used in Dynamo? - Educative</a> — Vector Clock の Dynamo 実装解説。閲覧日 2026-04-18</li>
+  <li><a href="https://www.geeksforgeeks.org/computer-networks/vector-clocks-in-distributed-systems/">Vector Clocks in Distributed Systems - GeeksforGeeks</a> — Vector Clock の一般的説明。閲覧日 2026-04-18</li>
+  <li><a href="https://efficientcodeblog.wordpress.com/2017/12/25/leaderless-replication-dynamo-style-quorum-consensus-eventual-consistency-high-availability-and-low-latency/">Leaderless Replication: Dynamo-style, Quorum Consensus - The Algorists</a> — NRW quorum の詳細解説。閲覧日 2026-04-18</li>
+  <li><a href="https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html">Dynamo | Apache Cassandra Documentation</a> — Cassandra から見た Dynamo 系アーキテクチャ。閲覧日 2026-04-18</li>
+  <li><a href="https://www.amazon.science/latest-news/amazons-dynamodb-10-years-later">Amazon's DynamoDB — 10 years later - Amazon Science</a> — Amazon 公式の振り返り記事。閲覧日 2026-04-18</li>
+</ul>
+
+<hr>
+
+<p><em>Saved at 2026-04-18 via /learning-flow:reference</em></p>
+
+<div class="foot">← <a href="../../index.html">Phase 1 ルーター</a> ／ <a href="../../main.md">Markdown 目次</a></div>
+</main></body></html>

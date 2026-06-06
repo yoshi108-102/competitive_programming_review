@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 リファレンス / Q&A</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 リファレンス / Q&A · <a href="../index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>01. Terraform apply 手順と動作確認</h1>
+
+<blockquote>
+<p>出典:</p>
+<ul>
+<li><a href="https://developer.hashicorp.com/terraform/cli/commands/apply">Terraform CLI - apply</a></li>
+<li><a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/how-to-test-method.html">API Gateway - test invoke</a></li>
+</ul>
+<p>閲覧日 2026-05-09</p>
+</blockquote>
+
+<h2>概要</h2>
+
+<p>Phase 1 をデプロイする手順。<strong>実 AWS 環境への適用</strong>となるため、課金が発生する。</p>
+
+<h2>手順</h2>
+
+<h3>Step 1+2: Lambda ZIP build → terraform plan</h3>
+
+<p>ルートの <code>Makefile</code> で 1 コマンド:</p>
+
+<pre><code>make plan</code></pre>
+
+<p>→ <code>make build</code> が前提として走り <code>backend/dist/lambda.zip</code> (~16MB) を生成、その後 <code>terraform plan -out=tfplan</code>。
+ZIP のソースに変更がなければ build はスキップ (Make の依存解決による)。</p>
+
+<p>主な作成リソース:</p>
+<ul>
+<li>IAM ロール (Lambda execution)</li>
+<li>Lambda 関数 × 3 (save_user / sync_submissions / get_submissions)</li>
+<li>CloudWatch Log Group × 3</li>
+<li>API Gateway リソース・メソッド・統合 × 4 endpoints + OPTIONS × 4</li>
+<li>API Gateway Deployment / Stage</li>
+</ul>
+
+<p>予想されるリソース数: 概ね 30〜40 個。意図しないリソースが出ていないか確認。</p>
+
+<h3>Step 3: terraform apply</h3>
+
+<pre><code>make apply</code></pre>
+
+<p><code>make plan</code> で生成済みの <code>tfplan</code> を適用。完了まで通常 1〜2 分。</p>
+
+<h3>Step 4: 出力値の確認</h3>
+
+<pre><code>terraform output</code></pre>
+
+<p>返ってくる値:</p>
+<ul>
+<li><code>api_gateway_url</code> (例: <code>https://abc123.execute-api.ap-northeast-1.amazonaws.com/prod</code>)</li>
+<li><code>cognito_user_pool_id</code>, <code>cognito_user_pool_client_id</code></li>
+<li><code>dynamodb_*_table_name</code></li>
+</ul>
+
+<p>これを <code>frontend/.env.local</code> に設定 (Task 18 で使用)。</p>
+
+<h3>Step 5: 公開エンドポイント (<code>/health</code>) で疎通確認</h3>
+
+<p>認証不要で叩ける <code>/health</code>:</p>
+
+<pre><code>curl "$(terraform output -raw api_gateway_url)/health"
+# → {"status":"ok"}</code></pre>
+
+<p>これが返れば API Gateway / デプロイは成功している。</p>
+
+<h3>Step 6: 認証付きエンドポイントで疎通確認</h3>
+
+<p>Cognito でユーザーを admin 経由で作成（self-signup を無効化しているため、<code>Task 17 §A</code> 参照）:</p>
+
+<pre><code>USER_POOL_ID=$(terraform output -raw cognito_user_pool_id)
+aws cognito-idp admin-create-user \
+  --user-pool-id "$USER_POOL_ID" \
+  --username "test@example.com" \
+  --temporary-password "TempPass123!" \
+  --message-action SUPPRESS
+
+# 永続パスワードに変更
+aws cognito-idp admin-set-user-password \
+  --user-pool-id "$USER_POOL_ID" \
+  --username "test@example.com" \
+  --password "RealPass123!" \
+  --permanent</code></pre>
+
+<p>JWT トークンを取得:</p>
+
+<pre><code>CLIENT_ID=$(terraform output -raw cognito_user_pool_client_id)
+TOKEN=$(aws cognito-idp initiate-auth \
+  --auth-flow USER_PASSWORD_AUTH \
+  --client-id "$CLIENT_ID" \
+  --auth-parameters USERNAME=test@example.com,PASSWORD=RealPass123! \
+  --query 'AuthenticationResult.IdToken' \
+  --output text)</code></pre>
+
+<blockquote>
+<p>補足（公式 docs には記載なし）: <code>USER_PASSWORD_AUTH</code> は Cognito client の <code>explicit_auth_flows</code> で許可されている必要がある。
+現状 <code>terraform/modules/cognito/main.tf</code> は <code>ALLOW_USER_SRP_AUTH</code> のみ許可しているので、CLI からの動作確認には一時的に <code>ALLOW_USER_PASSWORD_AUTH</code> を追加するか、Frontend 経由でログインする。</p>
+</blockquote>
+
+<p>API を叩く:</p>
+
+<pre><code>API_URL=$(terraform output -raw api_gateway_url)
+
+# AtCoder ユーザー名を登録
+curl -X POST "$API_URL/users/me" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"atcoder_username": "chokudai"}'
+
+# 提出を同期
+curl -X POST "$API_URL/sync" -H "Authorization: Bearer $TOKEN"
+
+# 一覧
+curl "$API_URL/submissions" -H "Authorization: Bearer $TOKEN"</code></pre>
+
+<h3>Step 7: CloudWatch Logs で実行ログ確認</h3>
+
+<p>何か 5xx が返ったら CloudWatch Logs を見る:</p>
+
+<pre><code>aws logs tail /aws/lambda/atcoder-review-save-user-prod --follow</code></pre>
+
+<p><code>/aws/lambda/&lt;関数名&gt;</code> のロググループに stdout / stderr が流れる。Python の <code>print()</code> も CloudWatch に届く。</p>
+
+<h3>Step 8: クリーンアップ (検証後、課金停止)</h3>
+
+<pre><code>make destroy</code></pre>
+
+<p>削除順は Terraform が依存解決する（Lambda → API GW → IAM ロール → DynamoDB の順で消える）。</p>
+
+<h2>デバッグの当たりどころ</h2>
+
+<table>
+<thead>
+<tr><th>症状</th><th>当たり</th></tr>
+</thead>
+<tbody>
+<tr><td><code>/health</code> が 502</td><td>API Gateway デプロイ漏れ。<code>triggers</code> に該当リソース入ってるか</td></tr>
+<tr><td><code>/users/me</code> が 401</td><td>JWT 期限切れ or <code>Authorization: Bearer</code> ヘッダ未送信</td></tr>
+<tr><td><code>/users/me</code> が 403 (Forbidden)</td><td>Cognito Authorizer の <code>provider_arns</code> ミス、または ID Token ではなく Access Token を送ってる</td></tr>
+<tr><td>Lambda が 5xx (Internal Server Error)</td><td>CloudWatch Logs を見る。<code>Malformed Lambda proxy response</code> なら body を str 化忘れ (Task 3 の伏線)</td></tr>
+<tr><td><code>/submissions</code> が空</td><td>sync 未実行 or <code>last_sync_epoch</code> が現在時刻まで進んでて差分ゼロ</td></tr>
+</tbody>
+</table>
+
+<h2>重要ポイント</h2>
+
+<ul>
+<li><strong>apply 前に必ず <code>build_lambda.sh</code></strong> で ZIP を生成</li>
+<li><code>terraform plan</code> の出力で想定外リソースが無いか確認</li>
+<li><code>terraform output</code> で得られる値を Frontend <code>.env.local</code> に設定</li>
+<li><code>/health</code> で疎通 → JWT 取得 → <code>/users/me</code> で End-to-End 確認の順で</li>
+<li>検証完了後は <strong><code>terraform destroy</code> で課金停止</strong>を忘れない</li>
+</ul>
+
+<h2>関連</h2>
+
+<ul>
+<li>議題・Q&amp;A: （<code>lesson</code> 中に発生したら <code>reference/</code> 配下にリンクが追加されます）</li>
+<li>関連 Task: Task 16 (build script), Task 18 (Frontend 結合)</li>
+</ul>
+
+<hr>
+
+<p><em>Auto-generated at 2026-05-09 via /learning-flow:material（公式 docs 駆動）</em></p>
+
+<div class="foot">← <a href="../index.html">Phase 1 ルーター</a> ／ <a href="../main.md">Markdown 目次</a></div>
+</main></body></html>
