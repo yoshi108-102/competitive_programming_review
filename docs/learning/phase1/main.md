@@ -176,3 +176,19 @@ Topic 2 のクイズで「わからない」だった論点の再出題。
 **関連ノート**: [02-lambda-proxy-integration-and-cors.md](02-lambda-proxy-integration-and-cors.md), [practice/reference/cors-only-blocks-reads-not-writes.md](practice/reference/cors-only-blocks-reads-not-writes.md), [practice/reference/preflight-bypass-via-simple-post.md](practice/reference/preflight-bypass-via-simple-post.md)
 
 **回答**:
+
+---
+
+> ルーティング: ブラウザ閲覧は [index.html](index.html) ／ テスト UI は [demo/index.html](demo/index.html)
+
+## ハンズオン — 実 AWS sandbox
+
+普段は無料で検証し、観測したい時だけ短時間 apply→観測→destroy する（apply から実課金）。
+
+1. `make sandbox-test-phase1` — 無料検証（moto + terraform validate）
+2. `make sandbox-up-phase1` — terraform apply（実課金開始）
+3. `make sandbox-load-phase1` — 無認証トラフィックを生成（テストユーザー不要）。認証あり負荷は TEST_PASSWORD=... make sandbox-load-phase1
+4. `make sandbox-watch-phase1` — API GW の Count / 4XXError / Latency、Lambda、DynamoDB、Cognito メトリクス（反映まで 2〜5 分）
+5. `make sandbox-down-phase1` — terraform destroy（課金停止）
+
+> ⚠ phase1 は本番スタックを観測するダッシュボードのみ作成（本番アプリは別途デプロイ済みが前提）。

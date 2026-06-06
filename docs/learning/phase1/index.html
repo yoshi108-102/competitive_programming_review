@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 — リクエストの旅 — Cognito → API GW → Lambda → DynamoDB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--accent:#2cb696;--ink:#202124;--muted:#6b6f76;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}
+.topbar .in{max-width:760px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;gap:10px;font-size:14px;color:var(--ink)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:760px;margin:0 auto;padding:30px 20px 80px}
+.eyebrow{color:var(--accent);font-weight:700;font-size:13px;letter-spacing:.08em}
+h1{font-size:27px;line-height:1.4;margin:8px 0 10px}
+.lead{color:var(--muted);font-size:15px;margin:0}
+.pills{margin-top:12px;display:flex;gap:7px;flex-wrap:wrap}
+.pill{display:inline-block;font-size:12px;color:var(--muted);background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:3px 11px}
+.card{border:1px solid var(--line);border-radius:12px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin:20px 0}
+.cta{display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid var(--accent)}
+.cta .t{font-weight:700;font-size:16px}.cta .s{color:var(--muted);font-size:13px;margin-top:2px}
+.btn{flex:0 0 auto;background:var(--accent);color:#fff;border-radius:8px;padding:10px 16px;font-weight:700;font-size:14px;white-space:nowrap}
+.btn:hover{opacity:.9;text-decoration:none}
+.sec{font-size:12px;letter-spacing:.08em;color:var(--muted);font-weight:700;margin:36px 0 8px}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:0;display:grid;gap:12px}
+ol.steps li{position:relative;padding:13px 16px 14px 50px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:14px}
+ol.steps li::before{counter-increment:s;content:counter(s);position:absolute;left:15px;top:13px;width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:var(--soft);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+.cmd{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:#f6f6f4;border:1px solid var(--line);border-radius:6px;padding:8px 11px;margin:8px 0 0;color:var(--ink)}
+.tstamp{color:var(--muted);font-size:12px;margin-top:6px}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:12px;margin:14px 0}
+.note.warn{border-left-color:var(--accent);color:var(--ink)}
+ul.mat{list-style:none;padding:0;margin:0;display:grid;gap:8px}
+ul.mat li{border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:14px}
+ul.mat li .d{color:var(--muted);font-size:12px;margin-top:2px}
+.foot{margin-top:48px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b>&nbsp;— Phase 1 ルーター</div></div>
+<div class="wrap">
+  <p class="eyebrow">PHASE 1</p>
+  <h1>リクエストの旅 — Cognito → API GW → Lambda → DynamoDB</h1>
+  <p class="lead">Cognito / API Gateway / Lambda / DynamoDB</p>
+  <div class="pills"><span class="pill">🧪 テスト UI</span><span class="pill">📖 教材</span><span class="pill">☁️ 実 AWS ハンズオン</span></div>
+
+  <a class="card cta" href="./demo/index.html">
+    <div><div class="t">🧪 テスト UI を開く</div><div class="s">ブラウザだけで概念を体験できるインタラクティブ・デモ（実 AWS 不要）</div></div>
+    <span class="btn">開く →</span>
+  </a>
+
+  <p class="sec">ハンズオン — 実 AWS sandbox を動かす</p>
+  <p class="note">普段は無料で検証し、CloudWatch を見たい時だけ短時間 apply→観測→destroy します。<b>apply から実課金</b>が始まるので、終わったら必ず destroy してください。</p>
+  <ol class="steps">
+    <li><b>無料検証</b>（課金なし · moto + terraform validate）<span class="cmd">make sandbox-test-phase1</span></li>
+    <li><b>デプロイ</b>（実課金開始）<span class="cmd">make sandbox-up-phase1</span></li>
+    <li><b>負荷生成</b> — 無認証トラフィックを生成（テストユーザー不要）。認証あり負荷は <code>TEST_PASSWORD=... make sandbox-load-phase1</code><span class="cmd">make sandbox-load-phase1</span></li>
+    <li><b>観測</b> — API GW の Count / 4XXError / Latency、Lambda、DynamoDB、Cognito メトリクス<span class="cmd">make sandbox-watch-phase1</span><div class="tstamp">⏱ 反映まで 2〜5 分</div></li>
+    <li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase1</span></li>
+  </ol>
+  <p class="note warn">⚠ phase1 は<b>本番スタックを観測するダッシュボードのみ</b>作成（本番アプリは別途デプロイ済みが前提）。</p>
+
+  <p class="sec">教材</p>
+  <ul class="mat">
+    <li><a href="./02-lambda-proxy-integration-and-cors.md">Lambda の HTTP レスポンス形式と CORS / SOP の関係</a><div class="d">Markdown 教材 · note風HTML版は順次追加</div></li>
+    <li><a href="./03-boto3-resource-vs-client.md">01. Boto3 Resource API vs Client API</a><div class="d">Markdown 教材 · note風HTML版は順次追加</div></li>
+    <li><a href="./04-dynamodb-decimal-and-pagination.md">02. DynamoDB の 1MB 制限 / LastEvaluatedKey / Boto3 Paginators</a><div class="d">Markdown 教材 · note風HTML版は順次追加</div></li>
+    <li><a href="./05-lambda-execution-role-and-deployment.md">05. Lambda 実行ロールとデプロイパッケージ</a><div class="d">Markdown 教材 · note風HTML版は順次追加</div></li>
+    <li><a href="./06-api-gateway-rest-api-structure.md">01. API Gateway REST API のリソース構造</a><div class="d">Markdown 教材 · note風HTML版は順次追加</div></li>
+    <li><a href="./07-cognito-and-api-gateway-authorizer.md">07. Cognito User Pool と API Gateway Authorizer</a><div class="d">Markdown 教材 · note風HTML版は順次追加</div></li>
+  </ul>
+
+  <div class="foot">Markdown 目次は <a href="./main.md">main.md</a> ／ 設計は <code>docs/superpowers/specs/2026-05-31-aws-phase-sandboxes-design.md</code><br>これは学習用ページです。実 AWS の <code>apply</code> / <code>destroy</code> はご自身で実行してください（Claude は実行しません）。</div>
+</div>
+</body>
+</html>

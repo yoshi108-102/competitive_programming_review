@@ -126,11 +126,11 @@ demo: ## Phase デモの開き方を表示 (make demo-phaseN, N=1..10)
 	@echo "  例:     make demo-phase1     # docs/learning/phase1/demo/index.html を開く"
 	@echo
 	@echo "現在あるデモ:"
-	@ls -1 docs/learning/phase*/demo/index.html 2>/dev/null | sed 's/^/  - /' || echo "  (まだありません)"
+	@ls -1 docs/learning/phase*/index.html 2>/dev/null | sed 's/^/  - /' || echo "  (まだありません)"
 
 # Phase ごとのデモを既定ブラウザで開く (例: make demo-phase5)
 demo-phase%:
-	@f="docs/learning/phase$*/demo/index.html"; \
+	@f="docs/learning/phase$*/index.html"; \
 	 if [ ! -f "$$f" ]; then echo "ERROR: $$f が見つかりません" >&2; exit 1; fi; \
 	 echo "Opening $$f"; \
 	 open "$$f" 2>/dev/null || xdg-open "$$f" 2>/dev/null || echo "手動で開いてください: $$f"
