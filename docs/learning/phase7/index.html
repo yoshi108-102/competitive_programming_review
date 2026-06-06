@@ -63,10 +63,12 @@ ul.mat li .d{color:var(--muted);font-size:12px;margin-top:2px}
     <li><b>観測</b> — ルール発火数 / 失敗数 / ターゲット Lambda<span class="cmd">make sandbox-watch-phase7</span><div class="tstamp">⏱ rate は初回発火まで最大 60 秒</div></li>
     <li><b>後片付け</b>（課金停止）<span class="cmd">make sandbox-down-phase7</span></li>
   </ol>
+  <p class="note"><b>📋 もっと詳しく:</b> 各コマンドの期待出力・観察ポイントのチェックリスト・トラブルシュート・コスト目安は <a href="./handson.html">ハンズオン詳細（HTML）</a> ／ <a href="./handson.md">md</a> を参照。</p>
   <p class="note warn">⚠ <code>rate(1 minute)</code> ルールは<b>放置で毎分課金</b>。観測が終わったらすぐ destroy。<br>KMS を使う Phase は <code>destroy</code> 後も 7 日間の削除保留期間がある（ごく僅かな残コスト）。</p>
 
   <p class="sec">教材</p>
   <ul class="mat">
+    <li><a href="./handson.html">Phase 7 ハンズオン — EventBridge sandbox</a><a href="./handson.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
     <li><a href="./preview-eventbridge.html">Phase 7 プレビュー教材: EventBridge — スケジュール &amp; イベントバス</a><a href="./preview-eventbridge.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
   </ul>
 

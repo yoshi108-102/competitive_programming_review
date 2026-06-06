@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 8 ハンズオン</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#7c3aed;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+input[type=checkbox]{margin-right:7px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 8 ハンズオン · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Phase 8 ハンズオン — Step Functions sandbox</h1>
+
+<h2>前提条件</h2>
+
+<h3>AWS 認証・権限</h3>
+
+<ul>
+  <li>AWS CLI が設定済みであること（<code>aws sts get-caller-identity</code> でアカウント ID が返ること）</li>
+  <li>以下のサービスへの権限が必要:
+    <ul>
+      <li><code>states:*</code>（Step Functions）</li>
+      <li><code>lambda:*</code></li>
+      <li><code>dynamodb:*</code></li>
+      <li><code>sns:*</code></li>
+      <li><code>kms:*</code></li>
+      <li><code>logs:*</code></li>
+      <li><code>xray:*</code></li>
+      <li><code>cloudwatch:*</code></li>
+      <li><code>iam:CreateRole</code>、<code>iam:AttachRolePolicy</code> など</li>
+    </ul>
+  </li>
+  <li>管理者権限または相当の IAM ポリシーを持つプロファイルを使うこと</li>
+</ul>
+
+<h3>リージョン</h3>
+
+<p>デフォルトは <code>ap-northeast-1</code>（東京）。別リージョンで動かす場合は <code>AWS_REGION</code> 環境変数で上書きする。</p>
+
+<pre><code>export AWS_REGION=ap-northeast-1   # デフォルト。変更する場合のみ指定</code></pre>
+
+<h3>課金開始の注意</h3>
+
+<p><code>make sandbox-up-phase8</code>（terraform apply）を実行した時点から課金が始まる。
+KMS CMK は <code>destroy</code> 後も 7 日間の削除猶予期間（<code>deletion_window_in_days = 7</code>）が続くため、その間も KMS の費用が発生する。
+sandbox の目的外利用を防ぐため、観測が終わったら速やかに <code>make sandbox-down-phase8</code> を実行すること。</p>
+
+<h3>Phase 固有の前提</h3>
+
+<p>SNS email 通知を受け取る場合は <code>notify_email</code> 変数を自分のアドレスに変更し、apply 後に届く確認メールの「Confirm subscription」リンクをクリックする。
+デフォルト（<code>sandbox@example.com</code>）のままでも動作するが、通知メールは届かない。</p>
+
+<pre><code># notify_email を上書きして apply する場合
+terraform -chdir=terraform/sandboxes/phase8 apply \
+  -var="notify_email=your@email.com" -auto-approve</code></pre>
+
+<p>Python 3.12 が Lambda ランタイムとして使われる。ソースコードは <code>backend/sandboxes/phase8/handler.py</code>（5 ハンドラを 1 ファイルに集約）。</p>
+
+<hr>
+
+<h2>全体の流れ</h2>
+
+<table>
+  <thead>
+    <tr><th>ステップ</th><th>コマンド</th><th>内容</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>1. バリデーション</td><td><code>make sandbox-test-phase8</code></td><td>terraform validate（無料・ローカルのみ）</td></tr>
+    <tr><td>2. デプロイ</td><td><code>make sandbox-up-phase8</code></td><td>terraform apply（ここから課金）</td></tr>
+    <tr><td>3. 負荷生成</td><td><code>make sandbox-load-phase8</code></td><td>3 シナリオ 15 件の SFN 実行を投入</td></tr>
+    <tr><td>4. メトリクス観測</td><td><code>make sandbox-watch-phase8</code></td><td>CloudWatch 集計・コンソール URL 表示</td></tr>
+    <tr><td>5. 後片付け</td><td><code>make sandbox-down-phase8</code></td><td>terraform destroy（課金停止）</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>ステップ詳細</h2>
+
+<h3>Step 1: バリデーション（<code>make sandbox-test-phase8</code>）</h3>
+
+<h4>何が起きるか</h4>
+
+<p><code>terraform init -backend=false</code> + <code>terraform validate</code> をローカルで実行する。
+AWS への通信は発生しない。<code>backend/tests/sandboxes/phase8</code> ディレクトリが存在すれば moto pytest も先に走る。</p>
+
+<h4>実行コマンド</h4>
+
+<pre><code>make sandbox-test-phase8</code></pre>
+
+<h4>期待される出力例</h4>
+
+<pre><code>==> phase8 に moto テストなし (validate のみ)
+==> terraform validate phase8
+Success! The configuration is valid.</code></pre>
+
+<p>または moto テストがある場合:</p>
+
+<pre><code>==> moto pytest phase8
+collected 5 items
+
+tests/sandboxes/phase8/test_handler.py::test_validate_order_happy PASSED
+tests/sandboxes/phase8/test_handler.py::test_validate_order_invalid_amount PASSED
+...
+==> terraform validate phase8
+Success! The configuration is valid.</code></pre>
+
+<p><strong>所要時間</strong>: 10〜30 秒</p>
+
+<hr>
+
+<h3>Step 2: デプロイ（<code>make sandbox-up-phase8</code>）</h3>
+
+<h4>何が起きるか</h4>
+
+<p><code>terraform apply -auto-approve</code> を実行し、以下のリソースを作成する:</p>
+<ul>
+  <li>KMS CMK（<code>alias/phase8-sfn</code>）+ ローテーション有効</li>
+  <li>DynamoDB テーブル <code>phase8-orders</code>（KMS SSE / PAY_PER_REQUEST）</li>
+  <li>SNS トピック <code>phase8-order-notify</code> + email サブスクリプション</li>
+  <li>IAM ロール 2 つ（Lambda 用 / SFN 用）+ ポリシーアタッチ</li>
+  <li>Lambda 5 関数（<code>phase8-validate-order</code> / <code>phase8-charge-payment</code> / <code>phase8-update-inventory</code> / <code>phase8-notify-customer</code> / <code>phase8-compensate-order</code>）</li>
+  <li>CloudWatch Log Groups 6 つ（Lambda × 5 + SFN 実行ログ）</li>
+  <li>Step Functions ステートマシン <code>phase8-order-saga</code>（Standard / X-Ray / KMS 暗号化 / ALL ログ）</li>
+  <li>CloudWatch ダッシュボード <code>Phase8-StepFunctions</code></li>
+  <li>CloudWatch アラーム <code>phase8-sfn-execution-failures</code>（1 分に 3 件以上失敗でアラート）</li>
+</ul>
+
+<h4>実行コマンド</h4>
+
+<pre><code>make sandbox-up-phase8</code></pre>
+
+<h4>期待される出力例</h4>
+
+<pre><code>Initializing the backend...
+Initializing provider plugins...
+...
+Plan: 24 to add, 0 to change, 0 to destroy.
+aws_kms_key.phase8: Creating...
+aws_dynamodb_table.orders: Creating...
+...
+aws_sfn_state_machine.order_saga: Creation complete after 8s [id=arn:aws:states:ap-northeast-1:123456789012:stateMachine:phase8-order-saga]
+aws_cloudwatch_dashboard.phase8: Creation complete after 2s
+
+Apply complete! Resources: 24 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+state_machine_arn = "arn:aws:states:ap-northeast-1:123456789012:stateMachine:phase8-order-saga"
+state_machine_name = "phase8-order-saga"
+dashboard_url = "https://ap-northeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#dashboards:name=Phase8-StepFunctions"
+orders_table_name = "phase8-orders"
+sns_topic_arn = "arn:aws:sns:ap-northeast-1:123456789012:phase8-order-notify"
+kms_key_arn = "arn:aws:kms:ap-northeast-1:123456789012:key/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"</code></pre>
+
+<blockquote>SNS email を指定した場合、apply 完了後すぐに確認メールが届く。Subject が <code>AWS Notification - Subscription Confirmation</code> のメールの「Confirm subscription」リンクをクリックしないと通知が届かない。</blockquote>
+
+<p><strong>所要時間</strong>: 2〜4 分</p>
+
+<hr>
+
+<h3>Step 3: 負荷生成（<code>make sandbox-load-phase8</code>）</h3>
+
+<h4>何が起きるか</h4>
+
+<p><code>load.sh</code> が以下の 3 シナリオで Step Functions 実行を計 15 件投入する。</p>
+
+<table>
+  <thead>
+    <tr><th>シナリオ</th><th>件数</th><th>入力の特徴</th><th>期待される結果</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>正常系（Happy path）</td><td>10 件</td><td><code>amount</code> = 1000〜9999（ランダム）、<code>items</code> に <code>SKU-A</code> × 2</td><td><code>OrderSucceeded</code></td></tr>
+    <tr><td>補償パス（validate 失敗）</td><td>3 件</td><td><code>amount=0</code> → <code>validate_order</code> が <code>ValueError</code></td><td><code>CompensateOrder</code> → <code>OrderFailed</code></td></tr>
+    <tr><td>在庫不足パス（inventory 失敗）</td><td>2 件</td><td><code>qty=9999</code> / <code>SKU-RARE</code> → <code>update_inventory</code> が失敗</td><td><code>CompensateOrder</code> → <code>OrderFailed</code></td></tr>
+  </tbody>
+</table>
+
+<p>各実行の <code>name</code> はユニーク（<code>happy-order-{timestamp}-{i}</code> など）なので重複衝突しない。</p>
+
+<h4>実行コマンド</h4>
+
+<pre><code>make sandbox-load-phase8</code></pre>
+
+<h4>期待される出力例</h4>
+
+<pre><code>INFO: Looking up state machine ARN...
+Target SFN: arn:aws:states:ap-northeast-1:123456789012:stateMachine:phase8-order-saga
+
+=== Scenario 1: Happy path (10 executions) ===
+arn:aws:states:ap-northeast-1:123456789012:execution:phase8-order-saga:happy-order-1748000000-1
+arn:aws:states:ap-northeast-1:123456789012:execution:phase8-order-saga:happy-order-1748000000-2
+...（10 行）
+
+=== Scenario 2: Compensation path — amount=0 (3 executions) ===
+arn:aws:states:ap-northeast-1:123456789012:execution:phase8-order-saga:fail-fail-1748000001-1
+...（3 行）
+
+=== Scenario 3: Inventory shortage path (2 executions) ===
+arn:aws:states:ap-northeast-1:123456789012:execution:phase8-order-saga:inv-inv-1748000002-1
+...（2 行）
+
+All executions submitted. Wait ~30s then run: make sandbox-watch-phase8
+
+=== Recent executions (direct API) ===
+------------------------------------------------------------------
+|                        ListExecutions                          |
++-----------------------------------+------------+--------------+
+|               name                |   status   |    start     |
++-----------------------------------+------------+--------------+
+|  happy-order-1748000000-1        |  RUNNING   |  2026-06-06  |
+|  happy-order-1748000000-2        |  SUCCEEDED |  2026-06-06  |
+...</code></pre>
+
+<p><strong>所要時間</strong>: 1〜2 分（スクリプト実行 + 各実行の処理自体は非同期）</p>
+
+<hr>
+
+<h3>Step 4: メトリクス観測（<code>make sandbox-watch-phase8</code>）</h3>
+
+<h4>何が起きるか</h4>
+
+<p><code>watch.sh</code> が以下を順に実行する:</p>
+<ol>
+  <li>CloudWatch ダッシュボードの存在確認（<code>get-dashboard</code>）</li>
+  <li><strong>120 秒の待機</strong>（CloudWatch メトリクスの反映遅延対応）</li>
+  <li><code>ExecutionsStarted</code> / <code>ExecutionsSucceeded</code> / <code>ExecutionsFailed</code> / <code>ExecutionsTimedOut</code> を直近 10 分で集計</li>
+  <li><code>ExecutionTime</code> の P99 を取得</li>
+  <li>Lambda 5 関数それぞれの <code>Errors</code> 件数を集計</li>
+  <li>CloudWatch Logs から <code>ExecutionFailed</code> イベントを直近 10 分でフィルタ</li>
+  <li>コンソール Deep Link（ステートマシン / ダッシュボード / X-Ray）を出力</li>
+  <li>実行履歴テーブル（直近 20 件）を出力</li>
+</ol>
+
+<h4>実行コマンド</h4>
+
+<pre><code>make sandbox-watch-phase8</code></pre>
+
+<h4>期待される出力例</h4>
+
+<pre><code>INFO: CloudWatch メトリクスの反映には 1〜5 分かかります。
+...
+
+=== [0] Dashboard smoke test ===
+OK: dashboard exists
+
+=== [1] メトリクス反映待ち (Step Functions は ~2-3 分遅延) ===
+    60 秒 sleep します...
+    さらに 60 秒...
+    反映待ち完了。以下のメトリクスを取得します。
+
+=== [2] ExecutionsStarted / Succeeded / Failed / TimedOut ===
+  ExecutionsStarted:              15
+  ExecutionsSucceeded:            10
+  ExecutionsFailed:               5
+  ExecutionsTimedOut:             0
+
+=== [3] ExecutionTime P99 (ms) ===
+-------------------------------------------
+|      GetMetricStatistics                |
++-----------------------+-----------------+
+|          p99          |      time       |
++-----------------------+-----------------+
+|  3241.0               |  2026-06-06...  |
++-----------------------+-----------------+
+
+=== [4] Lambda Errors 集計 ===
+  phase8-validate-order:           Errors: 3
+  phase8-charge-payment:           Errors: 0
+  phase8-update-inventory:         Errors: 2
+  phase8-notify-customer:          Errors: 0
+  phase8-compensate-order:         Errors: 0
+
+=== [5] CloudWatch Logs — SFN 実行失敗ログ (直近10分) ===
+{"type":"ExecutionFailed","details":{"error":"OrderProcessingFailed",...}}
+...
+
+=== [6] Console Deep Links ===
+  State Machine:
+  https://ap-northeast-1.console.aws.amazon.com/states/home?region=ap-northeast-1#/statemachines/view/...
+
+  CloudWatch Dashboard:
+  https://ap-northeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#dashboards:name=Phase8-StepFunctions
+
+  X-Ray Service Map:
+  https://ap-northeast-1.console.aws.amazon.com/xray/home?region=ap-northeast-1#/service-map
+
+=== [7] Execution History (直近 20 件) ===
+------------------------------------------------------
+|                   ListExecutions                   |
++--------------------------+------------+------------+
+|           Name           |  Status    |  Started   |
++--------------------------+------------+------------+
+|  happy-order-...-1       |  SUCCEEDED |  2026-06-06|
+|  fail-fail-...-1         |  FAILED    |  2026-06-06|
+...
+===================================================
+ 観測が終わったら必ず実行:
+   make sandbox-down-phase8
+===================================================</code></pre>
+
+<p><strong>所要時間</strong>: 3〜4 分（うち 2 分は待機）</p>
+
+<hr>
+
+<h3>Step 5: 後片付け（<code>make sandbox-down-phase8</code>）</h3>
+
+<h4>何が起きるか</h4>
+
+<p><code>terraform destroy -auto-approve</code> を実行し、作成した 24 リソースをすべて削除する。
+KMS CMK は即時削除されず、7 日間の削除猶予期間に入る（この間も課金が継続）。</p>
+
+<h4>実行コマンド</h4>
+
+<pre><code>make sandbox-down-phase8</code></pre>
+
+<h4>期待される出力例</h4>
+
+<pre><code>aws_cloudwatch_metric_alarm.sfn_failures: Destroying...
+aws_cloudwatch_dashboard.phase8: Destroying...
+...
+aws_sfn_state_machine.order_saga: Destruction complete after 5s
+aws_kms_key.phase8: Destroying...
+aws_kms_key.phase8: Destruction complete after 0s [note: 7-day pending deletion]
+
+Destroy complete! Resources: 24 destroyed.</code></pre>
+
+<p><strong>所要時間</strong>: 2〜3 分</p>
+
+<hr>
+
+<h2>観察ポイント（チェックリスト）</h2>
+
+<h3>CloudWatch ダッシュボード <code>Phase8-StepFunctions</code></h3>
+
+<ul>
+  <li><label><input type="checkbox" disabled> <strong>SFN Executions ウィジェット</strong>（時系列グラフ）で <code>ExecutionsStarted=15</code>、<code>ExecutionsSucceeded=10</code>、<code>ExecutionsFailed=5</code> が立ち上がっているか</label></li>
+  <li><label><input type="checkbox" disabled> <strong>SFN Execution Duration (P99) ウィジェット</strong>（<code>ExecutionTime</code> メトリクス）に値が表示されているか。正常系でも数秒（2000〜5000 ms 程度）かかることを確認する</label></li>
+  <li><label><input type="checkbox" disabled> <strong>Lambda Errors (all phase8 functions) ウィジェット</strong>（<code>AWS/Lambda</code> namespace）で <code>phase8-validate-order</code> と <code>phase8-update-inventory</code> にエラーが計上されているか（補償パス・在庫失敗パスに対応）</label></li>
+  <li><label><input type="checkbox" disabled> <strong>Lambda Duration P99 ウィジェット</strong>で <code>phase8-validate-order</code> と <code>phase8-charge-payment</code> の実行時間が確認できるか</label></li>
+  <li><label><input type="checkbox" disabled> <strong>SFN Execution Failures (last 20) ウィジェット</strong>（Logs Insights クエリ）に <code>ExecutionFailed</code> イベントが表示されているか。<code>details.error</code> カラムで <code>OrderProcessingFailed</code> と読めること</label></li>
+</ul>
+
+<h3>Step Functions コンソール</h3>
+
+<ul>
+  <li><label><input type="checkbox" disabled> ステートマシン <code>phase8-order-saga</code> の「Executions」タブで全 15 件が一覧表示されるか</label></li>
+  <li><label><input type="checkbox" disabled> 正常系実行のグラフビューで <code>ValidateOrder → ChargePayment → UpdateInventory → NotifyCustomer → OrderSucceeded</code> のフローが緑色で表示されるか</label></li>
+  <li><label><input type="checkbox" disabled> 補償パスの実行で <code>ValidateOrder（赤）→ OrderFailed</code> のショートサーキットが確認できるか</label></li>
+  <li><label><input type="checkbox" disabled> 在庫失敗パスの実行で <code>UpdateInventory（赤）→ CompensateOrder（青）→ OrderFailed</code> の補償フローが確認できるか</label></li>
+  <li><label><input type="checkbox" disabled> 任意の実行の「Execution input and output」タブで入力 JSON が <code>include_execution_data = true</code> によってログに記録されているか確認</label></li>
+</ul>
+
+<h3>X-Ray サービスマップ</h3>
+
+<ul>
+  <li><label><input type="checkbox" disabled> X-Ray コンソールで <code>phase8-order-saga</code> → <code>phase8-validate-order</code> / <code>phase8-charge-payment</code> など Lambda ノードが接続されたサービスマップが表示されるか</label></li>
+  <li><label><input type="checkbox" disabled> エラートレースを選択し、どのサブセグメントで例外が発生したかを確認できるか</label></li>
+</ul>
+
+<h3>CloudWatch Logs</h3>
+
+<ul>
+  <li><label><input type="checkbox" disabled> <code>/aws/states/phase8-order-saga</code> に実行ログが書き込まれているか（<code>level = "ALL"</code> なので全ステートの入出力が記録される）</label></li>
+  <li><label><input type="checkbox" disabled> <code>/aws/lambda/phase8-validate-order</code> のログに <code>INVALID_ORDER: amount must be positive</code> のエラーメッセージが含まれるか（補償パス実行分）</label></li>
+  <li><label><input type="checkbox" disabled> ログが KMS 暗号化されていること（Log Group の「Encryption」列に CMK ARN が表示される）</label></li>
+</ul>
+
+<h3>CloudWatch アラーム</h3>
+
+<ul>
+  <li><label><input type="checkbox" disabled> <code>phase8-sfn-execution-failures</code> アラームが <code>ALARM</code> 状態になっているか（1 分以内に 3 件以上の失敗が発生するため）</label></li>
+</ul>
+
+<hr>
+
+<h2>トラブルシュート</h2>
+
+<table>
+  <thead>
+    <tr><th>症状</th><th>原因</th><th>対処</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>make sandbox-up-phase8</code> が <code>Error: creating IAM Policy: EntityAlreadyExists</code> で失敗する</td>
+      <td>前回の destroy が不完全でリソースが残っている</td>
+      <td><code>aws iam delete-policy --policy-arn arn:aws:iam::ACCOUNT:policy/phase8-*</code> で手動削除後、再 apply</td>
+    </tr>
+    <tr>
+      <td><code>load.sh</code> が <code>ERROR: state machine phase8-order-saga not found</code> で失敗する</td>
+      <td>apply が完了していない / リージョン不一致</td>
+      <td><code>make sandbox-up-phase8</code> が成功しているか確認。<code>AWS_REGION</code> が <code>ap-northeast-1</code> になっているか確認</td>
+    </tr>
+    <tr>
+      <td><code>watch.sh</code> の <code>[2]</code> でメトリクスが全部 <code>0</code> になる</td>
+      <td>CloudWatch の反映遅延（最大 5 分）。スクリプトは 2 分待機するが不十分な場合がある</td>
+      <td><code>watch.sh</code> を再度実行するか、コンソールで直接ダッシュボードを確認する</td>
+    </tr>
+    <tr>
+      <td>Step Functions 実行が <code>RUNNING</code> のまま止まっている</td>
+      <td>Lambda の初回コールドスタート待ち / Lambda の実行エラーで Retry 中</td>
+      <td>AWS コンソールのステートマシン実行詳細で現在のステートを確認。<code>ExecutionTime</code> が極端に長い場合は Retry が上限に達するまで待つ</td>
+    </tr>
+    <tr>
+      <td><code>ExecutionsFailed</code> が期待より多い / 少ない</td>
+      <td>ASL の <code>Retry</code> 設定が影響している。<code>ValidateOrder</code> は <code>Lambda.ServiceException</code> に対して最大 3 回リトライする</td>
+      <td>コンソールの実行履歴で各実行の <code>Retry</code> 回数を確認。<code>Catch</code> に <code>States.ALL</code> を指定しているので最終的には必ず <code>OrderFailed</code> か <code>OrderSucceeded</code> に収束する</td>
+    </tr>
+    <tr>
+      <td>SNS 通知メールが届かない</td>
+      <td>サブスクリプションが <code>PendingConfirmation</code> 状態</td>
+      <td>apply 後に届いた <code>AWS Notification - Subscription Confirmation</code> メールの「Confirm subscription」リンクをクリックする。SNS コンソールで購読の Status を確認</td>
+    </tr>
+    <tr>
+      <td><code>kms:GenerateDataKey</code> エラーで Lambda / SFN が失敗する</td>
+      <td>KMS キーポリシーが Lambda / SFN サービスプリンシパルの呼び出しを許可していない</td>
+      <td><code>main.tf</code> の KMS ポリシーに <code>states.ap-northeast-1.amazonaws.com</code> と <code>logs.ap-northeast-1.amazonaws.com</code> が含まれているか確認。リージョンを変更した場合はポリシー内のリージョン部分も一致させる</td>
+    </tr>
+    <tr>
+      <td><code>watch.sh [5]</code> で <code>(no ExecutionFailed events in log group)</code> と出る</td>
+      <td>ログの書き込み遅延か、KMS 復号権限の問題</td>
+      <td>1〜2 分待ってから <code>watch.sh</code> を再実行。ログ書き込みには <code>include_execution_data = true</code> の分だけ遅延がある</td>
+    </tr>
+    <tr>
+      <td><code>terraform destroy</code> 後も KMS 課金が続く</td>
+      <td>仕様。<code>deletion_window_in_days = 7</code> の間は削除保留</td>
+      <td>7 日後に自動削除される。KMS コンソールで「Pending deletion」のキーを確認できる</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>コスト目安</h2>
+
+<p>sandbox の 1 回あたり（apply → load 15 件 → watch → destroy）の概算。</p>
+
+<table>
+  <thead>
+    <tr><th>サービス</th><th>内訳</th><th>概算</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>Step Functions Standard</strong></td><td>15 実行 × 約 4 ステート = 60 遷移。無料枠 4,000 遷移/月以内</td><td><strong>$0</strong></td></tr>
+    <tr><td><strong>Lambda</strong></td><td>15 実行 × 5 関数、128 MB × 数百 ms。無料枠 100 万件/月以内</td><td><strong>$0</strong></td></tr>
+    <tr><td><strong>DynamoDB</strong></td><td>PAY_PER_REQUEST、数十 read/write。無料枠あり</td><td><strong>$0</strong></td></tr>
+    <tr><td><strong>SNS</strong></td><td>1 トピック、15 件以下のメッセージ。無料枠 100 万件/月以内</td><td><strong>$0</strong></td></tr>
+    <tr><td><strong>CloudWatch Logs</strong></td><td>実行データ込みでも数 KB〜数十 KB。無料枠 5 GB/月以内</td><td><strong>$0</strong></td></tr>
+    <tr><td><strong>KMS CMK</strong></td><td>1 キー × 月単位課金 $1/月。7 日保留期間分 = 約 $0.23</td><td><strong>≈ $0.23</strong></td></tr>
+    <tr><td><strong>X-Ray</strong></td><td>15 トレース。無料枠 100,000 トレース/月以内</td><td><strong>$0</strong></td></tr>
+    <tr><td><strong>合計</strong></td><td></td><td><strong>≈ $0.23</strong>（KMS 保留期間分のみ）</td></tr>
+  </tbody>
+</table>
+
+<blockquote><code>include_execution_data = true</code> を有効にすると実行データがすべてログに書き込まれる。個人情報（PII）を含むデータを投入した場合、destroy 前に手動でロググループを削除することを検討する。</blockquote>
+
+<hr>
+
+<h2>後片付けの確認</h2>
+
+<p><code>make sandbox-down-phase8</code> 実行後、以下を確認する。</p>
+
+<ul>
+  <li><label><input type="checkbox" disabled> <code>terraform destroy</code> が <code>Destroy complete! Resources: 24 destroyed.</code> で終了したこと</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール（Step Functions）でステートマシン <code>phase8-order-saga</code> が存在しないこと</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール（Lambda）で <code>phase8-*</code> 関数が存在しないこと</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール（DynamoDB）でテーブル <code>phase8-orders</code> が存在しないこと</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール（CloudWatch）でダッシュボード <code>Phase8-StepFunctions</code> が削除されたこと</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール（CloudWatch &gt; Log Groups）で <code>/aws/states/phase8-order-saga</code> と <code>/aws/lambda/phase8-*</code> が削除されたこと</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール（KMS）でキー <code>alias/phase8-sfn</code> が「Pending deletion（7 日）」状態になっていること（これは正常。7 日後に自動削除される）</label></li>
+  <li><label><input type="checkbox" disabled> タグ <code>Sandbox=phase8</code> のリソースが残存していないことを Resource Groups &amp; Tag Editor で確認すること（<code>make sandbox-down-all</code> で一括確認も可）</label></li>
+</ul>
+
+<div class="foot">← <a href="index.html">Phase 8 ルーター</a> ／ <a href="main.md">Markdown 目次</a><br>実 AWS の apply/destroy はご自身で実行してください（Claude は実行しません）。</div>
+</main></body></html>

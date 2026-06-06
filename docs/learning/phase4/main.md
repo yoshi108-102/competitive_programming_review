@@ -6,6 +6,7 @@ CloudWatch
 
 ## 教材
 
+- [handson.md](handson.md) — Phase 4 ハンズオン — CloudWatch sandbox
 - [preview-cloudwatch.md](preview-cloudwatch.md) — Phase 4 プレビュー教材: CloudWatch — メトリクス・ログ・アラーム
 
 ## ハンズオン — 実 AWS sandbox
@@ -17,5 +18,7 @@ CloudWatch
 3. `make sandbox-load-phase4` — Lambda を呼びカスタムメトリクスを発行
 4. `make sandbox-watch-phase4` — カスタム指標・アラーム状態（OK/ALARM）・ダッシュボード（反映 1〜3 分）
 5. `make sandbox-down-phase4` — terraform destroy（課金停止）
+
+詳しい手順・期待出力・観察チェックリスト・トラブルシュート → [handson.html](handson.html) ／ [handson.md](handson.md)
 
 > ⚠ SNS メール購読は apply 後に届く確認メールの承認が必要（通知を受け取る場合）。

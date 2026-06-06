@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 4 ハンズオン</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#16a34a;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+input[type=checkbox]{margin-right:7px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 4 ハンズオン · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Phase 4 ハンズオン — CloudWatch sandbox</h1>
+
+<h2>前提条件</h2>
+
+<h3>AWS 認証・権限</h3>
+
+<ul>
+  <li><code>aws configure</code> または環境変数（<code>AWS_ACCESS_KEY_ID</code> / <code>AWS_SECRET_ACCESS_KEY</code> / <code>AWS_SESSION_TOKEN</code>）で ap-northeast-1 に対して有効な認証情報が設定されていること</li>
+  <li>必要な IAM 権限: CloudWatch フルアクセス、Lambda フルアクセス、DynamoDB フルアクセス、IAM ロール作成、SNS、KMS（キー作成・削除・暗号化）、<code>logs:*</code></li>
+  <li>権限が不足している場合は <code>AdministratorAccess</code> を持つロールで実行する</li>
+</ul>
+
+<h3>ツール</h3>
+
+<ul>
+  <li>Terraform &gt;= 1.7 （<code>terraform -version</code> で確認）</li>
+  <li>AWS CLI v2 （<code>aws --version</code> で確認）</li>
+  <li><code>make</code> が使えること（<code>make sandbox</code> でヘルプ確認）</li>
+  <li>Python 3.12（Lambda ランタイムと同じバージョンだとローカル確認しやすい）</li>
+</ul>
+
+<h3>リージョン</h3>
+
+<p>このサンドボックスはすべて <strong>ap-northeast-1（東京）</strong> に作る。<code>AWS_REGION</code> 環境変数か <code>aws configure</code> のデフォルトリージョンを一致させておく。</p>
+
+<h3>課金開始の注意</h3>
+
+<p><code>make sandbox-up-phase4</code> を実行した時点から AWS 課金が始まる。以下のリソースが生成される。</p>
+
+<ul>
+  <li>KMS カスタムキー: 1 キーあたり $1.00/月（数時間なら数セント）</li>
+  <li>Lambda Insights カスタムメトリクス: 合計数本、無料枠（10 メトリクス）内に収まる</li>
+  <li>カスタムメトリクス <code>Phase4/Lambda</code> 名前空間: 3 本、同様に無料枠内</li>
+</ul>
+
+<p>観測が終わったら <strong>必ず</strong> <code>make sandbox-down-phase4</code> を実行すること。</p>
+
+<h3>Phase 固有の前提: SNS メール確認</h3>
+
+<p><code>apply</code> 後に指定メールアドレス（デフォルト: <code>variables.tf</code> の <code>alert_email</code>）に AWS から確認メールが届く。メール内の <strong>Confirm subscription</strong> リンクをクリックしないとアラームが ALARM になっても通知が届かない。通知を受け取る必要がない場合はスキップしてよい。メールアドレスを変えるには apply 時に上書きする。</p>
+
+<pre><code>make sandbox-up-phase4 TF_VAR_alert_email=your@example.com</code></pre>
+
+<hr>
+
+<h2>全体の流れ</h2>
+
+<pre><code>sandbox-test-phase4  →  sandbox-up-phase4  →  sandbox-load-phase4  →  sandbox-watch-phase4  →  sandbox-down-phase4
+(validate・無料)         (apply・課金開始)    (負荷生成・2〜3分)       (メトリクス・アラーム観測)   (destroy・課金停止)</code></pre>
+
+<hr>
+
+<h2>ステップ詳細</h2>
+
+<h3>ステップ 1: <code>make sandbox-test-phase4</code> — Terraform validate（無料）</h3>
+
+<h4>何が起きるか</h4>
+
+<p><code>backend/tests/sandboxes/phase4/</code> が存在しない場合は moto テストをスキップし、<code>terraform init -backend=false</code> → <code>terraform validate</code> を実行する。実リソースは何も作らない。</p>
+
+<h4>実行コマンド</h4>
+
+<pre><code>make sandbox-test-phase4</code></pre>
+
+<h4>期待される出力例</h4>
+
+<pre><code>==> phase4 に moto テストなし (validate のみ)
+==> terraform validate phase4
+Success! The configuration is valid.</code></pre>
+
+<h4>所要時間</h4>
+
+<p>15〜30 秒（provider プラグインのキャッシュが温まっていれば短縮）</p>
+
+<hr>
+
+<h3>ステップ 2: <code>make sandbox-up-phase4</code> — Terraform apply（課金開始）</h3>
+
+<h4>何が起きるか</h4>
+
+<p><code>terraform init</code> → <code>terraform apply -auto-approve</code> を実行する。以下のリソースが作られる。</p>
+
+<table>
+  <thead><tr><th>リソース</th><th>名前</th></tr></thead>
+  <tbody>
+    <tr><td>KMS キー</td><td><code>alias/phase4-cw-logs</code></td></tr>
+    <tr><td>CloudWatch Log Group</td><td><code>/aws/lambda/phase4-producer</code></td></tr>
+    <tr><td>CloudWatch Log Group</td><td><code>/aws/lambda/phase4-consumer</code></td></tr>
+    <tr><td>CloudWatch Log Group</td><td><code>/aws/lambda-insights</code></td></tr>
+    <tr><td>IAM ロール</td><td><code>phase4-lambda-producer</code> / <code>phase4-lambda-consumer</code></td></tr>
+    <tr><td>DynamoDB テーブル</td><td><code>phase4-events</code></td></tr>
+    <tr><td>Lambda</td><td><code>phase4-producer</code></td></tr>
+    <tr><td>Lambda</td><td><code>phase4-consumer</code></td></tr>
+    <tr><td>Metric Filter (3 本)</td><td><code>ProducerErrorCount</code> / <code>ConsumerErrorCount</code> / <code>ItemsWritten</code></td></tr>
+    <tr><td>SNS トピック</td><td><code>phase4-alerts</code></td></tr>
+    <tr><td>SNS サブスクリプション</td><td>指定メールアドレス</td></tr>
+    <tr><td>CloudWatch Alarm (2 本)</td><td><code>phase4-producer-errors</code> / <code>phase4-producer-duration-high</code></td></tr>
+    <tr><td>Composite Alarm</td><td><code>phase4-critical</code></td></tr>
+    <tr><td>CloudWatch Dashboard</td><td><code>phase4-overview</code></td></tr>
+  </tbody>
+</table>
+
+<h4>実行コマンド</h4>
+
+<pre><code>make sandbox-up-phase4</code></pre>
+
+<h4>期待される出力例</h4>
+
+<pre><code>Terraform will perform the following actions:
+  # aws_kms_key.cw_logs will be created
+  # aws_cloudwatch_log_group.producer_logs will be created
+  # aws_lambda_function.producer will be created
+  ...
+
+Apply complete! Resources: 20 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+consumer_function_name = &quot;phase4-consumer&quot;
+dashboard_url          = &quot;https://console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#dashboards:name=phase4-overview&quot;
+dynamodb_table_name    = &quot;phase4-events&quot;
+producer_function_name = &quot;phase4-producer&quot;
+sns_topic_arn          = &quot;arn:aws:sns:ap-northeast-1:123456789012:phase4-alerts&quot;</code></pre>
+
+<h4>所要時間</h4>
+
+<p>2〜4 分（IAM の伝播が遅い場合は Lambda の作成がやや時間がかかる）</p>
+
+<p>apply 後: メールボックスを確認して <strong>Confirm subscription</strong> をクリックする。</p>
+
+<hr>
+
+<h3>ステップ 3: <code>make sandbox-load-phase4</code> — 負荷生成</h3>
+
+<h4>何が起きるか</h4>
+
+<p><code>load.sh</code> が実行される。デフォルト 20 ラウンド、1 ラウンドごとに以下を行う。</p>
+
+<ol>
+  <li><code>phase4-producer</code> を <code>{"count":10}</code> で invoke → DynamoDB に 10 アイテム書き込み、EMF ログ（<code>items_written</code>）を出力</li>
+  <li><code>phase4-consumer</code> を invoke → DynamoDB を Scan し、約 10% の確率で <code>Simulated consumer error</code> を raise してエラーログを出力</li>
+  <li>2 秒待機</li>
+</ol>
+
+<p>20 ラウンドで producer が 200 アイテム書き込み、consumer が平均 2 回エラーを起こす。ラウンド数は引数で変更できる（エラーをより多く発生させたい場合は <code>./load.sh 50</code> を直接実行）。</p>
+
+<h4>実行コマンド</h4>
+
+<pre><code>make sandbox-load-phase4
+# または直接
+cd terraform/sandboxes/phase4 &amp;&amp; ./load.sh 20
+# エラーを多発させて CompositeAlarm を確実に鳴らすなら
+cd terraform/sandboxes/phase4 &amp;&amp; ./load.sh 50</code></pre>
+
+<h4>期待される出力例</h4>
+
+<pre><code>=== Phase 4 load generation: 20 rounds ===
+[1/20] Invoking producer (count=10)...
+{&quot;items_written&quot;: 10, &quot;errors&quot;: 0}
+[1/20] Invoking consumer...
+{&quot;read&quot;: 7}
+[2/20] Invoking producer (count=10)...
+{&quot;items_written&quot;: 10, &quot;errors&quot;: 0}
+[2/20] Invoking consumer...
+{&quot;statusCode&quot;: 500, &quot;body&quot;: &quot;Simulated consumer error&quot;}
+...
+[20/20] Invoking producer (count=10)...
+{&quot;items_written&quot;: 10, &quot;errors&quot;: 0}
+[20/20] Invoking consumer...
+{&quot;read&quot;: 10}
+
+=== ロード完了。メトリクス反映まで 2〜3 分待ちます... ===
+watch.sh を実行してください。</code></pre>
+
+<h4>所要時間</h4>
+
+<p>約 1 分 10 秒（20 ラウンド × 2 秒スリープ）</p>
+
+<p>load 完了後 <strong>2〜3 分待ってから</strong> watch ステップに進む（CloudWatch の標準解像度メトリクスは 60 秒単位）。</p>
+
+<hr>
+
+<h3>ステップ 4: <code>make sandbox-watch-phase4</code> — 観測</h3>
+
+<h4>何が起きるか</h4>
+
+<p><code>watch.sh</code> が実行される。以下の 6 セクションを順番に出力する。</p>
+
+<table>
+  <thead><tr><th>セクション</th><th>内容</th></tr></thead>
+  <tbody>
+    <tr><td>[1] ダッシュボード確認</td><td><code>phase4-overview</code> ダッシュボードが存在するかを API で確認</td></tr>
+    <tr><td>（待機 30 秒）</td><td>メトリクスの反映を待つ</td></tr>
+    <tr><td>[2] Lambda 標準メトリクス</td><td>producer / consumer それぞれの Invocations / Errors / Duration(p99) / Throttles を表形式で取得</td></tr>
+    <tr><td>[3] カスタムメトリクス</td><td><code>Phase4/Lambda</code> 名前空間の <code>ItemsWritten</code> / <code>ProducerErrorCount</code> / <code>ConsumerErrorCount</code> を取得</td></tr>
+    <tr><td>[4] アラーム状態</td><td>MetricAlarm 2 本 + CompositeAlarm 1 本の現在ステートを表示</td></tr>
+    <tr><td>[5] Logs Insights クエリ</td><td><code>/aws/lambda/phase4-producer</code> と <code>/aws/lambda/phase4-consumer</code> からエラーログを抽出（30 秒待機）</td></tr>
+    <tr><td>[6] コンソール Deep Link</td><td>ダッシュボード / Logs Insights / Alarms / Metrics の URL を出力</td></tr>
+  </tbody>
+</table>
+
+<h4>実行コマンド</h4>
+
+<pre><code>make sandbox-watch-phase4</code></pre>
+
+<h4>期待される出力例（抜粋）</h4>
+
+<pre><code>=== [1] ダッシュボード存在スモーク ===
+phase4-overview
+dashboard OK
+
+メトリクスは最大 2〜3 分遅延します。load.sh 実行後に待ってから watch.sh を実行してください。
+(高解像度メトリクスなら 1 分以内だが、今回は標準解像度=60s)
+
+=== [2] Lambda 標準メトリクス: Invocations / Errors (過去 10 分) ===
+--- phase4-producer / Invocations (Sum) ---
+-------------------------------------------------------
+|             GetMetricStatistics                     |
++--------------------+--------+---------------------+
+|     Timestamp      |  Sum   |        Unit         |
++--------------------+--------+---------------------+
+|  2026-06-06T10:30Z |  20.0  |  Count              |
++--------------------+--------+---------------------+
+--- phase4-consumer / Errors (Sum) ---
+-------------------------------------------------------
+|             GetMetricStatistics                     |
++--------------------+-------+---------------------+
+|     Timestamp      |  Sum  |        Unit         |
++--------------------+-------+---------------------+
+|  2026-06-06T10:30Z |  2.0  |  Count              |
++--------------------+-------+---------------------+
+
+=== [3] カスタムメトリクス: Phase4/Lambda ===
+--- ItemsWritten ---
+-------------------------------------------------------
+|             GetMetricStatistics                     |
++--------------------+--------+---------------------+
+|     Timestamp      |  Sum   |        Unit         |
++--------------------+--------+---------------------+
+|  2026-06-06T10:30Z |  200.0 |  Count              |
++--------------------+--------+---------------------+
+--- ProducerErrorCount ---
+(データなし)
+--- ConsumerErrorCount ---
+-------------------------------------------------------
+|             GetMetricStatistics                     |
++--------------------+-------+---------------------+
+|     Timestamp      |  Sum  |        Unit         |
++--------------------+-------+---------------------+
+|  2026-06-06T10:30Z |  2.0  |  Count              |
++--------------------+-------+---------------------+
+
+=== [4] Alarm 状態確認 ===
+---------------------------------------------------------------------------
+|                          DescribeAlarms                                 |
++--------------------------------+----------+----------------------------+
+|              Name              |  State   |          Reason            |
++--------------------------------+----------+----------------------------+
+|  phase4-producer-errors        |  ALARM   |  Threshold Crossed: 2...  |
+|  phase4-producer-duration-high |  OK      |  Threshold Not Crossed    |
++--------------------------------+----------+----------------------------+
+-----------------------------------------------
+|       DescribeAlarms (Composite)            |
++------------------------+-------------------+
+|         Name           |       State       |
++------------------------+-------------------+
+|  phase4-critical       |  ALARM            |
++------------------------+-------------------+
+
+=== [5] Logs Insights クエリ(エラーログ抽出) ===
+  Query ID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (30 秒後に結果取得)...
+[
+    [
+        {&quot;field&quot;: &quot;@timestamp&quot;, &quot;value&quot;: &quot;2026-06-06 10:31:05.123&quot;},
+        {&quot;field&quot;: &quot;@message&quot;,   &quot;value&quot;: &quot;ERROR: Simulated consumer error&quot;}
+    ],
+    ...
+]
+
+=== [6] コンソール Deep Link ===
+  Dashboard:    https://console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#dashboards:name=phase4-overview
+  Log Insights: https://console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#logsV2:logs-insights
+  Alarms:       https://console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#alarmsV2:
+  Metrics:      https://console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#metricsV2:graph=~()
+
+========================================================
+観測が終わったら: make sandbox-down-phase4  を忘れずに！
+========================================================</code></pre>
+
+<h4>所要時間</h4>
+
+<p>約 2 分（30 秒待機 × 2 回 + API 呼び出し）</p>
+
+<hr>
+
+<h3>ステップ 5: <code>make sandbox-down-phase4</code> — 後片付け</h3>
+
+<h4>何が起きるか</h4>
+
+<p><code>terraform destroy -auto-approve</code> を実行する。作成したリソースがすべて削除される。ただし KMS キーは削除保留状態（7 日間）に移行する。</p>
+
+<h4>実行コマンド</h4>
+
+<pre><code>make sandbox-down-phase4</code></pre>
+
+<h4>期待される出力例</h4>
+
+<pre><code>...
+Destroy complete! Resources: 20 destroyed.</code></pre>
+
+<h4>所要時間</h4>
+
+<p>2〜4 分</p>
+
+<hr>
+
+<h2>観察ポイント（チェックリスト）</h2>
+
+<h3>ダッシュボード <code>phase4-overview</code></h3>
+
+<ul>
+  <li><label><input type="checkbox" disabled> 「Lambda Invocations &amp; Errors」ウィジェットで <code>phase4-producer</code> と <code>phase4-consumer</code> の Invocations が load ラウンド数分（デフォルト 20）カウントされている</label></li>
+  <li><label><input type="checkbox" disabled> 「Lambda Invocations &amp; Errors」ウィジェットで <code>phase4-consumer</code> の Errors が 0 以上になっている（consumer は 10% の確率でエラー）</label></li>
+  <li><label><input type="checkbox" disabled> 「Lambda Duration p50/p99」ウィジェットで Duration の折れ線が描かれている（p50 &lt; p99 であることを確認）</label></li>
+  <li><label><input type="checkbox" disabled> 「Custom: ItemsWritten &amp; ErrorCount」ウィジェットで <code>ItemsWritten</code> が 200（20 ラウンド × 10 件）付近になっている</label></li>
+  <li><label><input type="checkbox" disabled> 「Custom: ItemsWritten &amp; ErrorCount」ウィジェットで <code>ConsumerErrorCount</code> が 1 以上になっている</label></li>
+  <li><label><input type="checkbox" disabled> 「DynamoDB Consumed Capacity Units」ウィジェットで <code>phase4-events</code> テーブルの <code>ConsumedWriteCapacityUnits</code> が増えている</label></li>
+  <li><label><input type="checkbox" disabled> 「Active Alarms」ウィジェットに <code>phase4-producer-errors</code> または <code>phase4-critical</code> が ALARM 表示されている</label></li>
+  <li><label><input type="checkbox" disabled> 「Producer ERROR ログ」ウィジェット（Logs ウィジェット）に <code>ERROR</code> メッセージが表示されている</label></li>
+</ul>
+
+<h3>アラーム</h3>
+
+<ul>
+  <li><label><input type="checkbox" disabled> <code>phase4-producer-errors</code> が <code>ALARM</code> または <code>OK</code> 状態になっている（<code>INSUFFICIENT_DATA</code> でなければ評価は機能している）</label></li>
+  <li><label><input type="checkbox" disabled> <code>phase4-critical</code>（Composite Alarm）が、子アラームの OR で正しくステートを集約している</label></li>
+  <li><label><input type="checkbox" disabled> メールアドレスを確認した場合、ALARM 遷移時にメール通知が届いている</label></li>
+</ul>
+
+<h3>カスタムメトリクス</h3>
+
+<ul>
+  <li><label><input type="checkbox" disabled> <code>Phase4/Lambda</code> 名前空間が CloudWatch コンソール（Metrics → All metrics）に表示されている</label></li>
+  <li><label><input type="checkbox" disabled> <code>ItemsWritten</code> メトリクスが Metric Filter 経由で記録されている（producer の EMF ログ <code>{ $.items_written &gt; 0 }</code> から抽出）</label></li>
+  <li><label><input type="checkbox" disabled> <code>ProducerErrorCount</code> / <code>ConsumerErrorCount</code> が Metric Filter 経由で記録されている（ログの <code>ERROR</code> 文字列を計数）</label></li>
+</ul>
+
+<h3>Logs Insights</h3>
+
+<ul>
+  <li><label><input type="checkbox" disabled> <code>/aws/lambda/phase4-consumer</code> のログに <code>Simulated consumer error</code> のメッセージが含まれている</label></li>
+  <li><label><input type="checkbox" disabled> Logs Insights クエリ（<code>filter @message like /ERROR/</code>）がエラーログを正しく返している</label></li>
+</ul>
+
+<h3>Lambda Insights</h3>
+
+<ul>
+  <li><label><input type="checkbox" disabled> CloudWatch コンソールの Lambda Insights（Lambda &gt; Monitoring &gt; Lambda Insights）で <code>phase4-producer</code> / <code>phase4-consumer</code> の <code>memory_utilization</code> や <code>init_duration</code> が表示されている（<code>/aws/lambda-insights</code> ロググループに記録される）</label></li>
+</ul>
+
+<hr>
+
+<h2>トラブルシュート</h2>
+
+<table>
+  <thead><tr><th>症状</th><th>原因</th><th>対処</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>アラームが <code>INSUFFICIENT_DATA</code> のまま変わらない</td>
+      <td>評価期間（60 秒）分のデータポイントがまだ溜まっていない</td>
+      <td>load.sh 完了後、2〜3 分待ってから watch.sh を実行する。<code>evaluation_periods=1</code>、<code>period=60</code> なので最低 1 分間分のデータが必要</td>
+    </tr>
+    <tr>
+      <td><code>ProducerErrorCount</code> が <code>(データなし)</code> で返る</td>
+      <td>consumer エラーが 0 回だった（確率的）</td>
+      <td><code>./load.sh 50</code> で試行回数を増やしてリトライ</td>
+    </tr>
+    <tr>
+      <td><code>ItemsWritten</code> が <code>(データなし)</code> で返る</td>
+      <td>EMF ログが Metric Filter パターン <code>{ $.items_written &gt; 0 }</code> にマッチしなかった</td>
+      <td><code>aws logs filter-log-events --log-group-name /aws/lambda/phase4-producer</code> で実際のログを確認する</td>
+    </tr>
+    <tr>
+      <td><code>apply</code> 時に <code>AccessDeniedException</code> が出る</td>
+      <td>IAM 権限が不足している（特に KMS キー作成）</td>
+      <td><code>AdministratorAccess</code> ポリシーを持つロールで実行する</td>
+    </tr>
+    <tr>
+      <td>SNS メールが届かない</td>
+      <td>サブスクリプション未確認、またはスパムフィルターに引っかかった</td>
+      <td>AWS コンソール &gt; SNS &gt; <code>phase4-alerts</code> &gt; Subscriptions で Pending confirmation を確認し、メールを探す</td>
+    </tr>
+    <tr>
+      <td><code>destroy</code> 後に KMS キーが残っている</td>
+      <td>KMS は最短 7 日の削除保留期間が必須</td>
+      <td>正常動作。コンソールで「Pending deletion」ステートを確認する。7 日後に自動削除される</td>
+    </tr>
+    <tr>
+      <td><code>watch.sh</code> の Logs Insights クエリが空配列を返す</td>
+      <td>ログが出力されてから Insights のインデックスが構築されるまで 1〜2 分かかる</td>
+      <td>30 秒後に再度 watch.sh を実行する</td>
+    </tr>
+    <tr>
+      <td><code>dashboard not found</code> と表示される</td>
+      <td>apply がまだ完了していない、またはリージョンが違う</td>
+      <td><code>terraform output dashboard_url</code> でリージョンを確認する</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>コスト目安</h2>
+
+<table>
+  <thead><tr><th>リソース</th><th>料金</th><th>数時間の sandbox での実費</th></tr></thead>
+  <tbody>
+    <tr><td>KMS カスタムキー</td><td>$1.00/月/キー</td><td>&lt; $0.01（数時間で destroy）</td></tr>
+    <tr><td>CloudWatch カスタムメトリクス（3 本）</td><td>$0.30/メトリクス/月</td><td>&lt; $0.01</td></tr>
+    <tr><td>Lambda Invocations（20〜50 回）</td><td>無料枠（100 万回/月）内</td><td>$0.00</td></tr>
+    <tr><td>CloudWatch Logs 取り込み</td><td>$0.76/GB</td><td>数 KB なので $0.00</td></tr>
+    <tr><td>DynamoDB（PAY_PER_REQUEST）</td><td>無料枠内（25 GB / 25 WCU）</td><td>$0.00</td></tr>
+    <tr><td>SNS メール通知</td><td>無料枠（1000 件/月）</td><td>$0.00</td></tr>
+    <tr><td><strong>合計目安</strong></td><td></td><td><strong>&lt; $0.05</strong></td></tr>
+  </tbody>
+</table>
+
+<p>カスタムメトリクスは無料枠が 10 メトリクス/月なので、Phase4/Lambda の 3 本（<code>ItemsWritten</code> / <code>ProducerErrorCount</code> / <code>ConsumerErrorCount</code>）は無料枠に収まる。LambdaInsights 名前空間のメトリクス数本を合わせても通常は無料枠内。</p>
+
+<hr>
+
+<h2>後片付けの確認</h2>
+
+<ul>
+  <li><label><input type="checkbox" disabled> <code>make sandbox-down-phase4</code> が <code>Destroy complete!</code> を表示して正常終了した</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール &gt; Lambda でファンクション <code>phase4-producer</code> / <code>phase4-consumer</code> が存在しない</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール &gt; DynamoDB でテーブル <code>phase4-events</code> が存在しない</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール &gt; CloudWatch &gt; Dashboards で <code>phase4-overview</code> が存在しない</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール &gt; CloudWatch &gt; Alarms で <code>phase4-producer-errors</code> / <code>phase4-producer-duration-high</code> / <code>phase4-critical</code> が存在しない</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール &gt; SNS &gt; Topics で <code>phase4-alerts</code> が存在しない</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール &gt; IAM &gt; Roles で <code>phase4-lambda-producer</code> / <code>phase4-lambda-consumer</code> が存在しない</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール &gt; KMS で <code>alias/phase4-cw-logs</code> が「Pending deletion」ステートになっている（7 日後に完全削除される）</label></li>
+  <li><label><input type="checkbox" disabled> タグ <code>Sandbox=phase4</code> のリソースが（KMS 以外）残存していない（<code>aws resourcegroupstaggingapi get-resources --tag-filters Key=Sandbox,Values=phase4</code> で確認）</label></li>
+</ul>
+
+<div class="foot">← <a href="index.html">Phase 4 ルーター</a> ／ <a href="main.md">Markdown 目次</a><br>実 AWS の apply/destroy はご自身で実行してください（Claude は実行しません）。</div>
+</main></body></html>

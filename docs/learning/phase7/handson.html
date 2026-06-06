@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 7 ハンズオン</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#0891b2;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+input[type=checkbox]{margin-right:7px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 7 ハンズオン · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Phase 7 ハンズオン — EventBridge sandbox</h1>
+
+<h2>前提条件</h2>
+
+<h3>AWS 認証・権限</h3>
+
+<ul>
+  <li><code>aws sts get-caller-identity</code> が正常に返ること（プロファイル or 環境変数が設定済み）</li>
+  <li>必要な権限: <code>events:*</code> / <code>lambda:*</code> / <code>sqs:*</code> / <code>kms:*</code> / <code>cloudwatch:*</code> / <code>logs:*</code> / <code>scheduler:*</code> / <code>iam:CreateRole</code> / <code>iam:PutRolePolicy</code></li>
+  <li>リージョン: <code>ap-northeast-1</code>（環境変数 <code>AWS_DEFAULT_REGION=ap-northeast-1</code> を推奨）</li>
+</ul>
+
+<h3>ツール</h3>
+
+<ul>
+  <li>Terraform &gt;= 1.7</li>
+  <li>AWS CLI v2</li>
+  <li>GNU/BSD <code>date</code> コマンド（watch.sh が macOS/Linux 両対応で動作）</li>
+</ul>
+
+<h3>課金開始の注意</h3>
+
+<p><code>make sandbox-up-phase7</code> を実行した瞬間から <strong>rate(1 minute) ルールが有効になり、毎分 Lambda が起動し続けます</strong>。観測が終わったら必ず <code>make sandbox-down-phase7</code> を実行してください。KMS キーは destroy 後も 7 日間は削除保留状態で残ります（追加課金は僅少）。</p>
+
+<h3>Phase 固有の前提</h3>
+
+<ul>
+  <li><code>backend/sandboxes/phase7/handler.py</code> が存在すること（Lambda zip の元ネタ）</li>
+  <li>Terraform の <code>archive_file</code> が <code>.terraform/handler.zip</code> を自動生成するため、事前に zip 化は不要</li>
+</ul>
+
+<hr>
+
+<h2>全体の流れ</h2>
+
+<table>
+  <thead>
+    <tr><th>ステップ</th><th>コマンド</th><th>概要</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>1</td><td><code>make sandbox-test-phase7</code></td><td>terraform validate（AWS 接続不要）</td></tr>
+    <tr><td>2</td><td><code>make sandbox-up-phase7</code></td><td>リソース全作成、rate ルール即有効化</td></tr>
+    <tr><td>3</td><td><code>make sandbox-load-phase7</code></td><td>カスタムイベント 10 件 + ミスマッチ 3 件 + Lambda 直接 invoke</td></tr>
+    <tr><td>4</td><td><code>make sandbox-watch-phase7</code></td><td>CloudWatch メトリクス・ログを CLI で確認</td></tr>
+    <tr><td>5</td><td><code>make sandbox-down-phase7</code></td><td>全リソース destroy（必須）</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>ステップ詳細</h2>
+
+<h3>ステップ 1 — terraform validate（sandbox-test-phase7）</h3>
+
+<h4>何が起きるか</h4>
+
+<p>Terraform が <code>main.tf</code> の構文と型チェックを実行します。AWS へのリクエストは一切発生しないため、認証情報がなくても実行できます。<code>archive_file</code> データソースが Lambda zip を生成する参照整合性もここで確認できます。</p>
+
+<h4>実行コマンド</h4>
+
+<pre><code>make sandbox-test-phase7</code></pre>
+
+<h4>期待される出力例</h4>
+
+<pre><code>==> Validating phase7 sandbox...
+Success! The configuration is valid.</code></pre>
+
+<h4>所要時間</h4>
+
+<p>約 5〜10 秒</p>
+
+<hr>
+
+<h3>ステップ 2 — terraform apply（sandbox-up-phase7）</h3>
+
+<h4>何が起きるか</h4>
+
+<p>以下のリソースが ap-northeast-1 に作成されます。</p>
+
+<ul>
+  <li>KMS キー × 2（EventBridge バス用 + Lambda 環境変数用）</li>
+  <li>カスタムイベントバス <code>phase7-bus</code>（KMS 暗号化）</li>
+  <li>イベントアーカイブ <code>phase7-archive</code>（30 日保持）</li>
+  <li>SQS DLQ <code>phase7-dlq</code>（14 日保持）</li>
+  <li>EventBridge ルール: <code>phase7-processor-rule</code>（カスタムバス上、<code>com.example.orders</code> / <code>order.created</code> → Lambda）</li>
+  <li>EventBridge ルール: <code>phase7-heartbeat-rule</code>（デフォルトバス、<code>rate(1 minute)</code> → Lambda）</li>
+  <li>Lambda <code>phase7-processor</code>（Python 3.12、X-Ray Active、EMF カスタムメトリクス出力）</li>
+  <li>EventBridge Scheduler グループ <code>phase7-group</code> + スケジュール <code>phase7-one-shot</code>（at(2099-01-01T00:00:00) プレースホルダー）</li>
+  <li>CloudWatch ダッシュボード <code>phase7-dashboard</code>（5 ウィジェット）</li>
+  <li>CloudWatch アラーム × 2</li>
+</ul>
+
+<h4>実行コマンド</h4>
+
+<pre><code>make sandbox-up-phase7</code></pre>
+
+<h4>期待される出力例</h4>
+
+<pre><code>==> Applying phase7 sandbox...
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+
+Terraform will perform the following actions:
+  ...（省略）...
+
+Plan: 22 to add, 0 to change, 0 to destroy.
+
+Do you want to perform these actions?
+  Terraform will perform the actions described above.
+  Only 'yes' will be accepted to approve.
+
+  Enter a value: yes
+
+aws_kms_key.lambda_env: Creating...
+aws_kms_key.eb: Creating...
+...
+Apply complete! Resources: 22 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+archive_name   = "phase7-archive"
+bus_arn        = "arn:aws:events:ap-northeast-1:123456789012:event-bus/phase7-bus"
+bus_name       = "phase7-bus"
+dashboard_url  = "https://ap-northeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#dashboards:name=phase7-dashboard"
+dlq_url        = "https://sqs.ap-northeast-1.amazonaws.com/123456789012/phase7-dlq"
+processor_name = "phase7-processor"</code></pre>
+
+<h4>所要時間</h4>
+
+<p>約 2〜4 分（KMS キー作成が律速）</p>
+
+<blockquote>この時点から <code>phase7-heartbeat-rule</code> が毎分 Lambda を起動します。長時間放置しないでください。</blockquote>
+
+<hr>
+
+<h3>ステップ 3 — イベント送信（sandbox-load-phase7）</h3>
+
+<h4>何が起きるか</h4>
+
+<p><code>load.sh</code> が 3 フェーズでイベントを送信します。</p>
+
+<ol>
+  <li><strong>カスタムイベント 10 件</strong>: <code>aws events put-events</code> で <code>phase7-bus</code> へ <code>source=com.example.orders</code> / <code>DetailType=order.created</code> のイベントを 0.5 秒間隔で送信。ルール <code>phase7-processor-rule</code> にマッチし Lambda が invoke されます。</li>
+  <li><strong>パターン不一致イベント 3 件</strong>: <code>source=com.example.inventory</code> / <code>DetailType=stock.updated</code> を送信。どのルールにもマッチしないため Lambda は起動しません（<code>MatchedRules=0</code> の観察用）。</li>
+  <li><strong>Lambda 直接 invoke</strong>: EventBridge を経由せずに Lambda を直接呼び出し、コールドスタートのログ末尾 5 行を表示します。</li>
+</ol>
+
+<h4>実行コマンド</h4>
+
+<pre><code>make sandbox-load-phase7</code></pre>
+
+<h4>期待される出力例</h4>
+
+<pre><code>=== Phase 7 load.sh: sending 10 custom events to phase7-bus ===
+  [1/10] order-1748000000-1 sent OK (amount=3872)
+  [2/10] order-1748000001-2 sent OK (amount=9041)
+  [3/10] order-1748000002-3 sent OK (amount=521)
+  ...
+  [10/10] order-1748000009-10 sent OK (amount=7113)
+
+=== Sending 3 events that won't match any rule (pattern mismatch demo) ===
+  [no-match 1] sent
+  [no-match 2] sent
+  [no-match 3] sent
+
+=== Direct invoke (bypass EventBridge) to observe cold start ===
+START RequestId: abc12345-... Version: $LATEST
+[INFO] EVENT: {"source":"load.sh","detail-type":"DirectInvoke","detail":{"test":true}}
+[INFO] EventsProcessed: 1
+END RequestId: abc12345-...
+REPORT RequestId: abc12345-... Duration: 12.34 ms  Billed Duration: 13 ms ...
+
+=== load.sh done. Wait 1-2 min, then run: make sandbox-watch-phase7 ===
+=== REMINDER: rate(1 minute) heartbeat rule is ACTIVE ===
+=== Run 'make sandbox-down-phase7' when you are done observing! ===</code></pre>
+
+<h4>所要時間</h4>
+
+<p>約 15〜20 秒（10 件 × 0.5 秒 + 直接 invoke）</p>
+
+<blockquote><code>FailedEntryCount=0</code> 以外が表示された場合はバスへのアクセス権限または KMS 権限を確認してください。</blockquote>
+
+<hr>
+
+<h3>ステップ 4 — メトリクス観測（sandbox-watch-phase7）</h3>
+
+<h4>何が起きるか</h4>
+
+<p><code>watch.sh</code> が以下の順番で CloudWatch を照会します。実行冒頭に <strong>90 秒のウェイト</strong>があります（Lambda メトリクスは 1〜3 分、EMF カスタムメトリクスは 2〜5 分の反映遅延があるため）。</p>
+
+<ol>
+  <li>ダッシュボード存在確認</li>
+  <li>90 秒待機</li>
+  <li>Lambda: Invocations / Errors / Duration（最後 5 分間, period=300s）</li>
+  <li>EventBridge: FailedInvocations（<code>phase7-processor-rule</code>）</li>
+  <li>DLQ: <code>ApproximateNumberOfMessages</code></li>
+  <li>CloudWatch Logs Insights: <code>@message like /EVENT/</code> を降順 10 件</li>
+</ol>
+
+<p>最後にコンソールへの deep link（ダッシュボード / EventBridge ルール一覧 / アーカイブ / Lambda / DLQ / X-Ray）を出力します。</p>
+
+<h4>実行コマンド</h4>
+
+<pre><code>make sandbox-watch-phase7</code></pre>
+
+<h4>期待される出力例</h4>
+
+<pre><code>INFO: CloudWatch メトリクスの反映には 1〜5 分かかります。
+INFO: SQS: load.sh 実行後 5 分待ってください (--period 300)
+INFO: EventBridge: rate(1 minute) は初回発火まで最大 60 秒待ってください
+
+============================================
+ Phase 7 EventBridge — watch.sh
+============================================
+
+[0/5] Checking dashboard exists...
+  Dashboard OK
+
+[1/5] Waiting 90s for CloudWatch metrics propagation...
+      (Lambda metrics ~1-3 min delay; EMF custom metrics ~2-5 min)
+
+[2/5] Lambda Invocations &amp; Errors (last 5 min, period=60s):
+  Invocations (Sum): 12.0
+  Errors (Sum): 0.0
+  Duration (Average): 15.432
+
+[3/5] EventBridge FailedInvocations (last 5 min):
+None
+
+[4/5] DLQ approximate message count:
+0
+
+[5/5] Recent Lambda log lines (Insights query):
+2026-06-06T12:34:56.789Z  [INFO] EVENT: {"source":"com.example.orders",...}
+2026-06-06T12:34:57.123Z  [INFO] EVENT: {"source":"com.example.orders",...}
+...
+
+============================================
+ Console deep links:
+  Dashboard : https://ap-northeast-1.console.aws.amazon.com/cloudwatch/home?...
+  EventBridge rules   : https://ap-northeast-1.console.aws.amazon.com/events/home?...
+  EventBridge archive : https://ap-northeast-1.console.aws.amazon.com/events/home?...
+  Lambda              : https://ap-northeast-1.console.aws.amazon.com/lambda/home?...
+  DLQ (SQS console)   : https://ap-northeast-1.console.aws.amazon.com/sqs/v3/home?...
+  X-Ray traces        : https://ap-northeast-1.console.aws.amazon.com/xray/home?...
+============================================
+
+!!! IMPORTANT: rate(1 minute) heartbeat rule is STILL ACTIVE !!!
+!!! Run 'make sandbox-down-phase7' NOW to avoid continuous Lambda billing !!!
+============================================</code></pre>
+
+<h4>所要時間</h4>
+
+<p>約 2〜3 分（90 秒の待機 + API 照会 5〜10 秒）</p>
+
+<hr>
+
+<h3>ステップ 5 — リソース削除（sandbox-down-phase7）</h3>
+
+<h4>何が起きるか</h4>
+
+<p><code>terraform destroy</code> が全 22 リソースを削除します。KMS キーは即時削除ではなく <strong>7 日間の削除保留</strong>に入ります。</p>
+
+<h4>実行コマンド</h4>
+
+<pre><code>make sandbox-down-phase7</code></pre>
+
+<h4>期待される出力例</h4>
+
+<pre><code>==> Destroying phase7 sandbox...
+
+Terraform will destroy all your managed infrastructure, as shown above.
+  There is no undo. Only 'yes' will be accepted to confirm.
+
+  Enter a value: yes
+
+...
+Destroy complete! Resources: 22 destroyed.</code></pre>
+
+<h4>所要時間</h4>
+
+<p>約 1〜2 分</p>
+
+<hr>
+
+<h2>観察ポイント（チェックリスト）</h2>
+
+<h3>Lambda メトリクス — <code>AWS/Lambda</code> 名前空間</h3>
+
+<ul>
+  <li><label><input type="checkbox" disabled> <code>Invocations (Sum)</code> が load.sh 送信数（10 件）+ heartbeat 発火数 + 直接 invoke 分だけ増加している</label></li>
+  <li><label><input type="checkbox" disabled> <code>Errors (Sum)</code> が 0 のまま（Lambda がエラーなく処理できた）</label></li>
+  <li><label><input type="checkbox" disabled> <code>Duration (Average)</code> が初回 invoke（コールドスタート）で高くなり、以降は低下している — ダッシュボードの <strong>「Lambda Invocations &amp; Errors」</strong> ウィジェット（左上）で確認</label></li>
+</ul>
+
+<h3>EMF カスタムメトリクス — <code>Phase7/EventBridge</code> 名前空間</h3>
+
+<ul>
+  <li><label><input type="checkbox" disabled> <code>EventsProcessed {Source=com.example.orders}</code> が 10（load.sh で送った件数）を示している — ダッシュボードの <strong>「Custom: EventsProcessed (EMF)」</strong> ウィジェット（中央上）で確認（反映まで最大 5 分）</label></li>
+</ul>
+
+<h3>EventBridge — <code>AWS/Events</code> 名前空間</h3>
+
+<ul>
+  <li><label><input type="checkbox" disabled> <code>FailedInvocations {RuleName=phase7-processor-rule}</code> が 0 のまま — ダッシュボードの <strong>「EventBridge FailedInvocations」</strong> ウィジェット（右下）で確認</label></li>
+  <li><label><input type="checkbox" disabled> heartbeat ルール（<code>phase7-heartbeat-rule</code>）が 1 分ごとに Lambda を起動しているため、Invocations が定期的に増え続けることを確認</label></li>
+</ul>
+
+<h3>DLQ — <code>AWS/SQS</code> 名前空間</h3>
+
+<ul>
+  <li><label><input type="checkbox" disabled> <code>ApproximateNumberOfMessagesVisible {QueueName=phase7-dlq}</code> が 0 のまま — ダッシュボードの <strong>「DLQ Messages」</strong> ウィジェットで確認</label></li>
+  <li><label><input type="checkbox" disabled> DLQ にメッセージが入った場合、CloudWatch アラーム <code>phase7-dlq-messages</code> が ALARM 状態になる</label></li>
+</ul>
+
+<h3>Logs Insights</h3>
+
+<ul>
+  <li><label><input type="checkbox" disabled> <code>SOURCE '/aws/lambda/phase7-processor'</code> のログに <code>EVENT:</code> を含む行が 10 件以上表示される — ダッシュボードの <strong>「Processor Lambda Logs」</strong> ウィジェット（ログパネル）で確認</label></li>
+</ul>
+
+<h3>X-Ray トレース</h3>
+
+<ul>
+  <li><label><input type="checkbox" disabled> Lambda 設定の <code>tracing_config { mode = "Active" }</code> により、X-Ray コンソールでトレースが確認できる — watch.sh が出力するリンク <code>https://ap-northeast-1.console.aws.amazon.com/xray/home?...</code> から確認</label></li>
+</ul>
+
+<h3>Archive</h3>
+
+<ul>
+  <li><label><input type="checkbox" disabled> EventBridge コンソール → アーカイブ <code>phase7-archive</code> にイベント件数が記録されている（パターン不一致の 3 件も含む全件がアーカイブされる）</label></li>
+</ul>
+
+<hr>
+
+<h2>トラブルシュート</h2>
+
+<table>
+  <thead>
+    <tr><th>症状</th><th>原因</th><th>対処</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>put-events</code> で <code>FailedEntryCount=1</code></td>
+      <td>カスタムバスへの権限不足 / KMS キーポリシー未反映</td>
+      <td><code>aws events put-events</code> のエラー本文を確認。apply 直後は KMS が数秒で有効化されるので 30 秒待って再試行</td>
+    </tr>
+    <tr>
+      <td>watch.sh で Lambda Invocations が <code>N/A</code></td>
+      <td>まだメトリクスが反映されていない</td>
+      <td>CloudWatch の反映遅延は最大 3 分。watch.sh 冒頭の 90 秒ウェイトを増やすか、手動で 1〜2 分待つ</td>
+    </tr>
+    <tr>
+      <td>EMF カスタムメトリクス <code>EventsProcessed</code> が見えない</td>
+      <td>EMF の初回反映遅延（最大 5 分）</td>
+      <td><code>Phase7/EventBridge</code> 名前空間は Lambda が少なくとも 1 度 invoke されてから最大 5 分後に現れる。period を 300s にして再照会</td>
+    </tr>
+    <tr>
+      <td><code>rate(1 minute)</code> のメトリクスが 0</td>
+      <td>heartbeat ルールの初回発火まで最大 60 秒かかる</td>
+      <td>apply 後 60〜90 秒待ってから watch.sh を実行する</td>
+    </tr>
+    <tr>
+      <td>DLQ にメッセージが溜まる</td>
+      <td>Lambda が <code>maximum_retry_attempts=2</code> 回失敗した</td>
+      <td><code>/aws/lambda/phase7-processor</code> のログを確認し、エラー原因を特定。Lambda を修正して再 deploy</td>
+    </tr>
+    <tr>
+      <td><code>aws cloudwatch get-dashboard</code> で NOT FOUND</td>
+      <td>apply が完了していない / リソース名の prefix が異なる</td>
+      <td><code>terraform output</code> で <code>dashboard_url</code> を確認し、実際のダッシュボード名と一致しているか照合</td>
+    </tr>
+    <tr>
+      <td><code>terraform destroy</code> 後の再 apply で KMS エラー</td>
+      <td>KMS エイリアスが削除保留中のキーに紐づいている</td>
+      <td>AWS コンソールの KMS → Customer managed keys から削除をキャンセルするか、<code>variable "prefix"</code> を変更して別名で apply</td>
+    </tr>
+    <tr>
+      <td>Scheduler <code>phase7-one-shot</code> が意図せず発火</td>
+      <td><code>at(2099-01-01T00:00:00)</code> を書き換えた場合</td>
+      <td>apply 前に time zone (Asia/Tokyo) を考慮した UTC オフセットを確認。テスト後は即 destroy</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>コスト目安</h2>
+
+<table>
+  <thead>
+    <tr><th>リソース</th><th>料金体系</th><th>sandbox 1 回分（目安）</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>EventBridge カスタムイベント</td><td>$1.00 / 100 万件</td><td>13 件送信 → 実質 $0.00</td></tr>
+    <tr><td>Lambda</td><td>100 万リクエスト + GB-seconds 無料枠</td><td>無料枠内</td></tr>
+    <tr><td>SQS DLQ</td><td>100 万リクエスト無料枠</td><td>無料枠内</td></tr>
+    <tr><td>KMS キー × 2</td><td>$1.00 / キー / 月</td><td>数日で destroy → 日割り数セント</td></tr>
+    <tr><td>KMS API リクエスト</td><td>$0.03 / 10,000 件</td><td>数十件 → $0.00</td></tr>
+    <tr><td>CloudWatch ダッシュボード</td><td>$3.00 / ダッシュボード / 月</td><td>数時間 destroy → 日割り数セント</td></tr>
+    <tr><td>CloudWatch Logs</td><td>5 GB/月 無料枠</td><td>ごく少量 → 無料枠内</td></tr>
+  </tbody>
+</table>
+
+<p><strong>最大リスク</strong>: <code>rate(1 minute)</code> ルールを destroy し忘れた場合、Lambda が毎分起動し続ける。100 万リクエスト無料枠を超えると課金が発生するが、通常の sandbox 利用時間（数時間）では無料枠内に収まる。</p>
+
+<hr>
+
+<h2>後片付けの確認</h2>
+
+<p><code>make sandbox-down-phase7</code> を実行後、以下を確認してください。</p>
+
+<ul>
+  <li><label><input type="checkbox" disabled> <code>terraform show</code> が空またはエラーになる（state が空）</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール → EventBridge → カスタムバス一覧に <code>phase7-bus</code> が存在しない</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール → EventBridge → ルール一覧（デフォルトバス）に <code>phase7-heartbeat-rule</code> が存在しない</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール → Lambda → <code>phase7-processor</code> が存在しない</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール → SQS → <code>phase7-dlq</code> が存在しない</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール → CloudWatch → ダッシュボード → <code>phase7-dashboard</code> が存在しない</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール → KMS → カスタマー管理キーに <code>alias/phase7-eventbridge</code> が「削除保留中」で残っている（正常。7 日後に自動削除）</label></li>
+  <li><label><input type="checkbox" disabled> タグ <code>Sandbox=phase7</code> のリソースが残存していないこと: <code>aws resourcegroupstaggingapi get-resources --tag-filters Key=Sandbox,Values=phase7 --region ap-northeast-1</code> で結果が空</label></li>
+</ul>
+
+<div class="foot">← <a href="index.html">Phase 7 ルーター</a> ／ <a href="main.md">Markdown 目次</a><br>実 AWS の apply/destroy はご自身で実行してください（Claude は実行しません）。</div>
+</main></body></html>

@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 3 ハンズオン</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#d97706;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+input[type=checkbox]{margin-right:7px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 3 ハンズオン · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Phase 3 ハンズオン — SQS sandbox</h1>
+
+<h2>前提条件</h2>
+
+<h3>AWS 認証・権限</h3>
+
+<p><code>aws configure</code> または環境変数 (<code>AWS_ACCESS_KEY_ID</code> / <code>AWS_SECRET_ACCESS_KEY</code> / <code>AWS_SESSION_TOKEN</code>) で ap-northeast-1 にアクセスできること。<br>
+実行 IAM ユーザー/ロールに次の権限が必要:</p>
+<ul>
+  <li><code>sqs:*</code>（キュー作成・ポリシー設定）</li>
+  <li><code>kms:*</code>（CMK 作成・エイリアス）</li>
+  <li><code>lambda:*</code>（関数作成・ESM 設定）</li>
+  <li><code>iam:CreateRole / AttachRolePolicy / PutRolePolicy</code></li>
+  <li><code>cloudwatch:PutDashboard / GetDashboard</code></li>
+  <li><code>logs:CreateLogGroup / PutRetentionPolicy</code></li>
+</ul>
+
+<h3>ツール</h3>
+
+<table>
+  <thead><tr><th>ツール</th><th>最低バージョン</th></tr></thead>
+  <tbody>
+    <tr><td>Terraform</td><td>1.6+</td></tr>
+    <tr><td>AWS CLI</td><td>v2</td></tr>
+    <tr><td>Python</td><td>3.10+（load.sh / watch.sh のコンソール deep link 生成で <code>python3 -c</code> を使用）</td></tr>
+  </tbody>
+</table>
+
+<h3>リージョン</h3>
+
+<p>全リソースは <strong>ap-northeast-1（東京）</strong> に作成される。</p>
+
+<h3>課金開始タイミング</h3>
+
+<p><code>make sandbox-up-phase3</code> を実行した時点で以下が課金対象になる:</p>
+<ul>
+  <li>KMS CMK: $1/月のキー保持料金（日割り換算で約 $0.033/日）</li>
+  <li>CloudWatch ダッシュボード: $3/ダッシュボード/月（日割り換算で約 $0.10/日）</li>
+  <li>SQS・Lambda: sandbox 規模のメッセージ数（〜60件）では無料枠内</li>
+</ul>
+
+<blockquote><p><strong>必ずハンズオン後に <code>make sandbox-down-phase3</code> を実行すること。</strong></p></blockquote>
+
+<hr>
+
+<h2>全体の流れ</h2>
+
+<pre><code>test（validate のみ・無料）→ up（apply・課金開始）→ load（メッセージ注入）→ 5分待機 → watch（メトリクス観測）→ down（destroy・課金停止）</code></pre>
+
+<table>
+  <thead><tr><th>ステップ</th><th>コマンド</th><th>所要時間</th></tr></thead>
+  <tbody>
+    <tr><td>1. テスト・検証</td><td><code>make sandbox-test-phase3</code></td><td>30〜60秒</td></tr>
+    <tr><td>2. リソース作成</td><td><code>make sandbox-up-phase3</code></td><td>1〜2分</td></tr>
+    <tr><td>3. ロード生成</td><td><code>make sandbox-load-phase3</code></td><td>20〜30秒</td></tr>
+    <tr><td>4. 待機</td><td>—</td><td><strong>5分</strong></td></tr>
+    <tr><td>5. メトリクス観測</td><td><code>make sandbox-watch-phase3</code></td><td>30〜60秒</td></tr>
+    <tr><td>6. 後片付け</td><td><code>make sandbox-down-phase3</code></td><td>1〜2分</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>ステップ詳細</h2>
+
+<h3>ステップ 1: テスト・検証（<code>make sandbox-test-phase3</code>）</h3>
+
+<h4>何が起きるか</h4>
+<p><code>backend/tests/sandboxes/phase3/</code> が存在すれば moto を使った Python ユニットテストを実行し、続いて <code>terraform validate</code> を行う。実 AWS へのアクセスは発生せず、課金もゼロ。</p>
+
+<h4>実行コマンド</h4>
+<pre><code>make sandbox-test-phase3</code></pre>
+
+<h4>期待される出力例</h4>
+<pre><code>==> phase3 に moto テストなし (validate のみ)
+==> terraform validate phase3
+Success! The configuration is valid.</code></pre>
+
+<p>または moto テストがある場合:</p>
+<pre><code>==> moto pytest phase3
+collected 3 items
+
+tests/sandboxes/phase3/test_producer.py::test_send_messages PASSED
+...
+==> terraform validate phase3
+Success! The configuration is valid.</code></pre>
+
+<p><strong>所要時間</strong>: 30〜60秒</p>
+
+<hr>
+
+<h3>ステップ 2: リソース作成（<code>make sandbox-up-phase3</code>）</h3>
+
+<h4>何が起きるか</h4>
+<p><code>terraform apply -auto-approve</code> が走り、以下のリソースが ap-northeast-1 に作成される:</p>
+
+<table>
+  <thead><tr><th>リソース</th><th>名前（prefix=phase3）</th></tr></thead>
+  <tbody>
+    <tr><td>KMS CMK</td><td><code>alias/phase3-sqs</code></td></tr>
+    <tr><td>SQS メインキュー</td><td><code>phase3-main</code></td></tr>
+    <tr><td>SQS DLQ</td><td><code>phase3-dlq</code></td></tr>
+    <tr><td>IAM ロール（Producer）</td><td><code>phase3-producer-role</code></td></tr>
+    <tr><td>IAM ロール（Consumer）</td><td><code>phase3-consumer-role</code></td></tr>
+    <tr><td>Lambda（Producer）</td><td><code>phase3-producer</code></td></tr>
+    <tr><td>Lambda（Consumer）</td><td><code>phase3-consumer</code></td></tr>
+    <tr><td>Lambda ESM</td><td>SQS → phase3-consumer（batch_size=5）</td></tr>
+    <tr><td>CloudWatch ダッシュボード</td><td><code>phase3-sqs-dashboard</code></td></tr>
+    <tr><td>CloudWatch ロググループ</td><td><code>/aws/lambda/phase3-producer</code>, <code>/aws/lambda/phase3-consumer</code></td></tr>
+  </tbody>
+</table>
+
+<h4>実行コマンド</h4>
+<pre><code>make sandbox-up-phase3</code></pre>
+
+<h4>期待される出力例</h4>
+<pre><code>Initializing the backend...
+...
+Plan: 15 to add, 0 to change, 0 to destroy.
+...
+Apply complete! Resources: 15 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+dashboard_name = "phase3-sqs-dashboard"
+dashboard_url  = "https://ap-northeast-1.console.aws.amazon.com/cloudwatch/..."
+dlq_url        = "https://sqs.ap-northeast-1.amazonaws.com/123456789012/phase3-dlq"
+main_queue_url = "https://sqs.ap-northeast-1.amazonaws.com/123456789012/phase3-main"
+consumer_name  = "phase3-consumer"
+producer_name  = "phase3-producer"</code></pre>
+
+<p><strong>所要時間</strong>: 1〜2分</p>
+
+<hr>
+
+<h3>ステップ 3: ロード生成（<code>make sandbox-load-phase3</code>）</h3>
+
+<h4>何が起きるか</h4>
+<p><code>load.sh</code> が 3 つのシナリオで合計 63件のメッセージを注入する:</p>
+<ul>
+  <li><strong>シナリオ 1</strong>: Producer Lambda を invoke し、50件を <code>phase3-main</code> へ一括 SendMessage</li>
+  <li><strong>シナリオ 2</strong>: AWS CLI から直接 10件をバースト送信（Producer Lambda を介さない経路の確認）</li>
+  <li><strong>シナリオ 3</strong>: <code>index=0,7,14</code> の "poison message" を 3件送信 → Consumer が <code>index % 7 == 0</code> で意図的に例外を投げ、maxReceiveCount=3 回失敗後に DLQ へ転送される</li>
+</ul>
+
+<h4>実行コマンド</h4>
+<pre><code>make sandbox-load-phase3</code></pre>
+
+<h4>期待される出力例</h4>
+<pre><code>=== Phase 3 SQS Load Generator ===
+Producer Lambda : phase3-producer
+Main Queue URL  : https://sqs.ap-northeast-1.amazonaws.com/123456789012/phase3-main
+DLQ URL         : https://sqs.ap-northeast-1.amazonaws.com/123456789012/phase3-dlq
+Messages/invoke : 50
+
+[Step 1] Invoking producer Lambda (count=50)...
+{
+    "StatusCode": 200,
+    "ExecutedVersion": "$LATEST"
+}
+{"sent": 50}
+
+[Step 2] Direct CLI send (10 messages burst)...
+xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+...（10行）
+
+[Step 3] Sending poison messages (index=0,7,14) to trigger DLQ...
+yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy
+yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy
+yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy
+
+===========================================================
+  !! SQS キュー系メトリクス(ApproximateNumberOfMessages*) は
+  !! 5分粒度で CloudWatch に反映されます。
+  !! watch.sh の実行は 5 分後以降にしてください。
+===========================================================
+  Lambda の Invocations/Errors は 1 分粒度で反映されます。
+  DLQ への流入確認は maxReceiveCount=3 回失敗後なので
+  consumer が 3 回 invoke されるまで数分かかります。
+===========================================================
+
+5分後に ./watch.sh を実行してください。</code></pre>
+
+<p><strong>所要時間</strong>: 20〜30秒</p>
+
+<hr>
+
+<h3>ステップ 4: 5分待機</h3>
+
+<p>SQS の <code>ApproximateNumberOfMessagesVisible</code> などのキュー系メトリクスは <strong>5分粒度</strong> で CloudWatch に反映される。load.sh 実行後すぐに watch.sh を実行しても <code>Datapoints: []</code> が返るだけで何も見えない。</p>
+
+<p><strong>正確に5分（=300秒）待ってから次のステップへ進む。</strong></p>
+
+<p>DLQ への流入（poison message の退避）は Consumer が 3回失敗するまでさらに数分かかる場合がある。DLQ のデータポイントが 0 のときは追加で数分待ってから watch.sh を再実行するとよい。</p>
+
+<hr>
+
+<h3>ステップ 5: メトリクス観測（<code>make sandbox-watch-phase3</code>）</h3>
+
+<h4>何が起きるか</h4>
+<p><code>watch.sh</code> が以下の順序でメトリクスを取得・表示する:</p>
+<ol>
+  <li>CloudWatch ダッシュボード存在確認（スモークテスト）</li>
+  <li>30秒 sleep（SQS メトリクス反映待ち）</li>
+  <li>SQS メインキューの <code>ApproximateNumberOfMessagesVisible</code>（--period 300）</li>
+  <li>SQS DLQ の <code>ApproximateNumberOfMessagesVisible</code>（--period 300）</li>
+  <li>SQS メインキューの <code>NumberOfMessagesSent</code> / <code>NumberOfMessagesDeleted</code>（--period 300）</li>
+  <li>Consumer Lambda の <code>Invocations</code> / <code>Errors</code>（--period 60）</li>
+  <li>Consumer Lambda の <code>Duration</code> p50 / p99（--period 60）</li>
+  <li>CloudWatch ダッシュボード・SQS コンソール・Lambda ログへの deep link を表示</li>
+</ol>
+
+<h4>実行コマンド</h4>
+<pre><code>make sandbox-watch-phase3</code></pre>
+
+<h4>期待される出力例</h4>
+<pre><code>=== Phase 3 SQS 観測レポート ===
+観測時刻(UTC): 2026-06-06T03:00:00Z
+
+[Smoke] CloudWatch ダッシュボード存在確認...
+phase3-sqs-dashboard
+  OK: phase3-sqs-dashboard が存在します
+
+SQS メトリクス反映待ち (30秒)...
+
+[SQS Main] ApproximateNumberOfMessagesVisible (過去15分, 5分粒度)
+--------------------------------------------------------------------
+|                        GetMetricStatistics                       |
++----------------------------+-------------------------------------+
+|            Max             |               Time                  |
++----------------------------+-------------------------------------+
+|  52.0                      |  2026-06-06T02:55:00+00:00          |
+|  0.0                       |  2026-06-06T03:00:00+00:00          |
++----------------------------+-------------------------------------+
+
+[SQS DLQ] ApproximateNumberOfMessagesVisible (過去15分, 5分粒度)
+--------------------------------------------------------------------
+|                        GetMetricStatistics                       |
++----------------------------+-------------------------------------+
+|            Max             |               Time                  |
++----------------------------+-------------------------------------+
+|  3.0                       |  2026-06-06T03:00:00+00:00          |
++----------------------------+-------------------------------------+
+
+[SQS Main] NumberOfMessagesSent / Deleted (5分粒度)
+  NumberOfMessagesSent:
+...（Sum: 63.0）
+  NumberOfMessagesDeleted:
+...（Sum: 60.0）
+
+[Lambda Consumer] Invocations / Errors (1分粒度)
+  Invocations:
+...（Sum: 各分 5〜10 件）
+  Errors:
+...（Sum: poison メッセージ処理分）
+
+[Lambda Consumer] Duration p50/p99 (1分粒度)
+  p50: 〜120ms
+  p99: 〜300ms
+
+=== コンソール deep link ===
+CloudWatch ダッシュボード:
+  https://ap-northeast-1.console.aws.amazon.com/cloudwatch/home?...
+
+SQS メインキュー:
+  https://ap-northeast-1.console.aws.amazon.com/sqs/v3/home?...
+
+SQS DLQ:
+  https://ap-northeast-1.console.aws.amazon.com/sqs/v3/home?...
+
+Lambda Consumer ログ:
+  https://ap-northeast-1.console.aws.amazon.com/cloudwatch/home?...
+
+===========================================================
+  観測が終わったら必ず sandbox を teardown してください:
+  make sandbox-down-phase3
+===========================================================</code></pre>
+
+<p><strong>所要時間</strong>: 30〜60秒（内 sleep 30秒を含む）</p>
+
+<hr>
+
+<h3>ステップ 6: 後片付け（<code>make sandbox-down-phase3</code>）</h3>
+
+<h4>何が起きるか</h4>
+<p><code>terraform destroy -auto-approve</code> で全リソースが削除される。KMS CMK は即座に削除されず、<strong>7日間のペンディング削除</strong>状態になる（この間は $1/月のキー保持コストが継続する点に注意）。</p>
+
+<h4>実行コマンド</h4>
+<pre><code>make sandbox-down-phase3</code></pre>
+
+<h4>期待される出力例</h4>
+<pre><code>Plan: 0 to add, 0 to change, 15 to destroy.
+...
+Destroy complete! Resources: 15 destroyed.</code></pre>
+
+<p><strong>所要時間</strong>: 1〜2分</p>
+
+<hr>
+
+<h2>観察ポイント（チェックリスト）</h2>
+
+<p>CloudWatch ダッシュボード <code>phase3-sqs-dashboard</code> には 5 つのウィジェットがある。以下を load → 5分後に確認する。</p>
+
+<h3>SQS Main - Visible Messages (5min) ウィジェット</h3>
+<ul>
+  <li><label><input type="checkbox" disabled> <code>ApproximateNumberOfMessagesVisible</code> がロード直後に 50〜60 付近にスパイクし、Consumer が処理するにつれて 0 に戻っていることを確認</label></li>
+</ul>
+
+<h3>SQS DLQ - Visible Messages (5min) ウィジェット</h3>
+<ul>
+  <li><label><input type="checkbox" disabled> DLQ の <code>ApproximateNumberOfMessagesVisible</code> が 3 になっていることを確認（poison message: index=0,7,14 がそれぞれ 3 回失敗後に退避）</label></li>
+  <li><label><input type="checkbox" disabled> メインキューが 0 に戻った後も DLQ には値が残り続けることを確認（DLQ は自動では処理されない）</label></li>
+</ul>
+
+<h3>Consumer Lambda - Invocations / Errors ウィジェット</h3>
+<ul>
+  <li><label><input type="checkbox" disabled> <code>Invocations</code> が複数の 1 分バケットに分散して計上されていること（batch_size=5 × 複数バッチ）</label></li>
+  <li><label><input type="checkbox" disabled> <code>Errors</code> が数件〜十数件計上されていること（poison message は Consumer が 3 回 raise → maxReceiveCount=3 で DLQ 送り）</label></li>
+  <li><label><input type="checkbox" disabled> <code>Errors</code> の合計が <code>Invocations</code> の合計より少ないこと（多くの通常メッセージは成功）</label></li>
+</ul>
+
+<h3>Consumer Lambda - Duration (p50/p99) ウィジェット</h3>
+<ul>
+  <li><label><input type="checkbox" disabled> p50 と p99 の差を確認（通常メッセージは <code>time.sleep(0.1)</code> × バッチ件数分 ≒ 500ms 以内、poison は即例外で短い）</label></li>
+  <li><label><input type="checkbox" disabled> p99 が p50 の 2〜5 倍程度に収まっていることを確認</label></li>
+</ul>
+
+<h3>SQS Main - Sent / Deleted / NotVisible (5min) ウィジェット</h3>
+<ul>
+  <li><label><input type="checkbox" disabled> <code>NumberOfMessagesSent</code> が 63（Producer 50 + CLI 10 + poison 3）になっていること</label></li>
+  <li><label><input type="checkbox" disabled> <code>NumberOfMessagesDeleted</code> が 60（poison 3件は DLQ に退避され main から削除されず）またはそれに近い値になっていること</label></li>
+  <li><label><input type="checkbox" disabled> <code>ApproximateNumberOfMessagesNotVisible</code>（処理中・visibility timeout 中のメッセージ）が一時的に上昇したことを確認</label></li>
+</ul>
+
+<hr>
+
+<h2>トラブルシュート</h2>
+
+<table>
+  <thead><tr><th>症状</th><th>原因</th><th>対処</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>watch.sh で SQS の Datapoints が空</td>
+      <td>load 後 5 分未満で実行した</td>
+      <td>5 分待ってから再実行。<code>--period 300</code> で集計されるため 5 分ごとにしかデータポイントが生まれない</td>
+    </tr>
+    <tr>
+      <td>DLQ に 3 件来ない</td>
+      <td>Consumer がまだ 3 回失敗していない</td>
+      <td>数分待つ。Consumer ESM の polling 間隔が最大 20 秒のため、3 回失敗には最大 60 秒程度かかる場合がある</td>
+    </tr>
+    <tr>
+      <td><code>make sandbox-up-phase3</code> で <code>Error: error creating SQS Queue Policy</code></td>
+      <td>SQS キューポリシーは IAM ロールの ARN が確定してから適用される</td>
+      <td><code>terraform apply</code> を再実行。解消しなければ <code>terraform state list</code> でリソース状態を確認</td>
+    </tr>
+    <tr>
+      <td>Lambda invoke で <code>KMS.KmsDisabledException</code></td>
+      <td>Producer ロールに <code>kms:GenerateDataKey</code> が付いていない</td>
+      <td>iam.tf を確認。Producer ロールのインラインポリシーに <code>kms:GenerateDataKey</code> と <code>kms:Decrypt</code> が必要</td>
+    </tr>
+    <tr>
+      <td>Consumer Lambda ログに <code>AccessDenied: kms:Decrypt</code></td>
+      <td>Consumer ロールに KMS Decrypt 権限がない</td>
+      <td>iam.tf の Consumer ロールポリシーを確認</td>
+    </tr>
+    <tr>
+      <td><code>terraform validate</code> で <code>Invalid provider configuration</code></td>
+      <td><code>.terraform</code> が初期化されていない</td>
+      <td><code>terraform -chdir=terraform/sandboxes/phase3 init -backend=false</code> を手動実行してから <code>make sandbox-test-phase3</code> を再実行</td>
+    </tr>
+    <tr>
+      <td><code>make sandbox-down-phase3</code> で KMS の削除が完了しない</td>
+      <td>CMK は即座に削除できない（7日ペンディング）</td>
+      <td>正常動作。<code>deletion_window_in_days = 7</code> の設定通り。7日後に自動削除される</td>
+    </tr>
+    <tr>
+      <td>watch.sh の deep link を開くとコンソールで <code>ResourceNotFound</code></td>
+      <td>apply 前に watch.sh を実行している</td>
+      <td><code>make sandbox-up-phase3</code> と <code>make sandbox-load-phase3</code> を先に実行する</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>コスト目安</h2>
+
+<table>
+  <thead><tr><th>サービス</th><th>課金項目</th><th>sandbox 規模の概算</th></tr></thead>
+  <tbody>
+    <tr><td>SQS</td><td>$0.40/百万リクエスト</td><td>63件のメッセージ → <strong>$0.00（無料枠 100万件/月）</strong></td></tr>
+    <tr><td>KMS CMK</td><td>$1/月のキー保持 + $0.03/10,000 APIコール</td><td>キー保持: <strong>約 $0.03/日</strong>。APIコール数 ≒ 数十件 → $0.00</td></tr>
+    <tr><td>Lambda</td><td>無料枠: 100万 invoke/月、400,000 GB-秒/月</td><td>sandbox 規模 → <strong>$0.00</strong></td></tr>
+    <tr><td>CloudWatch ダッシュボード</td><td>$3/ダッシュボード/月</td><td><strong>約 $0.10/日</strong>。destroy すれば即停止</td></tr>
+    <tr><td>CloudWatch ログ</td><td>$0.76/GB（取り込み）</td><td>数KB 未満 → <strong>$0.00</strong></td></tr>
+  </tbody>
+</table>
+
+<p><strong>ハンズオン 1 回あたりの合計コスト目安: $0.00〜$0.15 程度（KMS + ダッシュボードの日割り）</strong></p>
+
+<blockquote><p>KMS CMK は <code>terraform destroy</code> 後も <strong>7 日間のペンディング削除</strong>状態が続き、その間は $0.03/日程度のキー保持コストが発生する。誤って再参照するとエラーになるため、7 日後に完全削除されるまで同名のエイリアスは使えない。</p></blockquote>
+
+<hr>
+
+<h2>後片付けの確認</h2>
+
+<p>destroy 前にやっておくこと:</p>
+<ul>
+  <li><label><input type="checkbox" disabled> CloudWatch ダッシュボードのスクリーンショットを保存した（必要な場合）</label></li>
+  <li><label><input type="checkbox" disabled> DLQ に残るメッセージを redrive したい場合は事前に実施（destroy 後はメッセージごと削除される）</label></li>
+</ul>
+
+<p>destroy 後の確認:</p>
+<ul>
+  <li><label><input type="checkbox" disabled> <code>make sandbox-down-phase3</code> が <code>Destroy complete! Resources: N destroyed.</code> で終了した</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール → SQS → ap-northeast-1 で <code>phase3-main</code> / <code>phase3-dlq</code> が表示されないことを確認</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール → Lambda → ap-northeast-1 で <code>phase3-producer</code> / <code>phase3-consumer</code> が表示されないことを確認</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール → KMS → ap-northeast-1 で <code>alias/phase3-sqs</code> が「ペンディング削除」状態になっていることを確認（7日後に自動削除）</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール → CloudWatch → ダッシュボード で <code>phase3-sqs-dashboard</code> が削除されていることを確認</label></li>
+  <li><label><input type="checkbox" disabled> タグ <code>Sandbox=phase3</code> のリソースがリソースグループタグエディタで残っていないことを確認</label></li>
+</ul>
+
+<div class="foot">← <a href="index.html">Phase 3 ルーター</a> ／ <a href="main.md">Markdown 目次</a><br>実 AWS の apply/destroy はご自身で実行してください（Claude は実行しません）。</div>
+</main></body></html>

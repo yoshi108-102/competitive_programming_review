@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 2 ハンズオン</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#3b82f6;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+input[type=checkbox]{margin-right:7px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 2 ハンズオン · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Phase 2 ハンズオン — S3 sandbox</h1>
+
+<h2>前提条件</h2>
+
+<h3>AWS 認証・権限</h3>
+
+<ul>
+  <li><code>aws configure</code> または環境変数（<code>AWS_ACCESS_KEY_ID</code> / <code>AWS_SECRET_ACCESS_KEY</code> / <code>AWS_SESSION_TOKEN</code>）が設定済みであること</li>
+  <li>IAM ユーザー / ロールに以下が付与されていること
+    <ul>
+      <li><code>s3:*</code>（バケット作成・オブジェクト操作）</li>
+      <li><code>kms:CreateKey</code> / <code>kms:ScheduleKeyDeletion</code> / <code>kms:Alias*</code></li>
+      <li><code>lambda:CreateFunction</code> / <code>lambda:AddPermission</code> など Lambda 系</li>
+      <li><code>iam:CreateRole</code> / <code>iam:PutRolePolicy</code></li>
+      <li><code>cloudwatch:PutDashboard</code> / <code>cloudwatch:GetMetricStatistics</code></li>
+      <li><code>logs:CreateLogGroup</code> / <code>logs:PutLogEvents</code> / <code>logs:DescribeLogStreams</code></li>
+    </ul>
+  </li>
+  <li>動作確認済みの最低権限セット: <code>AdministratorAccess</code>（学習用 AWS アカウント推奨）</li>
+</ul>
+
+<h3>リージョン</h3>
+
+<p><code>ap-northeast-1</code>（東京）を使用。変更する場合は <code>variables.tf</code> の <code>aws_region</code> を上書き。</p>
+
+<pre><code>export AWS_DEFAULT_REGION=ap-northeast-1</code></pre>
+
+<h3>課金開始の注意</h3>
+
+<p><code>make sandbox-up-phase2</code> を実行した時点で実 AWS リソースへの課金が始まる。
+特に <strong>KMS カスタムキーは削除保留期間（7 日間）も課金継続</strong>する。
+学習が終わったら必ず <code>make sandbox-down-phase2</code> を実行すること。</p>
+
+<h3>Phase 固有の前提</h3>
+
+<ul>
+  <li>Terraform 1.5 以上・AWS CLI v2 がインストール済みであること</li>
+  <li><code>uv</code> がインストール済みであること（<code>sandbox-test</code> で Python テストを実行する）</li>
+  <li>12 MB のランダムデータを生成するため <code>dd</code> コマンドが使えること（macOS / Linux 標準で OK）</li>
+  <li><code>curl</code> が使えること（presigned URL 動作確認用）</li>
+</ul>
+
+<hr>
+
+<h2>全体の流れ</h2>
+
+<table>
+  <thead>
+    <tr><th>ステップ</th><th>コマンド</th><th>内容</th><th>課金</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>1</td><td><code>make sandbox-test-phase2</code></td><td>terraform validate（無料・無起動）</td><td>なし</td></tr>
+    <tr><td>2</td><td><code>make sandbox-up-phase2</code></td><td>terraform apply でリソース作成</td><td>開始</td></tr>
+    <tr><td>3</td><td><code>make sandbox-load-phase2</code></td><td>load.sh：オブジェクト投入 + presigned URL</td><td>微小</td></tr>
+    <tr><td>4</td><td><code>make sandbox-watch-phase2</code></td><td>watch.sh：CloudWatch でメトリクス/ログ観測</td><td>なし</td></tr>
+    <tr><td>5</td><td><code>make sandbox-down-phase2</code></td><td>terraform destroy でリソース削除</td><td>停止</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>ステップ詳細</h2>
+
+<h3>ステップ 1: terraform validate（<code>make sandbox-test-phase2</code>）</h3>
+
+<h4>何が起きるか</h4>
+<p><code>backend/tests/sandboxes/phase2</code> にテストがある場合は moto pytest を実行し、その後 <code>terraform validate</code> を走らせる。実 AWS には一切アクセスしない。プラグインキャッシュを活かして軽量。</p>
+
+<h4>実行コマンド</h4>
+<pre><code>make sandbox-test-phase2</code></pre>
+
+<h4>期待される出力例</h4>
+<pre><code>==> phase2 に moto テストなし (validate のみ)
+Initializing the backend...
+Initializing provider plugins...
+
+Terraform has been successfully initialized!
+
+Success! The configuration is valid.</code></pre>
+
+<p>※ <code>backend/tests/sandboxes/phase2/</code> が存在する場合は pytest の出力が先に出る。</p>
+
+<p><strong>所要時間</strong>: 10〜30 秒（初回は provider ダウンロードで 1〜2 分）</p>
+
+<hr>
+
+<h3>ステップ 2: terraform apply（<code>make sandbox-up-phase2</code>）</h3>
+
+<h4>何が起きるか</h4>
+<p>以下のリソースを一括作成する。</p>
+
+<table>
+  <thead>
+    <tr><th>リソース名（Terraform）</th><th>作成されるもの</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>aws_kms_key.s3</code></td><td>Phase2 S3 sandbox key（エイリアス: <code>alias/phase2-s3</code>）</td></tr>
+    <tr><td><code>aws_s3_bucket.main</code></td><td>メインバケット（名前: <code>sandbox-phase2-main-&lt;account-id&gt;</code>）</td></tr>
+    <tr><td><code>aws_s3_bucket.logs</code></td><td>アクセスログ用バケット（名前: <code>sandbox-phase2-logs-&lt;account-id&gt;</code>）</td></tr>
+    <tr><td><code>aws_s3_bucket_metric.main_all</code></td><td>CloudWatch リクエストメトリクス有効化（FilterId: AllRequests）</td></tr>
+    <tr><td><code>aws_s3_bucket_lifecycle_configuration.main</code></td><td>30d→IA / 90d→GLACIER_IR / 365d→削除</td></tr>
+    <tr><td><code>aws_lambda_function.on_upload</code></td><td>Python 3.12 関数（名前: <code>sandbox-phase2-on-upload</code>）</td></tr>
+    <tr><td><code>aws_cloudwatch_log_group.lambda</code></td><td>ロググループ <code>/aws/lambda/sandbox-phase2-on-upload</code>（保持 1 日）</td></tr>
+    <tr><td><code>aws_cloudwatch_dashboard.phase2</code></td><td>ダッシュボード <code>Phase2-S3</code></td></tr>
+  </tbody>
+</table>
+
+<p>Lambda のソースコードは <code>backend/sandboxes/phase2/handler.py</code> を ZIP 化して deploy。</p>
+
+<h4>実行コマンド</h4>
+<pre><code>make sandbox-up-phase2</code></pre>
+
+<h4>期待される出力例</h4>
+<pre><code>Initializing the backend...
+...
+
+Plan: 18 to add, 0 to change, 0 to destroy.
+
+aws_kms_key.s3: Creating...
+aws_s3_bucket.logs: Creating...
+aws_s3_bucket.main: Creating...
+aws_kms_alias.s3: Creating...
+aws_s3_bucket_public_access_block.main: Creating...
+...
+aws_lambda_function.on_upload: Creating...
+aws_cloudwatch_dashboard.phase2: Creating...
+
+Apply complete! Resources: 18 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+aws_region           = &quot;ap-northeast-1&quot;
+dashboard_name       = &quot;Phase2-S3&quot;
+kms_key_arn          = &quot;arn:aws:kms:ap-northeast-1:123456789012:key/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx&quot;
+lambda_function_name = &quot;sandbox-phase2-on-upload&quot;
+logs_bucket_name     = &quot;sandbox-phase2-logs-123456789012&quot;
+main_bucket_name     = &quot;sandbox-phase2-main-123456789012&quot;</code></pre>
+
+<p><strong>所要時間</strong>: 2〜4 分（KMS キー作成に時間がかかることがある）</p>
+
+<hr>
+
+<h3>ステップ 3: テストデータ投入（<code>make sandbox-load-phase2</code>）</h3>
+
+<h4>何が起きるか</h4>
+<p><code>load.sh</code> が次の 6 フェーズを順に実行する。</p>
+<ol>
+  <li>小オブジェクト 30 個の PutObject（<code>load-&lt;timestamp&gt;/small-1.txt</code> ～ <code>small-30.txt</code>）</li>
+  <li>12 MB マルチパートオブジェクト 1 個の PutObject（<code>large-12mb.bin</code>、AWS CLI が 8 MB 超で自動マルチパート）</li>
+  <li><code>small-1.txt</code> ～ <code>small-10.txt</code> の GetObject 10 回</li>
+  <li>バージョン確認（<code>list-object-versions</code> でバージョニングが有効か検証）</li>
+  <li>存在しないキー <code>nonexistent.txt</code> への GetObject（404 確認）</li>
+  <li><code>small-1.txt</code> のプリサインド URL を生成し <code>curl</code> で HTTP ステータスを確認</li>
+</ol>
+<p>各 PutObject は ObjectCreated イベントを発火させ、Lambda <code>sandbox-phase2-on-upload</code> が呼ばれる。</p>
+
+<h4>実行コマンド</h4>
+<pre><code>make sandbox-load-phase2</code></pre>
+
+<h4>期待される出力例</h4>
+<pre><code>=== Phase2 load start: bucket=sandbox-phase2-main-123456789012 ===
+[+] 30 small objects uploaded
+[+] 12 MB object uploaded (multipart)
+[+] 10 GetObject done
+[+] Versions in prefix: 31
+[+] Expected 404 for nonexistent key
+[+] Presigned URL HTTP status: 200
+
+=== load.sh complete ===
+S3 リクエストメトリクスは ~1min、Lambda は即時、BucketSizeBytes は翌日に反映。</code></pre>
+
+<p><code>Versions in prefix: 31</code> は小オブジェクト 30 個 + 12 MB オブジェクト 1 個のバージョンが記録されたことを示す。Presigned URL の HTTP status が <code>200</code> であればプリサインド URL（SigV4 署名）が正常動作している。</p>
+
+<p><strong>所要時間</strong>: 1〜2 分（12 MB オブジェクトのアップロードに依存）</p>
+
+<hr>
+
+<h3>ステップ 4: CloudWatch 観測（<code>make sandbox-watch-phase2</code>）</h3>
+
+<h4>何が起きるか</h4>
+<p><code>watch.sh</code> が次の 5 項目を順に確認する。90 秒のウェイトを含む。</p>
+<ol>
+  <li>ダッシュボード <code>Phase2-S3</code> の存在確認</li>
+  <li>S3 <code>AllRequests</code> メトリクス（1 分粒度、過去 15 分間）</li>
+  <li>S3 <code>PutRequests</code> メトリクス（同上）</li>
+  <li>Lambda <code>Invocations</code> / <code>Errors</code> メトリクス（同上）</li>
+  <li>直近の Lambda ログ最新 20 件</li>
+  <li><code>BucketSizeBytes</code> メトリクス（日次粒度、過去 2 日間）</li>
+  <li>CloudWatch コンソールへのディープリンクを出力</li>
+</ol>
+
+<h4>実行コマンド</h4>
+<pre><code>make sandbox-watch-phase2</code></pre>
+
+<h4>期待される出力例</h4>
+<pre><code>=== Phase2 CloudWatch 観測 ===
+観測時刻: 2026-06-06T10:00:00Z
+バケット: sandbox-phase2-main-123456789012 / Lambda: sandbox-phase2-on-upload
+
+--- [0] Dashboard smoke check ---
+Phase2-S3
+[OK] Dashboard exists
+
+--- [1] S3 AllRequests (1min 粒度) ---
+NOTE: load.sh 実行直後は反映に最大 1-2 分かかります
+(90 秒ウェイト中...)
+-------------------------------------------------------------------------------------------
+|                                   GetMetricStatistics                                   |
++------------------+----------+-----------------------------------------------------------+
+|    Average       |  Maximum | Timestamp                                                 |
++------------------+----------+-----------------------------------------------------------+
+|  42.0            |  42.0    | 2026-06-06T09:58:00+00:00                                 |
++------------------+----------+-----------------------------------------------------------+
+
+--- [2] S3 PutRequests ---
+...（同形式のテーブル、Sum が 31 前後）
+
+--- [3] Lambda Invocations ---
+...（Sum が 31 前後: 小 30 + large 1）
+
+--- [3b] Lambda Errors ---
+...（Sum が 0 であれば正常）
+
+--- [4] Lambda 最新ログ (直近 20 件) ---
+START RequestId: xxxxxxxx-...
+{&quot;bucket&quot;: &quot;sandbox-phase2-main-123456789012&quot;, &quot;key&quot;: &quot;load-1717660800/small-30.txt&quot;, &quot;size_bytes&quot;: 47}
+END RequestId: xxxxxxxx-...
+REPORT RequestId: xxxxxxxx-... Duration: 3.45 ms  Billed Duration: 4 ms  ...
+
+--- [5] BucketSizeBytes (日次・遅延大) ---
+NOTE: オブジェクト投入当日はまだ 0 のことが多い。翌日に確認を推奨。
+...（当日は空テーブルまたは 0 のことが多い）
+
+=== コンソール Deep Link ===
+CloudWatch Dashboard :
+  https://ap-northeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#dashboards:name=Phase2-S3
+S3 バケット :
+  https://s3.console.aws.amazon.com/s3/buckets/sandbox-phase2-main-123456789012?region=ap-northeast-1&amp;tab=metrics
+Lambda ログ :
+  https://ap-northeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#logsV2:log-groups/log-group/%2Faws%2Flambda%2Fsandbox-phase2-on-upload
+
+==========================================================
+観測が終わったら: make sandbox-down-phase2  を忘れずに！
+==========================================================</code></pre>
+
+<p><strong>所要時間</strong>: 3〜4 分（90 秒ウェイト込み）</p>
+
+<hr>
+
+<h3>ステップ 5: リソース削除（<code>make sandbox-down-phase2</code>）</h3>
+
+<h4>何が起きるか</h4>
+<p><code>terraform destroy -auto-approve</code> で全リソースを削除。メインバケット・ログバケットはともに <code>force_destroy = true</code> のためオブジェクトが入っていても削除できる。KMS キーは削除ではなく「削除保留（pending deletion）」状態になり、7 日後に完全削除される。この 7 日間は KMS の日割り料金（$1/月 = 約 $0.03/日）が継続する。</p>
+
+<h4>実行コマンド</h4>
+<pre><code>make sandbox-down-phase2</code></pre>
+
+<h4>期待される出力例</h4>
+<pre><code>aws_s3_bucket_notification.main: Destroying...
+aws_lambda_permission.s3_invoke: Destroying...
+aws_cloudwatch_dashboard.phase2: Destroying...
+aws_s3_bucket_lifecycle_configuration.main: Destroying...
+aws_lambda_function.on_upload: Destroying...
+...
+aws_kms_key.s3: Destroying...
+aws_kms_key.s3: Destruction complete after 0s (pending deletion in 7 days)
+
+Destroy complete! Resources: 18 destroyed.</code></pre>
+
+<p><strong>所要時間</strong>: 1〜3 分</p>
+
+<hr>
+
+<h2>観察ポイント（チェックリスト）</h2>
+
+<h3>ダッシュボード <code>Phase2-S3</code></h3>
+
+<p>CloudWatch コンソール → ダッシュボード → <code>Phase2-S3</code> を開く。</p>
+
+<ul>
+  <li><label><input type="checkbox" disabled> ウィジェット「S3 AllRequests (1min)」に値が出ている（load.sh 実行後 1〜2 分で反映）</label></li>
+  <li><label><input type="checkbox" disabled> ウィジェット「S3 PutRequests (1min)」の Sum が 31 前後（小オブジェクト 30 + large 1）</label></li>
+  <li><label><input type="checkbox" disabled> ウィジェット「Lambda Invocations &amp; Errors」の Invocations が 31 前後、Errors が 0</label></li>
+  <li><label><input type="checkbox" disabled> ウィジェット「BucketSizeBytes (日次・遅延あり)」は当日は 0 または空。翌日に数値が出る</label></li>
+</ul>
+
+<h3>S3 コンソール</h3>
+
+<p>S3 → バケット <code>sandbox-phase2-main-&lt;account-id&gt;</code> → メトリクスタブ</p>
+
+<ul>
+  <li><label><input type="checkbox" disabled> 「リクエストメトリクス」に <code>AllRequests</code> フィルター <code>AllRequests</code> が表示されている</label></li>
+  <li><label><input type="checkbox" disabled> バケットプロパティ → 暗号化が「AWS KMS」、キーが <code>alias/phase2-s3</code> になっている</label></li>
+  <li><label><input type="checkbox" disabled> バケットプロパティ → サーバーアクセスのログ記録が「有効」でログ先が <code>sandbox-phase2-logs-&lt;account-id&gt;</code> になっている</label></li>
+  <li><label><input type="checkbox" disabled> バケットプロパティ → バージョニングが「有効」になっている</label></li>
+  <li><label><input type="checkbox" disabled> 「パブリックアクセスをブロック」がすべて有効（4 項目とも ON）</label></li>
+</ul>
+
+<h3>Lambda コンソール</h3>
+
+<p>Lambda → 関数 <code>sandbox-phase2-on-upload</code> → モニタリングタブ</p>
+
+<ul>
+  <li><label><input type="checkbox" disabled> 「呼び出し回数」グラフに load.sh 実行時のスパイクが見える</label></li>
+  <li><label><input type="checkbox" disabled> 「エラー数と成功率」がエラー 0%</label></li>
+</ul>
+
+<h3>Lambda ログ（CloudWatch Logs）</h3>
+
+<p>CloudWatch → ロググループ <code>/aws/lambda/sandbox-phase2-on-upload</code></p>
+
+<ul>
+  <li><label><input type="checkbox" disabled> 各ログイベントが <code>{"bucket": "...", "key": "...", "size_bytes": ...}</code> の JSON 形式になっている</label></li>
+  <li><label><input type="checkbox" disabled> 12 MB オブジェクトの <code>size_bytes</code> が <code>12582912</code>（= 12 × 1024 × 1024）前後</label></li>
+</ul>
+
+<h3>プリサインド URL</h3>
+
+<p>load.sh の出力行 <code>[+] Presigned URL HTTP status: 200</code> を確認。</p>
+
+<ul>
+  <li><label><input type="checkbox" disabled> HTTP ステータスが <code>200</code>（SigV4 署名が正しく機能している）</label></li>
+  <li><label><input type="checkbox" disabled> <code>403</code> の場合は KMS キーポリシーまたはバケットポリシーを確認</label></li>
+</ul>
+
+<hr>
+
+<h2>トラブルシュート</h2>
+
+<table>
+  <thead>
+    <tr><th>症状</th><th>原因</th><th>対処</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>S3 <code>AllRequests</code> / <code>PutRequests</code> が CloudWatch に出ない</td>
+      <td><code>aws_s3_bucket_metric</code> が未作成、またはメトリクス反映待ち</td>
+      <td><code>terraform state list</code> で <code>aws_s3_bucket_metric.main_all</code> があるか確認。load.sh 実行後 1〜2 分待つ</td>
+    </tr>
+    <tr>
+      <td><code>BucketSizeBytes</code> が 0 または空</td>
+      <td>日次集計なので当日は出ない</td>
+      <td>翌日（UTC）に再度 <code>make sandbox-watch-phase2</code> を実行して確認</td>
+    </tr>
+    <tr>
+      <td>Lambda が呼ばれない（Invocations = 0）</td>
+      <td>S3 バケット通知または Lambda Permission が未設定</td>
+      <td><code>terraform state list</code> で <code>aws_s3_bucket_notification.main</code> と <code>aws_lambda_permission.s3_invoke</code> を確認。なければ <code>make sandbox-up-phase2</code> を再実行</td>
+    </tr>
+    <tr>
+      <td>load.sh で <code>An error occurred (NoSuchBucket)</code></td>
+      <td><code>make sandbox-up-phase2</code> が未実行</td>
+      <td><code>terraform -chdir=terraform/sandboxes/phase2 output</code> でバケット名が出るか確認してから load を実行</td>
+    </tr>
+    <tr>
+      <td>Presigned URL が <code>403</code> を返す</td>
+      <td>KMS バケットキーが効いていない、または署名期限切れ</td>
+      <td><code>--expires-in 60</code> なので 60 秒以内に curl を実行しているか確認。タイムゾーンずれにも注意</td>
+    </tr>
+    <tr>
+      <td><code>make sandbox-up-phase2</code> で <code>BucketAlreadyOwnedByYou</code></td>
+      <td>前回の destroy が途中で失敗しバケット名が残っている</td>
+      <td>AWS コンソールでバケットを手動削除してから再実行</td>
+    </tr>
+    <tr>
+      <td>watch.sh の <code>describe-log-streams</code> で <code>ResourceNotFoundException</code></td>
+      <td>load.sh を実行していないため Lambda がまだ一度も起動していない</td>
+      <td><code>make sandbox-load-phase2</code> を先に実行してから <code>make sandbox-watch-phase2</code> を実行</td>
+    </tr>
+    <tr>
+      <td><code>alias/phase2-s3</code> がすでに存在するエラー</td>
+      <td>前回の destroy 後にキーの削除保留が残っている</td>
+      <td><code>aws kms list-aliases</code> で確認し、削除保留キーを <code>aws kms cancel-key-deletion</code> → <code>aws kms delete-alias</code> → 再 apply</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>コスト目安</h2>
+
+<table>
+  <thead>
+    <tr><th>項目</th><th>料金（概算）</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>S3 PUT リクエスト（31 回）</td><td>$0.000155（ほぼ無視できる）</td></tr>
+    <tr><td>S3 GET リクエスト（10 回）</td><td>$0.000004（ほぼ無視できる）</td></tr>
+    <tr><td>S3 ストレージ（12 MB 程度、数時間）</td><td>$0.001 未満</td></tr>
+    <tr><td>S3 リクエストメトリクス（有効化）</td><td>$0.01 / 100 万リクエスト（無料枠内）</td></tr>
+    <tr><td>KMS カスタムキー（1 ヶ月）</td><td>$1.00/月（日割り = 約 $0.03/日）</td></tr>
+    <tr><td>KMS API コール（数十回）</td><td>$0.03 / 1 万回（無料枠内）</td></tr>
+    <tr><td>Lambda 実行（31 回、数 ms）</td><td>無料枠内（月 100 万リクエスト・400,000 GB-s 以内）</td></tr>
+    <tr><td>CloudWatch ダッシュボード（1 個）</td><td>$3.00/月（日割り = 約 $0.10/日）</td></tr>
+  </tbody>
+</table>
+
+<p><strong>実質的なコスト</strong>: KMS キーの削除保留 7 日間 ≒ $0.20、ダッシュボード 1 日 ≒ $0.10。destroy 直後から数日は KMS キーの日割り料金のみ継続する。</p>
+
+<hr>
+
+<h2>後片付けの確認</h2>
+
+<p><code>make sandbox-down-phase2</code> 実行後、以下を確認する。</p>
+
+<ul>
+  <li><label><input type="checkbox" disabled> <code>terraform destroy</code> が <code>Destroy complete! Resources: 18 destroyed.</code> で終了している</label></li>
+  <li><label><input type="checkbox" disabled> S3 バケット <code>sandbox-phase2-main-&lt;account-id&gt;</code> が AWS コンソールに存在しない</label></li>
+  <li><label><input type="checkbox" disabled> S3 バケット <code>sandbox-phase2-logs-&lt;account-id&gt;</code> が AWS コンソールに存在しない</label></li>
+  <li><label><input type="checkbox" disabled> Lambda 関数 <code>sandbox-phase2-on-upload</code> が存在しない</label></li>
+  <li><label><input type="checkbox" disabled> CloudWatch ダッシュボード <code>Phase2-S3</code> が存在しない</label></li>
+  <li><label><input type="checkbox" disabled> CloudWatch ロググループ <code>/aws/lambda/sandbox-phase2-on-upload</code> が存在しない（保持 1 日後に自動削除）</label></li>
+  <li><label><input type="checkbox" disabled> KMS キー <code>alias/phase2-s3</code> が「削除保留中（Pending deletion）」状態である（7 日後に自動削除、この間は日割り課金が続く）</label></li>
+  <li><label><input type="checkbox" disabled> タグ <code>Sandbox=phase2</code> のリソースが残っていないか Tag Editor で確認（AWS コンソール → Resource Groups &amp; Tag Editor → ap-northeast-1 で検索）</label></li>
+</ul>
+
+<div class="foot">← <a href="index.html">Phase 2 ルーター</a> ／ <a href="main.md">Markdown 目次</a><br>実 AWS の apply/destroy はご自身で実行してください（Claude は実行しません）。</div>
+</main></body></html>

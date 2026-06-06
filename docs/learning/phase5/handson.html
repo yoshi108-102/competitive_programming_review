@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 5 ハンズオン</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#6366f1;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+input[type=checkbox]{margin-right:7px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 5 ハンズオン · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Phase 5 ハンズオン — CloudFront + WAF sandbox</h1>
+
+<h2>前提条件</h2>
+
+<h3>AWS 認証・権限</h3>
+
+<ul>
+<li><code>aws configure</code> または環境変数 (<code>AWS_ACCESS_KEY_ID</code>, <code>AWS_SECRET_ACCESS_KEY</code>, <code>AWS_SESSION_TOKEN</code>) で認証済みであること</li>
+<li>必要な権限: <code>cloudfront:*</code>, <code>wafv2:*</code>, <code>s3:*</code>, <code>cloudwatch:*</code>, <code>logs:*</code>, <code>iam:CreateServiceLinkedRole</code>（CloudFront 初回のみ必要）</li>
+<li>Terraform バックエンドへの S3/DynamoDB アクセス権限</li>
+</ul>
+
+<h3>リージョン</h3>
+
+<p><strong>us-east-1 のみ</strong>。これは AWS の制約による必然的な設計です。</p>
+
+<ul>
+<li>WAF の <code>scope = "CLOUDFRONT"</code> は us-east-1 にしか作成できない</li>
+<li>CloudFront のメトリクス (<code>AWS/CloudFront</code> 名前空間) は us-east-1 の CloudWatch にしか送られない</li>
+</ul>
+
+<p><code>aws configure</code> のデフォルトリージョンが <code>ap-northeast-1</code> になっていても問題ありません。Terraform と各スクリプトが <code>--region us-east-1</code> を明示しています。</p>
+
+<h3>課金開始の注意</h3>
+
+<p><code>make sandbox-up-phase5</code> を実行した時点で課金が始まります。特に:</p>
+
+<ul>
+<li>CloudFront ディストリビューションは<strong>作成に 10〜15 分</strong>かかります</li>
+<li>削除 (<code>make sandbox-down-phase5</code>) は<strong>30〜45 分</strong>かかります。途中で Ctrl-C しないでください</li>
+<li>WAF Web ACL は時間課金です。使わない時間帯はこまめに destroy してください</li>
+</ul>
+
+<h3>Phase 固有の前提</h3>
+
+<ul>
+<li><code>terraform</code>, <code>aws</code> CLI, <code>curl</code>, <code>python3</code> がインストールされていること</li>
+<li><code>jq</code> は省略可（watch.sh は <code>python3</code> でフォールバックします）</li>
+<li>sandbox ディレクトリ: <code>terraform/sandboxes/phase5/</code></li>
+</ul>
+
+<hr>
+
+<h2>全体の流れ</h2>
+
+<table>
+<thead><tr><th>ステップ</th><th>コマンド</th><th>内容</th><th>所要時間</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>make sandbox-test-phase5</code></td><td>init + validate（課金なし）</td><td>1〜2 分</td></tr>
+<tr><td>2</td><td><code>make sandbox-up-phase5</code></td><td>apply（課金開始）</td><td>10〜15 分</td></tr>
+<tr><td>3</td><td><code>make sandbox-load-phase5</code></td><td>index.html アップ + 6 シナリオ実行</td><td>3〜5 分</td></tr>
+<tr><td>4</td><td><code>make sandbox-watch-phase5</code></td><td>CloudWatch メトリクス確認（3 分待機含む）</td><td>5〜8 分</td></tr>
+<tr><td>5</td><td><code>make sandbox-down-phase5</code></td><td>destroy（CF 削除に 30〜45 分）</td><td>30〜45 分</td></tr>
+</tbody>
+</table>
+
+<hr>
+
+<h2>ステップ詳細</h2>
+
+<h3>ステップ 1: <code>make sandbox-test-phase5</code> — 構文検証</h3>
+
+<p><strong>何が起きるか</strong>: <code>terraform init</code> と <code>terraform validate</code> を実行します。課金は一切発生しません。provider プラグインのダウンロードとモジュール解決のみ行います。</p>
+
+<pre><code>make sandbox-test-phase5</code></pre>
+
+<p><strong>期待される出力例</strong>:</p>
+
+<pre><code>Initializing the backend...
+Initializing provider plugins...
+- Finding hashicorp/aws versions matching "~> 5.0"...
+- Finding hashicorp/random versions matching "~> 3.0"...
+- Installed hashicorp/aws v5.x.x ...
+- Installed hashicorp/random v3.x.x ...
+
+Terraform has been successfully initialized!
+
+Success! The configuration is valid.</code></pre>
+
+<p><strong>所要時間</strong>: 1〜2 分（プラグインキャッシュがあれば 10 秒程度）</p>
+
+<hr>
+
+<h3>ステップ 2: <code>make sandbox-up-phase5</code> — リソース作成</h3>
+
+<p><strong>何が起きるか</strong>: <code>terraform apply -auto-approve</code> を実行し、以下のリソースを順番に作成します。</p>
+
+<table>
+<thead><tr><th>リソース</th><th>名前（suffix はランダム 8 文字）</th></tr></thead>
+<tbody>
+<tr><td>S3 バケット（オリジン）</td><td><code>atcoder-phase5-origin-&lt;suffix&gt;</code></td></tr>
+<tr><td>S3 バケット（CF ログ）</td><td><code>atcoder-phase5-cf-logs-&lt;suffix&gt;</code></td></tr>
+<tr><td>CloudFront OAC</td><td><code>phase5-oac-&lt;suffix&gt;</code></td></tr>
+<tr><td>WAF Web ACL</td><td><code>phase5-waf</code></td></tr>
+<tr><td>CloudWatch Log Group（WAF ログ）</td><td><code>aws-waf-logs-phase5</code></td></tr>
+<tr><td>WAF ログ設定</td><td>—</td></tr>
+<tr><td>CloudFront Distribution</td><td><code>*.cloudfront.net</code> ドメイン自動割当</td></tr>
+<tr><td>CloudWatch Dashboard</td><td><code>phase5-dashboard</code></td></tr>
+<tr><td>CloudWatch Alarm</td><td><code>phase5-cf-5xx-error-rate</code></td></tr>
+</tbody>
+</table>
+
+<pre><code>make sandbox-up-phase5</code></pre>
+
+<p><strong>期待される出力例</strong>:</p>
+
+<pre><code>aws_s3_bucket.cf_logs: Creating...
+aws_s3_bucket.origin: Creating...
+aws_wafv2_web_acl.main: Creating...
+aws_cloudwatch_log_group.waf: Creating...
+...
+aws_cloudfront_distribution.main: Creating...
+aws_cloudfront_distribution.main: Still creating... [10s elapsed]
+aws_cloudfront_distribution.main: Still creating... [1m0s elapsed]
+...（10〜15 分）...
+aws_cloudfront_distribution.main: Creation complete after 12m34s
+
+Apply complete! Resources: 12 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+cloudfront_distribution_id = "E1ABCDEF12345"
+cloudfront_domain_name     = "d1234abcdef.cloudfront.net"
+cf_logs_bucket_name        = "atcoder-phase5-cf-logs-a1b2c3d4"
+dashboard_url              = "https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=phase5-dashboard"
+origin_bucket_name         = "atcoder-phase5-origin-a1b2c3d4"
+waf_web_acl_arn            = "arn:aws:wafv2:us-east-1:123456789012:global/webacl/phase5-waf/..."
+waf_web_acl_name           = "phase5-waf"</code></pre>
+
+<p><strong>所要時間</strong>: 10〜15 分（ほとんどが CloudFront ディストリビューションの作成待ち）</p>
+
+<blockquote>apply 直後は CloudFront の DNS が浸透しておらず、curl で <code>NoSuchDistribution</code> が返ることがあります。5 分ほど待つと解消します。</blockquote>
+
+<hr>
+
+<h3>ステップ 3: <code>make sandbox-load-phase5</code> — リクエスト生成</h3>
+
+<p><strong>何が起きるか</strong>: <code>load.sh</code> を実行し、6 つのシナリオでリクエストを生成します。</p>
+
+<pre><code>make sandbox-load-phase5</code></pre>
+
+<h4>Step 0: index.html をオリジン S3 にアップロード</h4>
+
+<p>一時ファイルを生成して S3 に PUT します。これがないと CloudFront が 403 を返します。</p>
+
+<p><strong>期待される出力例</strong>:</p>
+
+<pre><code>INFO: CloudFront メトリクスの反映には 3〜5 分かかります。
+Target: https://d1234abcdef.cloudfront.net
+
+=== Step 0: index.html を S3 オリジンにアップロード ===
+  uploaded: s3://atcoder-phase5-origin-a1b2c3d4/index.html</code></pre>
+
+<h4>Step 1: 正常リクエスト 50 回（キャッシュ HIT/MISS 生成）</h4>
+
+<p><code>Cache-Control: no-cache</code> ヘッダ付きで 50 回リクエストします。<code>CacheHitRate</code> メトリクスを観測するためのベースラインです。</p>
+
+<p><strong>期待される出力例</strong>:</p>
+
+<pre><code>=== Step 1: 正常リクエスト (200 系) — 50 回 ===
+  [1] 200
+  [2] 200
+  [3] 200
+  ...
+  [50] 200</code></pre>
+
+<h4>Step 2: 404 生成 10 回（4xxErrorRate を上昇させる）</h4>
+
+<p>存在しないパス (<code>/not-found-1.html</code> 〜 <code>/not-found-10.html</code>) にリクエストします。</p>
+
+<p><strong>期待される出力例</strong>:</p>
+
+<pre><code>=== Step 2: 404 生成 ===
+  [1] 404
+  [2] 404
+  ...
+  [10] 404</code></pre>
+
+<h4>Step 3: WAF ブロック試験（SQLi パターン）</h4>
+
+<p><code>AWSManagedRulesCommonRuleSet</code> の <code>SQLi_QUERYARGUMENTS</code> ルールが評価されます。WAF がブロックすると 403 が返ります。</p>
+
+<p><strong>期待される出力例</strong>:</p>
+
+<pre><code>=== Step 3: WAF Block 試験 (SQLi) ===
+  SQLi: 403</code></pre>
+
+<blockquote>403 は WAF がブロックした証拠です。200 が返った場合はルールが <code>count</code> モードになっています。</blockquote>
+
+<h4>Step 4: レートリミット試験（120 並列リクエスト）</h4>
+
+<p>120 リクエストをバックグラウンド並列実行します。WAF の <code>RateLimit</code> ルール（5 分間に同一 IP から 1000 リクエスト超でブロック）をトリガーするための負荷です。CloudWatch の <code>BlockedRequests / RateLimit</code> ディメンジョンで確認できます。</p>
+
+<p><strong>期待される出力例</strong>:</p>
+
+<pre><code>=== Step 4: レートリミット試験 (120 並列) ===
+  rate-limit burst done</code></pre>
+
+<h4>Step 5: Bot UA 試験</h4>
+
+<p><code>User-Agent: python-requests/2.28.0</code> でリクエストします。標準の <code>AWSManagedRulesCommonRuleSet</code> では通常 ALLOW されます（Bot Control は別途 extra-credit）。</p>
+
+<p><strong>期待される出力例</strong>:</p>
+
+<pre><code>=== Step 5: Bot UA 試験 ===
+  BotUA: 200</code></pre>
+
+<h4>Step 6: CloudFront Invalidation</h4>
+
+<p>キャッシュ全体を無効化します（<code>/*</code> — 1000 パス以内は無料）。</p>
+
+<p><strong>期待される出力例</strong>:</p>
+
+<pre><code>=== Step 6: CF Invalidation (/* — 1000 パス超は有料) ===
+|  CreateInvalidation  |
+|  ...                 |</code></pre>
+
+<p>ロード完了後の案内:</p>
+
+<pre><code>ロード完了。メトリクス反映まで 3〜5 分待つ。
+watch.sh または以下で確認:
+  aws cloudwatch get-metric-statistics --region us-east-1 \
+    --namespace AWS/CloudFront --metric-name Requests \
+    ...</code></pre>
+
+<p><strong>所要時間</strong>: 3〜5 分（Step 4 の並列 curl 完了待ち + 各ステップの sleep 合計）</p>
+
+<hr>
+
+<h3>ステップ 4: <code>make sandbox-watch-phase5</code> — メトリクス確認</h3>
+
+<p><strong>何が起きるか</strong>: <code>watch.sh</code> を実行します。まず 3 分間のメトリクス反映待ち (<code>sleep 180</code>) を行ってから、CloudWatch の各メトリクスを取得・表示します。</p>
+
+<pre><code>make sandbox-watch-phase5</code></pre>
+
+<p><strong>Step 0: ダッシュボード存在確認</strong></p>
+
+<pre><code>=== ダッシュボード確認 ===
+  OK: dashboard exists</code></pre>
+
+<p><strong>Step 1: 3 分待機</strong></p>
+
+<pre><code>=== メトリクス反映待ち (3 分) ===
+（ここで 180 秒待ちます）</code></pre>
+
+<p><strong>Step 2: CF リクエスト数</strong></p>
+
+<pre><code>=== CF Requests (直近 1 時間) ===
+------------------------------------------------------
+|              GetMetricStatistics                   |
++------------+--------+--------+--------------------+
+|  Average   |Maximum |Minimum |     Timestamp      |
++------------+--------+--------+--------------------+
+|  180.0     |180.0   |180.0   | 2026-06-06T10:00:00Z |
++------------+--------+--------+--------------------+</code></pre>
+
+<p><strong>Step 3: エラー率（4xx / 5xx / Total）</strong></p>
+
+<pre><code>=== CF 4xx / 5xx / Total Error Rate ===
+  --- 4xxErrorRate ---
+  ...（テーブル形式）...
+  --- 5xxErrorRate ---
+  ...
+  --- TotalErrorRate ---
+  ...</code></pre>
+
+<p><strong>Step 4: WAF ブロック数</strong></p>
+
+<pre><code>=== WAF BlockedRequests ===
+------------------------------------------------------
+|              GetMetricStatistics                   |
++----------+--------+--------+---------------------+
+|  Sum     |Maximum |Minimum |      Timestamp      |
++----------+--------+--------+---------------------+
+|  3.0     |3.0     |3.0     | 2026-06-06T10:00:00Z |
++----------+--------+--------+---------------------+</code></pre>
+
+<p><strong>Step 5: WAF サンプリングリクエスト（直近 3 分）</strong></p>
+
+<pre><code>=== WAF Sampled Requests (直近 3 分) ===
+{"Action": "BLOCK", "URI": "/?id=1' OR '1'='1"}</code></pre>
+
+<p><strong>Step 6: コンソール Deep Link</strong></p>
+
+<pre><code>=== コンソール Deep Link (us-east-1 固定) ===
+CloudFront メトリクス:
+  https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#metricsV2:...
+WAF ダッシュボード:
+  https://us-east-1.console.aws.amazon.com/wafv2/homev2/web-acls?region=us-east-1
+ダッシュボード:
+  https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=phase5-dashboard</code></pre>
+
+<p><strong>所要時間</strong>: 3 分（待機）+ 1〜2 分（メトリクス取得）= 5〜8 分</p>
+
+<hr>
+
+<h3>ステップ 5: <code>make sandbox-down-phase5</code> — リソース削除</h3>
+
+<p><strong>何が起きるか</strong>: <code>terraform destroy -auto-approve</code> を実行します。CloudFront ディストリビューションの削除が最も時間がかかります。</p>
+
+<pre><code>make sandbox-down-phase5</code></pre>
+
+<p><strong>期待される出力例</strong>:</p>
+
+<pre><code>aws_cloudwatch_metric_alarm.cf_5xx: Destroying...
+aws_cloudwatch_dashboard.phase5: Destroying...
+aws_wafv2_web_acl_logging_configuration.main: Destroying...
+aws_cloudfront_distribution.main: Destroying...
+aws_cloudfront_distribution.main: Still destroying... [1m0s elapsed]
+...（30〜45 分）...
+aws_cloudfront_distribution.main: Destruction complete after 38m12s
+aws_s3_bucket.cf_logs: Destroying...
+aws_s3_bucket.origin: Destroying...
+
+Destroy complete! Resources: 12 destroyed.</code></pre>
+
+<p><strong>所要時間</strong>: 30〜45 分</p>
+
+<blockquote>Ctrl-C で中断すると CloudFront が「無効化中」のまま残り、その後の再 destroy も失敗しやすくなります。コンソールで手動削除が必要になる場合があります。</blockquote>
+
+<hr>
+
+<h2>観察ポイント（チェックリスト）</h2>
+
+<h3>CloudWatch ダッシュボード (<code>phase5-dashboard</code>)</h3>
+
+<p>URL: <a href="https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=phase5-dashboard">https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=phase5-dashboard</a></p>
+
+<p><strong>ウィジェット 1: CF Requests &amp; Error Rates</strong>（左上 12 列 × 6 行）</p>
+
+<ul>
+<li><label><input type="checkbox" disabled> <code>Requests</code> (Sum) が load.sh 実行後に 170 以上になっている（50 + 10 + 120 = 180 リクエスト想定）</label></li>
+<li><label><input type="checkbox" disabled> <code>4xxErrorRate</code> (Average) が 5〜10% 台に上昇している（Step 2 の 404 × 10 が原因）</label></li>
+<li><label><input type="checkbox" disabled> <code>5xxErrorRate</code> (Average) が 0% に近い（オリジン S3 は安定しているため）</label></li>
+<li><label><input type="checkbox" disabled> <code>CacheHitRate</code> (Average) が値を持つ（50 リクエスト以上打った後でないと NaN になる場合あり）</label></li>
+</ul>
+
+<p><strong>ウィジェット 2: WAF Allowed vs Blocked</strong>（右上 12 列 × 6 行）</p>
+
+<ul>
+<li><label><input type="checkbox" disabled> <code>AllowedRequests / Rule=ALL</code> が正常リクエスト分（150 前後）計上されている</label></li>
+<li><label><input type="checkbox" disabled> <code>BlockedRequests / Rule=ALL</code> が 1 以上になっている（Step 3 の SQLi ブロック分）</label></li>
+<li><label><input type="checkbox" disabled> <code>BlockedRequests / Rule=RateLimit</code> が 0 または 1（バースト 120 は 1000/5min を下回るので必ずしもブロックされない）</label></li>
+<li><label><input type="checkbox" disabled> <code>BlockedRequests / Rule=AWSManagedRulesCommonRuleSet</code> が 1 以上（SQLi ブロック）</label></li>
+</ul>
+
+<p><strong>ウィジェット 3: WAF Block ログ</strong>（下段 24 列 × 6 行、Log Insights テーブル）</p>
+
+<ul>
+<li><label><input type="checkbox" disabled> <code>action = 'BLOCK'</code> の行が存在する</label></li>
+<li><label><input type="checkbox" disabled> <code>httpRequest.uri</code> が <code>/?id=1' OR '1'='1</code> 相当のエントリを確認できる</label></li>
+<li><label><input type="checkbox" disabled> <code>@timestamp</code> が load.sh 実行時刻と一致する</label></li>
+</ul>
+
+<h3>CloudWatch メトリクス（コンソール）</h3>
+
+<ul>
+<li><label><input type="checkbox" disabled> <code>AWS/CloudFront</code> 名前空間で <code>DistributionId</code> ディメンジョンにより自分のディストリビューションを絞り込める</label></li>
+<li><label><input type="checkbox" disabled> <code>AWS/WAFV2</code> 名前空間の <code>Region = CloudFront</code>（<code>us-east-1</code> でなく文字列 <code>CloudFront</code>）ディメンジョンで WAF メトリクスを確認できる</label></li>
+</ul>
+
+<h3>CloudWatch Alarm</h3>
+
+<ul>
+<li><label><input type="checkbox" disabled> <code>phase5-cf-5xx-error-rate</code> アラームが <code>OK</code> 状態（5xxErrorRate が 5% 未満）</label></li>
+<li><label><input type="checkbox" disabled> もし <code>ALARM</code> 状態なら何らかのオリジンエラーが発生している</label></li>
+</ul>
+
+<h3>WAF コンソール</h3>
+
+<ul>
+<li><label><input type="checkbox" disabled> <a href="https://us-east-1.console.aws.amazon.com/wafv2/homev2/web-acls?region=us-east-1">https://us-east-1.console.aws.amazon.com/wafv2/homev2/web-acls?region=us-east-1</a> で <code>phase5-waf</code> が表示される</label></li>
+<li><label><input type="checkbox" disabled> Web ACL 詳細 → Rules で <code>AWSManagedRulesCommonRuleSet</code>（priority 1）と <code>RateLimit</code>（priority 2）が確認できる</label></li>
+<li><label><input type="checkbox" disabled> Sampled requests で SQLi パターンが BLOCK されているサンプルを確認できる</label></li>
+</ul>
+
+<hr>
+
+<h2>トラブルシュート</h2>
+
+<table>
+<thead><tr><th>症状</th><th>原因</th><th>対処</th></tr></thead>
+<tbody>
+<tr><td><code>apply</code> が <code>InvalidClientTokenId</code> で失敗</td><td>認証情報が期限切れ（MFA/AssumeRole）</td><td><code>aws sts get-caller-identity</code> で確認、再認証</td></tr>
+<tr><td><code>apply</code> が <code>WAFInvalidParameterException</code> で失敗</td><td>WAF の <code>scope=CLOUDFRONT</code> をリージョンが非 us-east-1 で実行</td><td>provider の <code>region = "us-east-1"</code> を確認</td></tr>
+<tr><td><code>aws_wafv2_web_acl_logging_configuration</code> が <code>WAFLogDestinationPermissionIssueException</code></td><td>CloudWatch Logs へのリソースポリシーが未設定</td><td>初回のみ <code>aws logs put-resource-policy</code> を手動実行（詳細は下記）</td></tr>
+<tr><td><code>load.sh</code> の curl が <code>Could not resolve host</code></td><td>CloudFront が未反映（apply 直後）</td><td>5〜10 分待って再実行</td></tr>
+<tr><td><code>load.sh</code> の curl が全リクエスト <code>403</code></td><td>index.html が S3 に未アップロード、または OAC のバケットポリシー不整合</td><td><code>aws s3 ls s3://&lt;origin_bucket&gt;</code> で確認</td></tr>
+<tr><td>watch.sh で CF メトリクスが返らない</td><td>load.sh 実行直後すぎる（5 分未満）か <code>--period 60</code> を指定</td><td>CF メトリクスの最小粒度は 5 分。<code>--period 300</code> に変更</td></tr>
+<tr><td>WAF メトリクスの Dimension Region が見つからない</td><td><code>Region=us-east-1</code> ではなく <code>Region=CloudFront</code> を指定すべき</td><td><code>--dimensions Name=Region,Value=CloudFront</code> に修正</td></tr>
+<tr><td><code>destroy</code> が 45 分以上かかる</td><td>CloudFront の無効化・削除が長い</td><td>正常動作。Ctrl-C しないこと</td></tr>
+<tr><td><code>CacheHitRate</code> が NaN または 0.0</td><td>リクエスト数が少なすぎる</td><td>50 リクエスト以上打った後 5 分待ってから確認</td></tr>
+<tr><td><code>get-sampled-requests</code> がエラー</td><td><code>--time-window</code> に ISO 8601 を渡している</td><td>watch.sh では <code>date</code> コマンドで Unix 秒に変換済み。手動実行時は <code>date +%s</code> を使う</td></tr>
+</tbody>
+</table>
+
+<h3>WAF ログエラー: リソースポリシー問題の詳細</h3>
+
+<p>WAF から CloudWatch Logs へのログ配信は、対象ロググループに <code>delivery.logs.amazonaws.com</code> が書き込めるリソースポリシーが必要です。Terraform の <code>aws_wafv2_web_acl_logging_configuration</code> はこのポリシーを自動作成しません。</p>
+
+<p>初回 apply 後に以下のエラーが出た場合:</p>
+
+<pre><code>WAFLogDestinationPermissionIssueException: AWS WAF couldn&#39;t perform the operation
+because your resource doesn&#39;t have the necessary permissions for the log delivery service.</code></pre>
+
+<p>対処コマンド:</p>
+
+<pre><code>aws logs put-resource-policy \
+  --region us-east-1 \
+  --policy-name "AWSWAFLogsPolicy" \
+  --policy-document '{
+    "Version": "2012-10-17",
+    "Statement": [{
+      "Effect": "Allow",
+      "Principal": {"Service": "delivery.logs.amazonaws.com"},
+      "Action": ["logs:CreateLogStream","logs:PutLogEvents"],
+      "Resource": "arn:aws:logs:us-east-1:*:log-group:aws-waf-logs-*:*"
+    }]
+  }'</code></pre>
+
+<p>その後 <code>terraform apply</code> を再実行してください。</p>
+
+<hr>
+
+<h2>コスト目安</h2>
+
+<table>
+<thead><tr><th>項目</th><th>単価</th><th>sandbox 1 回あたりの目安</th></tr></thead>
+<tbody>
+<tr><td>CloudFront リクエスト</td><td>$0.0075 / 10,000 req（NA + EU）</td><td>$0.001 未満（〜200 リクエスト）</td></tr>
+<tr><td>CloudFront データ転送</td><td>$0.085 / GB（NA）</td><td>$0.001 未満（HTML 数 KB のみ）</td></tr>
+<tr><td>WAF Web ACL</td><td>$5 / 月 = 約 $0.007 / 時間</td><td>1 時間以内なら $0.01 未満</td></tr>
+<tr><td>WAF ルール</td><td>$1 / ルール / 月 × 2 ルール</td><td>$0.003 未満</td></tr>
+<tr><td>CloudWatch Logs（WAF ログ）</td><td>$0.50 / GB（取り込み）</td><td>無視できる量（KB オーダー）</td></tr>
+<tr><td>CloudWatch Alarm</td><td>$0.10 / アラーム / 月</td><td>$0.001 未満</td></tr>
+<tr><td>S3 バケット</td><td>リクエスト課金のみ</td><td>$0.001 未満</td></tr>
+<tr><td><strong>合計</strong></td><td></td><td><strong>$0.02 未満（1 時間以内に destroy すれば）</strong></td></tr>
+</tbody>
+</table>
+
+<p>WAF の月額費用が相対的に大きいため、destroy を忘れると 1 日放置で $0.17 程度かかります。</p>
+
+<hr>
+
+<h2>後片付けの確認</h2>
+
+<p><code>make sandbox-down-phase5</code> 完了後に以下を確認してください。</p>
+
+<h3>destroy 完了確認</h3>
+
+<ul>
+<li><label><input type="checkbox" disabled> <code>Destroy complete! Resources: 12 destroyed.</code> の出力を確認した</label></li>
+<li><label><input type="checkbox" disabled> <code>terraform state list</code> の出力が空（またはコマンドがエラーなし）</label></li>
+</ul>
+
+<h3>AWS コンソールでの残存確認</h3>
+
+<ul>
+<li><label><input type="checkbox" disabled> CloudFront コンソール（us-east-1）で <code>d1234abcdef.cloudfront.net</code> のディストリビューションが存在しない</label></li>
+<li><label><input type="checkbox" disabled> WAF コンソール（us-east-1）で <code>phase5-waf</code> Web ACL が存在しない</label></li>
+<li><label><input type="checkbox" disabled> S3 コンソールで <code>atcoder-phase5-origin-*</code> と <code>atcoder-phase5-cf-logs-*</code> バケットが存在しない</label></li>
+<li><label><input type="checkbox" disabled> CloudWatch コンソール（us-east-1）で <code>phase5-dashboard</code> ダッシュボードが存在しない</label></li>
+<li><label><input type="checkbox" disabled> CloudWatch Logs（us-east-1）で <code>aws-waf-logs-phase5</code> ロググループが存在しない</label></li>
+<li><label><input type="checkbox" disabled> CloudWatch Alarms（us-east-1）で <code>phase5-cf-5xx-error-rate</code> が存在しない</label></li>
+</ul>
+
+<h3>タグによる残存リソース確認</h3>
+
+<p>この sandbox のリソースにはタグ <code>Sandbox=phase5</code> が付与されています。</p>
+
+<pre><code>aws resourcegroupstaggingapi get-resources \
+  --region us-east-1 \
+  --tag-filters Key=Sandbox,Values=phase5 \
+  --output table</code></pre>
+
+<p>出力が空であれば全リソースが削除されています。</p>
+
+<h3>KMS 7 日保留（extra-credit 実施者のみ）</h3>
+
+<p>SSE-KMS に切り替えた場合、KMS キーの削除には最低 7 日間の待機期間があります。</p>
+
+<ul>
+<li><label><input type="checkbox" disabled> KMS コンソールで <code>phase5-*</code> キーが「削除保留中」になっていることを確認した（これは正常）</label></li>
+<li><label><input type="checkbox" disabled> 7 日後に自動削除されることを把握している</label></li>
+</ul>
+
+<div class="foot">← <a href="index.html">Phase 5 ルーター</a> ／ <a href="main.md">Markdown 目次</a><br>実 AWS の apply/destroy はご自身で実行してください（Claude は実行しません）。</div>
+</main></body></html>

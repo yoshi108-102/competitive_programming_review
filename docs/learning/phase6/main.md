@@ -6,6 +6,7 @@ Bedrock (Claude)
 
 ## 教材
 
+- [handson.md](handson.md) — Phase 6 ハンズオン — Bedrock (Claude) sandbox
 - [preview-bedrock.md](preview-bedrock.md) — Phase 6 プレビュー教材: Bedrock — Claude を呼ぶ Messages API 体験
 
 ## ハンズオン — 実 AWS sandbox
@@ -17,5 +18,7 @@ Bedrock (Claude)
 3. `make sandbox-load-phase6` — InvokeModel を少数回・短プロンプトで実行
 4. `make sandbox-watch-phase6` — AWS/Bedrock の Invocations / Latency（反映 2〜3 分）
 5. `make sandbox-down-phase6` — terraform destroy（課金停止）
+
+詳しい手順・期待出力・観察チェックリスト・トラブルシュート → [handson.html](handson.html) ／ [handson.md](handson.md)
 
 > ⚠ 事前にコンソールで「モデルアクセス」を有効化すること。未有効だと InvokeModel が 403 になり load.sh が中断、CloudWatch にも何も出ない。トークン課金あり。

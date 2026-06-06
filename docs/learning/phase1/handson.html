@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 ハンズオン</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#2cb696;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+input[type=checkbox]{margin-right:7px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 ハンズオン · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Phase 1 ハンズオン — Cognito / API GW / Lambda / DynamoDB(本番観測) sandbox</h1>
+
+<h2>前提条件</h2>
+
+<h3>AWS 認証と権限</h3>
+
+<p>以下の権限を持つ IAM ユーザーまたはロールで <code>aws configure</code> 済みであること。</p>
+
+<ul>
+  <li><code>cloudwatch:PutDashboard</code> / <code>cloudwatch:GetDashboard</code> / <code>cloudwatch:DeleteDashboards</code></li>
+  <li><code>cloudwatch:GetMetricStatistics</code></li>
+  <li><code>lambda:GetFunction</code>（本番 Lambda の参照のみ）</li>
+  <li><code>apigateway:GET</code>（本番 API GW の参照のみ）</li>
+  <li><code>dynamodb:DescribeTable</code></li>
+  <li><code>cognito-idp:DescribeUserPool</code> / <code>cognito-idp:ListUserPools</code></li>
+</ul>
+
+<p>sandbox が書き込むのは CloudWatch ダッシュボード 1 本のみ。本番リソースへの書き込みは一切行わない。</p>
+
+<h3>リージョン</h3>
+
+<p><code>ap-northeast-1</code>（東京）。<code>AWS_DEFAULT_REGION=ap-northeast-1</code> を設定しておくか、<code>~/.aws/config</code> で default region を指定する。</p>
+
+<pre><code>export AWS_DEFAULT_REGION=ap-northeast-1</code></pre>
+
+<h3>本番スタックの apply 完了</h3>
+
+<p>この sandbox は本番スタック（Lambda / API Gateway / DynamoDB / Cognito）を <code>data</code> source で lookup するだけであり、本番スタックが apply 済みであることが前提。未デプロイの場合は <code>make sandbox-load-phase1</code> でエラーになる（後述のトラブルシュートを参照）。</p>
+
+<h3>tfvars の準備</h3>
+
+<p><code>terraform/sandboxes/phase1/terraform.tfvars</code> に本番リソース名を書く（<code>.gitignore</code> 済みなのでコミット不要）。</p>
+
+<pre><code># terraform/sandboxes/phase1/terraform.tfvars の例
+lambda_function_names  = [
+  &quot;atcoder-review-save-user-prod&quot;,
+  &quot;atcoder-review-sync-submissions-prod&quot;,
+  &quot;atcoder-review-get-submissions-prod&quot;
+]
+api_gw_rest_api_id     = &quot;atcoder-review-api-prod&quot;   # API Name または ID
+api_gw_stage_name      = &quot;prod&quot;
+dynamodb_table_name    = &quot;atcoder-review-submissions-prod&quot;
+cognito_user_pool_id   = &quot;ap-northeast-1_XXXXXXXXX&quot;  # terraform output cognito_user_pool_id</code></pre>
+
+<p>本番 output から取得する場合:</p>
+
+<pre><code>cd terraform   # プロジェクトルートの terraform/ ディレクトリ
+terraform output</code></pre>
+
+<h3>課金開始の注意</h3>
+
+<p><code>make sandbox-up-phase1</code>（Terraform apply）を実行した瞬間から、CloudWatch ダッシュボード 1 本分の課金が始まる。料金は <strong>月 $3 / ダッシュボード</strong>（ap-northeast-1）。数時間の観測なら日割りで数円以下。観測が終わったら必ず <code>make sandbox-down-phase1</code> で削除すること。</p>
+
+<hr>
+
+<h2>全体の流れ</h2>
+
+<pre><code>test → up → load → watch → down
+  ↑        ↑        ↑        ↑        ↑
+validate  apply  リクエ  CLI で   destroy
+（無課金） ダッシュ  スト生成  メトリクス
+          ボード作成  (2〜5分) 確認</code></pre>
+
+<table>
+  <thead>
+    <tr><th>ステップ</th><th>コマンド</th><th>内容</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>1</td><td><code>make sandbox-test-phase1</code></td><td>terraform validate / plan（課金なし）</td></tr>
+    <tr><td>2</td><td><code>make sandbox-up-phase1</code></td><td>dashboard apply（課金開始）</td></tr>
+    <tr><td>3</td><td><code>make sandbox-load-phase1</code></td><td>API に無認証・不正トークンリクエストを投げてメトリクスを生成</td></tr>
+    <tr><td>4</td><td><code>make sandbox-watch-phase1</code></td><td>CLI で各メトリクスを取得＋コンソール deep link 表示</td></tr>
+    <tr><td>5</td><td><code>make sandbox-down-phase1</code></td><td>dashboard destroy（課金終了）</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>ステップ詳細</h2>
+
+<h3>ステップ 1: <code>make sandbox-test-phase1</code> — validate &amp; plan</h3>
+
+<p><strong>何が起きるか</strong>: <code>terraform validate</code> と <code>terraform plan</code> を実行する。本番リソースへの書き込みはゼロ。課金は発生しない。<code>data</code> source の lookup が成功するかどうかも確認できる。</p>
+
+<p><strong>実行コマンド</strong>:</p>
+
+<pre><code>make sandbox-test-phase1</code></pre>
+
+<p><strong>期待される出力例</strong>:</p>
+
+<pre><code>==> terraform validate
+Success! The configuration is valid.
+
+==> terraform plan
+data.aws_lambda_function.fns[&quot;atcoder-review-get-submissions-prod&quot;]: Reading...
+data.aws_lambda_function.fns[&quot;atcoder-review-save-user-prod&quot;]: Reading...
+data.aws_lambda_function.fns[&quot;atcoder-review-sync-submissions-prod&quot;]: Reading...
+data.aws_api_gateway_rest_api.main: Reading...
+data.aws_dynamodb_table.main: Reading...
+data.aws_cognito_user_pools.main: Reading...
+data.aws_cloudwatch_log_group.lambda_logs[&quot;atcoder-review-get-submissions-prod&quot;]: Reading...
+...
+Plan: 1 to add, 0 to change, 0 to destroy.</code></pre>
+
+<p><code>Plan: 1 to add</code> の 1 件は <code>aws_cloudwatch_dashboard.phase1</code> のみ。それ以外の追加が出た場合は tfvars の内容を見直す。</p>
+
+<p><strong>所要時間</strong>: 15〜30 秒</p>
+
+<hr>
+
+<h3>ステップ 2: <code>make sandbox-up-phase1</code> — ダッシュボード作成</h3>
+
+<p><strong>何が起きるか</strong>: <code>terraform apply</code> を実行し、<code>phase1-sandbox</code> という名前の CloudWatch ダッシュボードを作成する。ダッシュボードには以下の 5 ウィジェットが含まれる:</p>
+
+<ul>
+  <li>API GW — Requests &amp; Errors (Count / 4XXError / 5XXError)</li>
+  <li>API GW — Latency (P50 / P90 / P99)</li>
+  <li>Lambda — Invocations &amp; Errors（全 3 関数を 1 グラフに）</li>
+  <li>DynamoDB — Consumed Capacity (Read / Write)</li>
+  <li>Cognito — SignIn Successes &amp; Token Refreshes</li>
+</ul>
+
+<p><strong>実行コマンド</strong>:</p>
+
+<pre><code>make sandbox-up-phase1</code></pre>
+
+<p><strong>期待される出力例</strong>:</p>
+
+<pre><code>aws_cloudwatch_dashboard.phase1: Creating...
+aws_cloudwatch_dashboard.phase1: Creation complete after 1s [id=phase1-sandbox]
+
+Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+dashboard_name = &quot;phase1-sandbox&quot;
+dashboard_url = &quot;https://ap-northeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#dashboards:name=phase1-sandbox&quot;
+dynamodb_table_arn = &quot;arn:aws:dynamodb:ap-northeast-1:123456789012:table/atcoder-review-submissions-prod&quot;
+lambda_function_arns = {
+  &quot;atcoder-review-get-submissions-prod&quot; = &quot;arn:aws:lambda:ap-northeast-1:123456789012:function:atcoder-review-get-submissions-prod&quot;
+  &quot;atcoder-review-save-user-prod&quot; = &quot;arn:aws:lambda:ap-northeast-1:123456789012:function:atcoder-review-save-user-prod&quot;
+  &quot;atcoder-review-sync-submissions-prod&quot; = &quot;arn:aws:lambda:ap-northeast-1:123456789012:function:atcoder-review-sync-submissions-prod&quot;
+}</code></pre>
+
+<p><code>dashboard_url</code> に表示された URL をブラウザで開くとダッシュボードが確認できる。この時点ではメトリクスはまだ空。</p>
+
+<p><strong>所要時間</strong>: 5〜10 秒</p>
+
+<hr>
+
+<h3>ステップ 3: <code>make sandbox-load-phase1</code> — ロード生成</h3>
+
+<p><strong>何が起きるか</strong>: <code>load.sh</code> が以下のシナリオを順番に実行し、CloudWatch にメトリクスデータを積む。</p>
+
+<table>
+  <thead>
+    <tr><th>フェーズ</th><th>内容</th><th>目的</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>[1] 無認証 GET x50</td><td>Authorization ヘッダーなしで <code>/submissions?limit=10</code></td><td>API GW の Count・4XXError (401) を積む</td></tr>
+    <tr><td>[2] 不正トークン x10</td><td><code>Authorization: Bearer invalid.token.N</code> で GET</td><td>4XXError をさらに積み、Cognito Authorizer の拒否を確認</td></tr>
+    <tr><td>[3] 認証あり（任意）</td><td><code>TEST_PASSWORD</code> 設定時のみ: Cognito サインイン後に GET x30 + POST /users x10</td><td>Lambda の Invocations・DynamoDB の ConsumedWriteCapacityUnits を出す</td></tr>
+  </tbody>
+</table>
+
+<p><code>load.sh</code> は本番 terraform output から <code>API_URL</code> / <code>USER_POOL_ID</code> / <code>CLIENT_ID</code> を自動取得する。環境変数を明示した場合はそちらが優先される。</p>
+
+<p><strong>実行コマンド（最小: 無認証トラフィックのみ）</strong>:</p>
+
+<pre><code>make sandbox-load-phase1</code></pre>
+
+<p><strong>実行コマンド（フル: 認証ありトラフィックも含む）</strong>:</p>
+
+<pre><code>TEST_USERNAME=your@example.com TEST_PASSWORD=YourPass123! make sandbox-load-phase1</code></pre>
+
+<p><strong>期待される出力例（最小実行）</strong>:</p>
+
+<pre><code>API_URL  = https://xxxxxxxxxx.execute-api.ap-northeast-1.amazonaws.com/prod
+REGION   = ap-northeast-1
+
+=== [1] 無認証 GET /submissions x50 (Cognito Authorizer が 401 を返す) ===
+  status: 401 401 401 401 401 401 401 401 401 401 401 401 401 401 401 ...
+=== [2] 不正トークン GET /submissions x10 ===
+  status: 401 401 401 401 401 401 401 401 401 401
+=== [3] 認証ありトラフィックはスキップ (TEST_PASSWORD 未設定) ===
+  handler Lambda の Invocations も出したい場合:
+    TEST_USERNAME=you@example.com TEST_PASSWORD=... make sandbox-load-phase1
+
+ロード生成 完了。メトリクス反映まで 2-5 分待ってから make sandbox-watch-phase1 を実行してください。</code></pre>
+
+<p><strong>期待される出力例（フル実行、認証成功時）</strong>:</p>
+
+<pre><code>=== [3] Cognito 認証 -&gt; 認証あり負荷 (USERNAME=your@example.com) ===
+  サインイン成功。認証あり GET x30 + POST /users x10 を送信
+200 200 200 200 200 ... （GET x30）
+200 200 200 200 200 ... （POST /users x10）</code></pre>
+
+<p><strong>所要時間</strong>: 約 1〜2 分（フルの場合は Cognito 認証が加わるため + 数十秒）</p>
+
+<blockquote>メトリクス反映まで 2〜5 分待つこと。watch.sh は自動で 60 秒待機するが、その後さらにデータが増える場合もある。</blockquote>
+
+<hr>
+
+<h3>ステップ 4: <code>make sandbox-watch-phase1</code> — メトリクス観測</h3>
+
+<p><strong>何が起きるか</strong>: <code>watch.sh</code> が以下の順で CLI 取得を実行し、最後にコンソール deep link を表示する。</p>
+
+<ol>
+  <li><code>[0]</code> ダッシュボードの存在確認（<code>get-dashboard</code>）</li>
+  <li>60 秒待機</li>
+  <li><code>[1]</code> API Gateway: <code>5XXError</code> / <code>4XXError</code> / <code>Count</code> / <code>Latency</code> を直近 5 分で取得</li>
+  <li><code>[2]</code> Lambda 全 3 関数: <code>Invocations</code> / <code>Errors</code> / <code>Duration</code> / <code>Throttles</code> / <code>ConcurrentExecutions</code></li>
+  <li><code>[3]</code> DynamoDB: <code>ConsumedReadCapacityUnits</code> / <code>ConsumedWriteCapacityUnits</code> / <code>SystemErrors</code> / <code>UserErrors</code> / <code>SuccessfulRequestLatency</code></li>
+  <li><code>[4]</code> Cognito: <code>SignInSuccesses</code> / <code>TokenRefreshSuccesses</code></li>
+</ol>
+
+<p><strong>実行コマンド</strong>:</p>
+
+<pre><code>make sandbox-watch-phase1</code></pre>
+
+<p><strong>期待される出力例（抜粋）</strong>:</p>
+
+<pre><code>INFO: CloudWatch メトリクスの反映には 1〜5 分かかります。
+...
+=== [0] Dashboard 存在確認 ===
+phase1-sandbox
+Dashboard OK
+
+メトリクス反映まで最大 5 分かかります。60 秒待機します...
+
+=== [1] API Gateway: 5XX / 4XX / Count / Latency ===
+--- 4XXError ---
+-----------------------------------------------------------------------
+|                       GetMetricStatistics                           |
++----------+----------+----------+------------------+-----------------+
+|  Average |  Maximum |    Sum   |    Timestamp     |    Unit         |
++----------+----------+----------+------------------+-----------------+
+|  1.0     |  1.0     |  60.0    |  2026-06-06T...  |  Count          |
++----------+----------+----------+------------------+-----------------+
+--- Count ---
+...
+
+=== [2] Lambda: Invocations / Errors / Duration / Throttles ===
+--- Lambda: atcoder-review-get-submissions-prod ---
+（TEST_PASSWORD 未設定の場合は Invocations が 0 または no data）
+...
+
+=== [3] DynamoDB: ConsumedReadCapacityUnits / ... ===
+...
+
+=== [4] Cognito: SignInSuccesses / TokenRefreshSuccesses ===
+（Advanced Security 無効の場合は下記が出る）
+SignInSuccesses: no data (Advanced Security may not be enabled)
+TokenRefreshSuccesses: no data (Advanced Security may not be enabled)
+
+=== Console Deep Links ===
+CloudWatch Dashboard : https://ap-northeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#dashboards:name=phase1-sandbox
+API GW Metrics       : https://ap-northeast-1.console.aws.amazon.com/apigateway/main/apis/atcoder-review-api-prod/stages/prod/metrics
+Lambda Monitoring    : https://ap-northeast-1.console.aws.amazon.com/lambda/home?region=ap-northeast-1#/functions
+DynamoDB Metrics     : https://ap-northeast-1.console.aws.amazon.com/dynamodb/home?region=ap-northeast-1#tables:selected=atcoder-review-submissions-prod;tab=monitoring
+Log Insights         : https://ap-northeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#logsV2:logs-insights
+
+==========================================
+観測が終わったら必ず: make sandbox-down-phase1
+==========================================</code></pre>
+
+<p><strong>所要時間</strong>: 60 秒待機 + メトリクス取得で合計 2〜3 分</p>
+
+<hr>
+
+<h3>ステップ 5: <code>make sandbox-down-phase1</code> — ダッシュボード削除</h3>
+
+<p><strong>何が起きるか</strong>: <code>terraform destroy</code> で <code>phase1-sandbox</code> ダッシュボードを削除する。data source で lookup した本番リソースには一切触れない。</p>
+
+<p><strong>実行コマンド</strong>:</p>
+
+<pre><code>make sandbox-down-phase1</code></pre>
+
+<p><strong>期待される出力例</strong>:</p>
+
+<pre><code>aws_cloudwatch_dashboard.phase1: Destroying... [id=phase1-sandbox]
+aws_cloudwatch_dashboard.phase1: Destruction complete after 0s
+
+Destroy complete! Resources: 1 destroyed.</code></pre>
+
+<p><strong>所要時間</strong>: 5〜10 秒。ダッシュボードは即時削除される（KMS 保留や CloudFront 伝播のような長時間待ちは発生しない）。</p>
+
+<hr>
+
+<h2>観察ポイント（チェックリスト）</h2>
+
+<p>CloudWatch コンソールで <code>phase1-sandbox</code> ダッシュボードを開き、以下を確認する。</p>
+
+<h3>API Gateway ウィジェット</h3>
+
+<ul>
+  <li><label><input type="checkbox" disabled> <code>API GW - Requests &amp; Errors</code> グラフで <code>Count</code>（青）が 50 以上立ち上がっている</label></li>
+  <li><label><input type="checkbox" disabled> <code>4XXError</code>（橙）が <code>Count</code> とほぼ同数（ほぼ全リクエストが 401）になっている</label></li>
+  <li><label><input type="checkbox" disabled> <code>5XXError</code>（赤）は 0 のまま（Lambda が直接エラーを返していないことの確認）</label></li>
+  <li><label><input type="checkbox" disabled> <code>API GW - Latency (P50/P90/P99)</code> グラフで P50 &lt; P90 &lt; P99 の順に値が大きい</label></li>
+</ul>
+
+<h3>Lambda ウィジェット</h3>
+
+<ul>
+  <li><label><input type="checkbox" disabled> <code>Lambda - Invocations &amp; Errors</code> グラフで、TEST_PASSWORD 未設定時は Invocations が 0 または "no data" になっている（Cognito Authorizer が Lambda を呼ぶ前に 401 を返すため）</label></li>
+  <li><label><input type="checkbox" disabled> TEST_PASSWORD 設定時は <code>atcoder-review-get-submissions-prod</code> と <code>atcoder-review-save-user-prod</code> の Invocations がそれぞれ立ち上がっている</label></li>
+  <li><label><input type="checkbox" disabled> Errors が Invocations より小さい（あるいは 0）</label></li>
+</ul>
+
+<h3>DynamoDB ウィジェット</h3>
+
+<ul>
+  <li><label><input type="checkbox" disabled> <code>DynamoDB - Consumed Capacity</code> グラフで、TEST_PASSWORD 設定時は <code>ConsumedWriteCapacityUnits</code>（POST /users 経由）が立ち上がっている</label></li>
+  <li><label><input type="checkbox" disabled> PAY_PER_REQUEST モードでも <code>ConsumedReadCapacityUnits</code> と <code>ConsumedWriteCapacityUnits</code> はきちんと出ることを確認</label></li>
+</ul>
+
+<h3>Cognito ウィジェット</h3>
+
+<ul>
+  <li><label><input type="checkbox" disabled> <code>Cognito - SignIn Successes &amp; Token Refreshes</code> グラフで、Advanced Security (<code>ENFORCED</code>) が有効なら <code>SignInSuccesses</code> が立ち上がっている</label></li>
+  <li><label><input type="checkbox" disabled> Advanced Security 無効の場合はグラフが空になる（CLI の出力に "no data" と出る）</label></li>
+</ul>
+
+<h3>CLI 出力（<code>watch.sh</code>）</h3>
+
+<ul>
+  <li><label><input type="checkbox" disabled> <code>[0] Dashboard 存在確認</code> で <code>phase1-sandbox</code> と表示される</label></li>
+  <li><label><input type="checkbox" disabled> <code>[1] API Gateway 4XXError</code> の Sum が 50 以上</label></li>
+  <li><label><input type="checkbox" disabled> <code>[2] Lambda</code> の各関数でデータが返ってくる（または意図的に空であることを確認）</label></li>
+  <li><label><input type="checkbox" disabled> <code>[3] DynamoDB</code> で <code>SystemErrors</code> が 0 のまま</label></li>
+  <li><label><input type="checkbox" disabled> コンソール deep link が 5 本すべて表示される</label></li>
+</ul>
+
+<hr>
+
+<h2>トラブルシュート</h2>
+
+<table>
+  <thead>
+    <tr><th>症状</th><th>原因</th><th>対処</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>ERROR: API_URL を特定できませんでした。</code></td>
+      <td>本番スタックが未デプロイ、または <code>terraform output</code> が空</td>
+      <td><code>API_URL=https://xxxx.execute-api.ap-northeast-1.amazonaws.com/prod make sandbox-load-phase1</code> で直接渡す</td>
+    </tr>
+    <tr>
+      <td><code>data.aws_lambda_function.fns: ... ResourceNotFoundException</code></td>
+      <td>tfvars の <code>lambda_function_names</code> が本番の関数名と不一致</td>
+      <td><code>terraform -chdir=../../../terraform output</code> で正確な関数名を確認し tfvars を修正</td>
+    </tr>
+    <tr>
+      <td><code>data.aws_api_gateway_rest_api.main: ... NotFoundException</code></td>
+      <td><code>api_gw_rest_api_id</code> が不正</td>
+      <td>AWS Console → API Gateway → APIs で正確な API 名を確認</td>
+    </tr>
+    <tr>
+      <td>Cognito メトリクス (<code>SignInSuccesses</code>) が出ない</td>
+      <td>Cognito Advanced Security が <code>ENFORCED</code> でない</td>
+      <td>出ないこと自体が正常（本番設定による）。CloudTrail → Event History → <code>InitiateAuth</code> で認証イベントを追う</td>
+    </tr>
+    <tr>
+      <td><code>watch.sh</code> で全 Datapoints が空</td>
+      <td>load.sh 直後にすぐ実行した</td>
+      <td>メトリクス反映に最大 5 分かかる。watch.sh は 60 秒待機するが足りない場合は再度 <code>make sandbox-watch-phase1</code> を実行</td>
+    </tr>
+    <tr>
+      <td><code>[3] 認証ありトラフィックはスキップ</code> が表示される</td>
+      <td><code>TEST_PASSWORD</code> 未設定</td>
+      <td><code>TEST_USERNAME=xxx TEST_PASSWORD=yyy make sandbox-load-phase1</code> として再実行</td>
+    </tr>
+    <tr>
+      <td><code>サインインに失敗</code> と表示される</td>
+      <td>Cognito にテストユーザーが存在しない、またはパスワード不一致</td>
+      <td>Cognito Console → User pools → ユーザーを確認する</td>
+    </tr>
+    <tr>
+      <td>Terraform apply が <code>Error: error creating CloudWatch Dashboard</code></td>
+      <td>IAM に <code>cloudwatch:PutDashboard</code> 権限がない</td>
+      <td>IAM ポリシーを確認・追加</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>コスト目安</h2>
+
+<table>
+  <thead>
+    <tr><th>リソース</th><th>料金</th><th>備考</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>aws_cloudwatch_dashboard</code> (phase1-sandbox)</td><td>~$3 / 月</td><td>ダッシュボード 1 本 (ap-northeast-1)</td></tr>
+    <tr><td><code>cloudwatch:GetMetricStatistics</code>（<code>watch.sh</code>）</td><td>無料枠内</td><td>1 万リクエスト / 月 無料</td></tr>
+    <tr><td>API GW リクエスト（load.sh 経由）</td><td>無料枠内</td><td>月 100 万リクエスト無料</td></tr>
+    <tr><td>Lambda 実行（認証ありの場合）</td><td>無料枠内</td><td>月 100 万リクエスト / 40 万 GB-秒 無料</td></tr>
+    <tr><td>DynamoDB 書き込み（認証ありの場合）</td><td>無料枠内</td><td>月 25 WCU（Provisioned）or 100 万書き込みリクエスト（PAY_PER_REQUEST）無料</td></tr>
+  </tbody>
+</table>
+
+<p>数時間の観測であればダッシュボード料金の日割りで <strong>数円以下</strong>。</p>
+
+<blockquote>destroy を忘れると翌月も課金が継続する。観測が終わったら直ちに <code>make sandbox-down-phase1</code> を実行すること。</blockquote>
+
+<hr>
+
+<h2>後片付けの確認</h2>
+
+<p><code>make sandbox-down-phase1</code> 実行後、以下をすべて確認してから終了すること。</p>
+
+<ul>
+  <li><label><input type="checkbox" disabled> <code>terraform destroy</code> が <code>Destroy complete! Resources: 1 destroyed.</code> で終了している</label></li>
+  <li><label><input type="checkbox" disabled> AWS Console → CloudWatch → Dashboards で <code>phase1-sandbox</code> が消えている</label></li>
+  <li><label><input type="checkbox" disabled> タグ <code>Sandbox=phase1</code> が付いたリソースが残っていないこと（Console → Resource Groups &amp; Tag Editor → タグ検索で確認）</label></li>
+  <li><label><input type="checkbox" disabled> <code>terraform.tfstate</code> に <code>resources: []</code> 以外の残存リソースがないこと（<code>terraform show</code> で確認）</label></li>
+  <li><label><input type="checkbox" disabled> Lambda ロググループ (<code>/aws/lambda/atcoder-review-*</code>) は <strong>terraform destroy では消えない</strong>。本番 Terraform 側で <code>retention_in_days</code> を設定して自動期限切れに任せること（sandbox 操作で意図せずログを消さないこと）</label></li>
+  <li><label><input type="checkbox" disabled> KMS 保留や CloudFront 伝播など長時間待ちは本 sandbox では発生しない（ダッシュボードのみのため）</label></li>
+</ul>
+
+<div class="foot">← <a href="index.html">Phase 1 ルーター</a> ／ <a href="main.md">Markdown 目次</a><br>実 AWS の apply/destroy はご自身で実行してください（Claude は実行しません）。</div>
+</main></body></html>

@@ -6,6 +6,7 @@ EventBridge
 
 ## 教材
 
+- [handson.md](handson.md) — Phase 7 ハンズオン — EventBridge sandbox
 - [preview-eventbridge.md](preview-eventbridge.md) — Phase 7 プレビュー教材: EventBridge — スケジュール & イベントバス
 
 ## ハンズオン — 実 AWS sandbox
@@ -17,5 +18,7 @@ EventBridge
 3. `make sandbox-load-phase7` — put-events で即時発火（rate(1 minute) も併用）
 4. `make sandbox-watch-phase7` — ルール発火数 / 失敗数 / ターゲット Lambda（rate は初回発火まで最大 60 秒）
 5. `make sandbox-down-phase7` — terraform destroy（課金停止）
+
+詳しい手順・期待出力・観察チェックリスト・トラブルシュート → [handson.html](handson.html) ／ [handson.md](handson.md)
 
 > ⚠ rate(1 minute) ルールは放置で毎分課金。観測が終わったらすぐ destroy。

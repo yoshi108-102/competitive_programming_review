@@ -191,4 +191,6 @@ Topic 2 のクイズで「わからない」だった論点の再出題。
 4. `make sandbox-watch-phase1` — API GW の Count / 4XXError / Latency、Lambda、DynamoDB、Cognito メトリクス（反映まで 2〜5 分）
 5. `make sandbox-down-phase1` — terraform destroy（課金停止）
 
+詳しい手順・期待出力・観察チェックリスト・トラブルシュート → [handson.html](handson.html) ／ [handson.md](handson.md)
+
 > ⚠ phase1 は本番スタックを観測するダッシュボードのみ作成（本番アプリは別途デプロイ済みが前提）。

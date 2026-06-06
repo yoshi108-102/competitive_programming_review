@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 10 ハンズオン</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>:root{--accent:#ea580c;--ink:#202124;--muted:#5f6368;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5;--code:#f6f6f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}.topbar .in{max-width:740px;margin:0 auto;padding:13px 20px;font-size:13px;color:var(--muted);display:flex;gap:9px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+.wrap{max-width:740px;margin:0 auto;padding:18px 20px 80px}
+h1{font-size:28px;line-height:1.4;margin:18px 0 14px;font-weight:700}
+h2{font-size:21px;margin:40px 0 12px;font-weight:700;padding-bottom:7px;border-bottom:1px solid var(--line)}
+h3{font-size:17px;margin:28px 0 10px;font-weight:700}h4{font-size:15px;margin:22px 0 8px;font-weight:700;color:var(--muted)}
+p{margin:13px 0}ul,ol{padding-left:1.5em;margin:13px 0}li{margin:5px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.88em;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow:auto;margin:16px 0}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7}
+blockquote{margin:16px 0;padding:4px 16px;border-left:3px solid var(--accent);background:#fafaf9;color:var(--muted)}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px;display:block;overflow:auto}th,td{border:1px solid var(--line);padding:8px 11px;text-align:left}th{background:var(--soft);font-weight:700}
+hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+input[type=checkbox]{margin-right:7px}
+.foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style></head><body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 10 ハンズオン · <a href="index.html">← ルーター</a></div></div>
+<main class="wrap">
+
+<h1>Phase 10 ハンズオン — SNS sandbox</h1>
+
+<h2>前提条件</h2>
+
+<h3>AWS 認証・権限</h3>
+
+<ul>
+  <li><code>aws configure</code> または環境変数（<code>AWS_ACCESS_KEY_ID</code> / <code>AWS_SECRET_ACCESS_KEY</code> / <code>AWS_SESSION_TOKEN</code>）が設定済みであること</li>
+  <li>以下の権限が必要（最低限）: <code>sns:*</code>, <code>sqs:*</code>, <code>lambda:*</code>, <code>kms:*</code>, <code>iam:PassRole</code>, <code>cloudwatch:*</code>, <code>logs:*</code></li>
+  <li>IAM ユーザーではなく IAM ロールを使う場合は <code>sts:AssumeRole</code> も必要</li>
+</ul>
+
+<h3>リージョン</h3>
+
+<ul>
+  <li>デフォルト: <code>ap-northeast-1</code>（東京）</li>
+  <li>変更する場合は環境変数 <code>AWS_REGION=&lt;your-region&gt;</code> を設定してから各 make コマンドを実行する</li>
+</ul>
+
+<h3>ツール</h3>
+
+<ul>
+  <li>Terraform &gt;= 1.7</li>
+  <li>AWS CLI v2</li>
+  <li>Python 3.12（Lambda ソースのビルドは Terraform の archive_file プロバイダが自動処理）</li>
+  <li><code>jq</code>（出力の確認を楽にするために推奨）</li>
+</ul>
+
+<h3>課金開始の注意</h3>
+
+<p><code>make sandbox-up-phase10</code> を実行した瞬間から以下のリソースが課金対象になる。</p>
+
+<table>
+  <thead><tr><th>リソース</th><th>課金の起点</th></tr></thead>
+  <tbody>
+    <tr><td>KMS キー</td><td>作成直後から月額 $1（7日保留中も課金）</td></tr>
+    <tr><td>SNS</td><td>Publish 100万件/月まで無料。この sandbox は無料枠内</td></tr>
+    <tr><td>SQS</td><td>100万リクエスト/月まで無料。この sandbox は無料枠内</td></tr>
+    <tr><td>Lambda</td><td>100万回/月まで無料。この sandbox は無料枠内</td></tr>
+    <tr><td>CloudWatch</td><td>メトリクス数は無料枠内</td></tr>
+  </tbody>
+</table>
+
+<p><strong>必ず <code>make sandbox-down-phase10</code> でリソースを削除すること。</strong> KMS のみ削除保留が 7 日残る。</p>
+
+<h3>Phase 固有の前提</h3>
+
+<ul>
+  <li>メール購読は今回の sandbox では使わない（SQS + Lambda のみ）。将来メール購読を追加する場合は確認メールを承認しないと配信されない</li>
+  <li><code>backend/sandboxes/phase10/handler.py</code> が存在すること（Lambda ソース）。存在しない場合は apply が失敗する</li>
+</ul>
+
+<hr>
+
+<h2>全体の流れ</h2>
+
+<pre><code>test → up → load → (3〜5分待つ) → watch → down</code></pre>
+
+<table>
+  <thead><tr><th>ステップ</th><th>make コマンド</th><th>目的</th></tr></thead>
+  <tbody>
+    <tr><td>test</td><td><code>make sandbox-test-phase10</code></td><td>terraform validate のみ（無課金・無起動）</td></tr>
+    <tr><td>up</td><td><code>make sandbox-up-phase10</code></td><td>terraform apply でリソース作成（課金開始）</td></tr>
+    <tr><td>load</td><td><code>make sandbox-load-phase10</code></td><td>SNS に 21 件の注文メッセージを Publish</td></tr>
+    <tr><td>watch</td><td><code>make sandbox-watch-phase10</code></td><td>CloudWatch メトリクスをターミナルで確認</td></tr>
+    <tr><td>down</td><td><code>make sandbox-down-phase10</code></td><td>terraform destroy で全リソース削除（課金停止）</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>ステップ詳細</h2>
+
+<h3>ステップ 1 — test: terraform validate（無課金）</h3>
+
+<h4>何が起きるか</h4>
+<p><code>backend/tests/sandboxes/phase10/</code> があれば moto pytest を実行し、次に <code>terraform init -backend=false</code> + <code>terraform validate</code> を実行する。実際の AWS リソースは一切作成しない。</p>
+
+<h4>実行コマンド</h4>
+<pre><code>make sandbox-test-phase10</code></pre>
+
+<h4>期待される出力例</h4>
+<pre><code>==> phase10 に moto テストなし (validate のみ)
+==> terraform validate phase10
+Success! The configuration is valid.</code></pre>
+<p>moto テストがあれば pytest の出力がその前に出る。</p>
+
+<p><strong>所要時間</strong>: 30 秒〜1 分（プラグインキャッシュがあれば数秒）</p>
+
+<hr>
+
+<h3>ステップ 2 — up: terraform apply</h3>
+
+<h4>何が起きるか</h4>
+<p>以下のリソースが一括で作成される:</p>
+<ul>
+  <li>KMS キー（<code>alias/phase10-sns</code>）と SNS・SQS・Lambda への鍵ポリシー</li>
+  <li>SNS トピック: <code>phase10-orders</code>（標準）、<code>phase10-orders.fifo</code>（FIFO）</li>
+  <li>SQS キュー: <code>phase10-fulfillment</code>, <code>phase10-analytics</code>, <code>phase10-wholesale</code>（各キューに DLQ 付き）</li>
+  <li>SQS キュー: <code>phase10-fifo-consumer.fifo</code></li>
+  <li>SNS → SQS 購読（フィルタポリシー付き）× 3 + SNS → Lambda 購読 × 1 + FIFO 購読 × 1</li>
+  <li>Lambda 関数: <code>phase10-notifier</code>（Python 3.12）</li>
+  <li>CloudWatch ダッシュボード: <code>phase10-sns</code></li>
+  <li>CloudWatch アラーム: <code>phase10-{fulfillment,analytics,wholesale}-dlq-not-empty</code> × 3</li>
+  <li>IAM ロール: <code>phase10-publisher</code>, <code>phase10-subscriber-sqs</code>, <code>phase10-lambda-notifier</code></li>
+</ul>
+
+<h4>実行コマンド</h4>
+<pre><code>make sandbox-up-phase10</code></pre>
+
+<h4>期待される出力例</h4>
+<pre><code>Initializing the backend...
+Initializing provider plugins...
+- Reusing previous version of hashicorp/aws from the dependency lock file
+- Reusing previous version of hashicorp/archive from the dependency lock file
+
+Terraform has been successfully initialized!
+
+...（省略）...
+
+Plan: 32 to add, 0 to change, 0 to destroy.
+
+Changes to Outputs:
+  + analytics_queue_url    = (known after apply)
+  + fulfillment_queue_url  = (known after apply)
+  + kms_key_arn            = (known after apply)
+  + notifier_function_name = "phase10-notifier"
+  + orders_fifo_topic_arn  = (known after apply)
+  + orders_topic_arn       = (known after apply)
+  + wholesale_queue_url    = (known after apply)
+
+aws_kms_key.phase10: Creating...
+aws_kms_key.phase10: Creation complete after 1s [id=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx]
+...
+aws_cloudwatch_dashboard.phase10: Creation complete after 0s [id=phase10-sns]
+
+Apply complete! Resources: 32 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+analytics_queue_url    = "https://sqs.ap-northeast-1.amazonaws.com/123456789012/phase10-analytics"
+fulfillment_queue_url  = "https://sqs.ap-northeast-1.amazonaws.com/123456789012/phase10-fulfillment"
+kms_key_arn            = "arn:aws:kms:ap-northeast-1:123456789012:key/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+notifier_function_name = "phase10-notifier"
+orders_fifo_topic_arn  = "arn:aws:sns:ap-northeast-1:123456789012:phase10-orders.fifo"
+orders_topic_arn       = "arn:aws:sns:ap-northeast-1:123456789012:phase10-orders"
+wholesale_queue_url    = "https://sqs.ap-northeast-1.amazonaws.com/123456789012/phase10-wholesale"</code></pre>
+
+<p><strong>所要時間</strong>: 2〜3 分</p>
+
+<hr>
+
+<h3>ステップ 3 — load: SNS メッセージ Publish</h3>
+
+<h4>何が起きるか</h4>
+<p><code>load.sh</code> が 5 つのシナリオで合計 21 件のメッセージを SNS トピック <code>phase10-orders</code> に Publish する。メッセージ属性 <code>order_type</code> の値によってフィルタポリシーが効き、各キュー・Lambda に振り分けられる。</p>
+
+<table>
+  <thead><tr><th>シナリオ</th><th>order_type</th><th>件数</th><th>届く購読先</th></tr></thead>
+  <tbody>
+    <tr><td>[1/5] standard</td><td><code>standard</code></td><td>10 件</td><td>fulfillment + analytics</td></tr>
+    <tr><td>[2/5] express</td><td><code>express</code></td><td>5 件</td><td>fulfillment + analytics + Lambda notifier</td></tr>
+    <tr><td>[3/5] wholesale</td><td><code>wholesale</code></td><td>3 件</td><td>wholesale + analytics</td></tr>
+    <tr><td>[4/5] unknown</td><td><code>unknown_type</code></td><td>2 件</td><td>analytics のみ（他はフィルタで除外）</td></tr>
+    <tr><td>[5/5] malformed</td><td><code>express</code>（本文が <code>NOT_JSON</code>）</td><td>1 件</td><td>Lambda が parse 失敗 → DLQ へ</td></tr>
+  </tbody>
+</table>
+
+<h4>実行コマンド</h4>
+<pre><code>make sandbox-load-phase10</code></pre>
+
+<h4>期待される出力例</h4>
+<pre><code>============================================================
+  Phase 10 SNS Load Generator
+============================================================
+  Region    : ap-northeast-1
+  Topic ARN : arn:aws:sns:ap-northeast-1:123456789012:phase10-orders
+============================================================
+
+[1/5] Publishing 10 standard orders
+      宛先: fulfillment キュー + analytics キュー（filter: standard|express）
+    [OK] order_id=ORD-23456789  type=standard  amount=4521  MessageId=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    [OK] order_id=ORD-34567890  type=standard  amount=7843  MessageId=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    ...（10行）
+      → 計10件送信完了
+
+[2/5] Publishing 5 express orders
+      宛先: fulfillment + analytics + Lambda notifier（filter: express のみ）
+    [OK] order_id=ORD-45678901  type=express  amount=2910  MessageId=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    ...（5行）
+      → 計5件送信完了
+
+[3/5] Publishing 3 wholesale orders
+      宛先: wholesale + analytics キュー（filter: wholesale）
+    [OK] order_id=ORD-56789012  type=wholesale  amount=8321  MessageId=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    ...（3行）
+      → 計3件送信完了
+
+[4/5] Publishing 2 UNKNOWN orders
+      宛先: analytics キューのみ（他 subscription は filter で弾く）
+      NumberOfNotificationsFilteredOut が上がるはず
+    [OK] order_id=ORD-67890123  type=unknown_type  amount=5102  MessageId=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    ...（2行）
+      → 計2件送信完了
+
+[5/5] Publishing 1 malformed payload (DLQ test)
+      Lambda notifier が JSON parse 失敗 → maxReceiveCount 超過で DLQ へ
+xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+============================================================
+  送信完了サマリー
+  成功: 21 件  失敗: 0 件
+============================================================
+
+  CloudWatch メトリクスの反映には 数分（最大 5 分）かかります。
+
+  次のステップ:
+    make sandbox-watch-phase10
+============================================================</code></pre>
+
+<p><strong>所要時間</strong>: 約 1 分（publish 間に 0.2 秒スリープ）。<strong>その後 3〜5 分待ってから watch を実行すること</strong>（SNS メトリクスの反映遅延）。</p>
+
+<hr>
+
+<h3>ステップ 4 — watch: CloudWatch 観測</h3>
+
+<h4>何が起きるか</h4>
+<p><code>watch.sh</code> が以下を順に実行する:</p>
+<ol>
+  <li>ダッシュボード <code>phase10-sns</code> の存在確認</li>
+  <li>観察ポイントの解説（メトリクスの意味・期待値）を表示</li>
+  <li><code>aws cloudwatch get-metric-statistics</code> で SNS / SQS / Lambda の主要メトリクスを過去 20 分分取得してターミナルに表示</li>
+  <li>AWS コンソールへの deep link を表示</li>
+  <li><code>make sandbox-down-phase10</code> 実行を促すリマインダーを表示</li>
+</ol>
+
+<h4>実行コマンド</h4>
+<pre><code>make sandbox-watch-phase10</code></pre>
+
+<h4>期待される出力例（抜粋）</h4>
+<pre><code>============================================================
+  Phase 10 CloudWatch Observer
+============================================================
+  Region    : ap-northeast-1
+  Topic     : phase10-orders
+  Function  : phase10-notifier
+  Window    : 2026-06-06T10:00:00Z → 2026-06-06T10:20:00Z
+============================================================
+
+[1/5] Dashboard smoke check
+  [OK] phase10-sns は存在します (arn:aws:cloudwatch::123456789012:dashboard/phase10-sns)
+
+[2/5] 観察ポイント（メトリクスが何を意味するか）
+  ┌─────────────────────────────────────────────────────────────┐
+  │ SNS                                                         │
+  │  NumberOfMessagesPublished   : load.sh で送った総件数(21件想定) │
+  │  NumberOfNotificationsDelivered : サブスクリプションへの配信成功数 │
+  │    → 1メッセージが複数サブスクに届くと件数が増える            │
+  │  NumberOfNotificationsFailed : 配信失敗数（DLQ 行きの根拠）    │
+  │  NumberOfNotificationsFilteredOut : フィルタで弾かれた件数     │
+  │    → unknown_type の2件は fulfilment/wholesale フィルタで弾かれる │
+  ├─────────────────────────────────────────────────────────────┤
+  │ SQS (ApproximateNumberOfMessagesVisible)                    │
+  │  fulfillment : standard(10) + express(5) = 15 件想定        │
+  │  analytics   : フィルタなし = 全20件（unknown含む）想定       │
+  │  wholesale   : wholesale(3) のみ = 3 件想定                 │
+  │  *-dlq       : malformed express が Lambda エラー → DLQ へ   │
+  ├─────────────────────────────────────────────────────────────┤
+  │ Lambda                                                      │
+  │  Invocations : express(5) + malformed(1) = 6 件想定         │
+  │  Errors      : malformed 1 件が JSON parse 失敗 → 1 件想定    │
+  └─────────────────────────────────────────────────────────────┘
+
+[3/5] メトリクス取得
+
+  [ SNS メトリクス: phase10-orders ]
+  --- NumberOfMessagesPublished (送信数) ---
+  -------------------------------------------------
+  |            GetMetricStatistics                |
+  +-------------------------+---------------------+
+  |  2026-06-06T10:05:00Z   |         21.0        |
+  +-------------------------+---------------------+
+
+  --- NumberOfNotificationsDelivered (配信成功数) ---
+  -------------------------------------------------
+  |            GetMetricStatistics                |
+  +-------------------------+---------------------+
+  |  2026-06-06T10:05:00Z   |         47.0        |
+  +-------------------------+---------------------+
+
+  [ SQS キュー深さ ]
+  --- phase10-fulfillment ---
+  -------------------------------------------------
+  |            GetMetricStatistics                |
+  +-------------------------+---------------------+
+  |  2026-06-06T10:05:00Z   |         15.0        |
+  +-------------------------+---------------------+
+
+[4/5] コンソール deep links
+  SNS Topic:
+    https://ap-northeast-1.console.aws.amazon.com/sns/v3/home?region=ap-northeast-1#/topic/arn:aws:sns:...
+
+  CloudWatch Dashboard (phase10-sns):
+    https://ap-northeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#dashboards:name=phase10-sns
+
+[5/5] 観測が終わったら必ずリソースを削除してください
+  make sandbox-down-phase10</code></pre>
+
+<p>メトリクスがまだ反映されていない場合は <code>(データなし — まだ反映待ちの可能性があります)</code> と表示される。3〜5 分後に再実行する。</p>
+<p><strong>所要時間</strong>: 30 秒〜1 分</p>
+
+<hr>
+
+<h3>ステップ 5 — down: terraform destroy</h3>
+
+<h4>何が起きるか</h4>
+<p>apply で作ったリソースをすべて削除する。KMS キーは削除保留（7 日）に入るため、コンソールで「削除保留中」状態になる。</p>
+
+<h4>実行コマンド</h4>
+<pre><code>make sandbox-down-phase10</code></pre>
+
+<h4>期待される出力例</h4>
+<pre><code>aws_cloudwatch_metric_alarm.dlq_alert["wholesale"]: Destroying...
+aws_cloudwatch_metric_alarm.dlq_alert["analytics"]: Destroying...
+aws_cloudwatch_metric_alarm.dlq_alert["fulfillment"]: Destroying...
+...
+aws_kms_key.phase10: Destroying...
+aws_kms_key.phase10: Destruction complete after 0s
+
+Destroy complete! Resources: 32 destroyed.</code></pre>
+
+<p><strong>所要時間</strong>: 2〜3 分</p>
+
+<hr>
+
+<h2>観察ポイント（チェックリスト）</h2>
+
+<p>CloudWatch ダッシュボード <code>phase10-sns</code> を開き、以下の各ウィジェットで変化を確認する。<br>
+ダッシュボード URL: <code>https://ap-northeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-northeast-1#dashboards:name=phase10-sns</code></p>
+
+<h3>ウィジェット 1: SNS Publish &amp; Delivery</h3>
+<ul>
+  <li><label><input type="checkbox" disabled> <code>NumberOfMessagesPublished</code>（TopicName: <code>phase10-orders</code>）が <strong>21</strong> になっている</label></li>
+  <li><label><input type="checkbox" disabled> <code>NumberOfNotificationsDelivered</code>（TopicName: <code>phase10-orders</code>）が <strong>47 前後</strong>になっている（1 通が複数サブスクに届くため Publish 数を上回る）</label></li>
+  <li><label><input type="checkbox" disabled> <code>NumberOfNotificationsFailed</code>（TopicName: <code>phase10-orders</code>）が <strong>1</strong> になっている（malformed → Lambda エラー）</label></li>
+  <li><label><input type="checkbox" disabled> <code>NumberOfNotificationsFilteredOut</code>（TopicName: <code>phase10-orders</code>）が <strong>4</strong> になっている（unknown_type × 2 が fulfillment + wholesale の 2 フィルタで弾かれる）</label></li>
+</ul>
+
+<h3>ウィジェット 2: SQS Queue Depth (per queue)</h3>
+<ul>
+  <li><label><input type="checkbox" disabled> <code>ApproximateNumberOfMessagesVisible</code>（QueueName: <code>phase10-fulfillment</code>）が <strong>15</strong>（standard 10 + express 5）</label></li>
+  <li><label><input type="checkbox" disabled> <code>ApproximateNumberOfMessagesVisible</code>（QueueName: <code>phase10-analytics</code>）が <strong>20</strong>（全 order_type、フィルタなし）</label></li>
+  <li><label><input type="checkbox" disabled> <code>ApproximateNumberOfMessagesVisible</code>（QueueName: <code>phase10-wholesale</code>）が <strong>3</strong>（wholesale のみ）</label></li>
+  <li><label><input type="checkbox" disabled> <code>ApproximateNumberOfMessagesVisible</code>（QueueName: <code>phase10-fulfillment-dlq</code>）が <strong>1</strong>（malformed の Lambda エラーで DLQ へ）</label></li>
+  <li><label><input type="checkbox" disabled> <code>ApproximateNumberOfMessagesVisible</code>（QueueName: <code>phase10-analytics-dlq</code>）が <strong>0</strong></label></li>
+  <li><label><input type="checkbox" disabled> <code>ApproximateNumberOfMessagesVisible</code>（QueueName: <code>phase10-wholesale-dlq</code>）が <strong>0</strong></label></li>
+</ul>
+
+<h3>ウィジェット 3: Lambda Notifier: Invocations / Errors / Duration</h3>
+<ul>
+  <li><label><input type="checkbox" disabled> <code>Invocations</code>（FunctionName: <code>phase10-notifier</code>）が <strong>6</strong>（express 5 + malformed 1）</label></li>
+  <li><label><input type="checkbox" disabled> <code>Errors</code>（FunctionName: <code>phase10-notifier</code>）が <strong>1</strong>（malformed が JSON parse エラー）</label></li>
+  <li><label><input type="checkbox" disabled> <code>Duration</code> のピーク値を確認し、コールドスタートの有無を推測できる</label></li>
+</ul>
+
+<h3>CloudWatch アラーム</h3>
+<ul>
+  <li><label><input type="checkbox" disabled> <code>phase10-fulfillment-dlq-not-empty</code> が <strong>ALARM</strong> 状態になっている（DLQ に 1 件）</label></li>
+  <li><label><input type="checkbox" disabled> <code>phase10-analytics-dlq-not-empty</code> が <strong>OK</strong> 状態</label></li>
+  <li><label><input type="checkbox" disabled> <code>phase10-wholesale-dlq-not-empty</code> が <strong>OK</strong> 状態</label></li>
+</ul>
+
+<h3>Lambda ログ</h3>
+<ul>
+  <li><label><input type="checkbox" disabled> <code>/aws/lambda/phase10-notifier</code> のロググループに express 注文の JSON が記録されている</label></li>
+  <li><label><input type="checkbox" disabled> malformed メッセージに対する parse エラーログが残っている</label></li>
+</ul>
+
+<hr>
+
+<h2>トラブルシュート</h2>
+
+<table>
+  <thead><tr><th>症状</th><th>原因</th><th>対処</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>KMS.KMSDisabledException</code> または SQS キューにメッセージが届かない</td>
+      <td>KMS キーポリシーに SNS サービスプリンシパルが不足</td>
+      <td><code>main.tf</code> の KMS ポリシーに <code>SNSEncrypt</code> ステートメントが含まれているか確認。apply をやり直す</td>
+    </tr>
+    <tr>
+      <td>フィルタが効かず全メッセージが全キューに届く</td>
+      <td>SNS 購読の <code>filter_policy</code> が未設定</td>
+      <td><code>aws sns get-subscription-attributes</code> で <code>FilterPolicy</code> を確認。Terraform の <code>aws_sns_topic_subscription</code> リソースを確認</td>
+    </tr>
+    <tr>
+      <td>analytics キューに unknown_type のメッセージが届かない</td>
+      <td>analytics 購読にフィルタが設定されている</td>
+      <td><code>analytics</code> 購読は意図的にフィルタなし。<code>aws sns get-subscription-attributes --subscription-arn &lt;ARN&gt; --query Attributes.FilterPolicy</code> が <code>{}</code> か空であることを確認</td>
+    </tr>
+    <tr>
+      <td>Lambda が一切呼ばれない（Invocations = 0）</td>
+      <td>SNS → Lambda の <code>aws_lambda_permission</code> が未作成</td>
+      <td><code>aws lambda get-policy --function-name phase10-notifier</code> でリソースポリシーを確認。<code>AllowSNSInvoke</code> ステートメントが存在するか</td>
+    </tr>
+    <tr>
+      <td>DLQ にメッセージが来ない（malformed を送ったのに）</td>
+      <td>Lambda の maxReceiveCount 到達に時間がかかる</td>
+      <td>SQS の visibility_timeout（30 秒）× maxReceiveCount（3 回）= 最大 90 秒後に DLQ へ移動。watch.sh を 2〜3 分後に再実行</td>
+    </tr>
+    <tr>
+      <td><code>watch.sh</code> で <code>(データなし)</code> が表示される</td>
+      <td>SNS/SQS メトリクスの反映遅延（最大 5 分）</td>
+      <td><code>load.sh</code> 実行後 5 分待ってから <code>make sandbox-watch-phase10</code> を再実行</td>
+    </tr>
+    <tr>
+      <td><code>Dashboard phase10-sns が見つかりません</code></td>
+      <td>terraform apply が未実行 or 失敗している</td>
+      <td><code>make sandbox-up-phase10</code> を確認。<code>terraform -chdir=terraform/sandboxes/phase10 show</code> でリソース状態を確認</td>
+    </tr>
+    <tr>
+      <td>terraform apply が <code>Error: creating SNS Topic</code> で失敗する</td>
+      <td>FIFO トピック名が <code>.fifo</code> で終わっていない</td>
+      <td><code>main.tf</code> の <code>aws_sns_topic.orders_fifo</code> の <code>name</code> が <code>phase10-orders.fifo</code> であることを確認</td>
+    </tr>
+    <tr>
+      <td><code>publish failed</code> が多発する</td>
+      <td>AWS CLI の credentials が期限切れ</td>
+      <td><code>aws sts get-caller-identity</code> で認証を確認。SSO の場合は <code>aws sso login</code> を再実行</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>コスト目安</h2>
+
+<table>
+  <thead><tr><th>リソース</th><th>課金単位</th><th>この sandbox での推定</th></tr></thead>
+  <tbody>
+    <tr><td>KMS キー</td><td>$1.00/月（キー存在中）+ $0.03/10,000 APIコール</td><td>約 $0.03〜$0.10（数時間の利用）+ KMS 7日保留中 $0.007/日</td></tr>
+    <tr><td>SNS Publish</td><td>100万件/月まで無料</td><td>21 件 → 無料</td></tr>
+    <tr><td>SQS リクエスト</td><td>100万件/月まで無料</td><td>数十件 → 無料</td></tr>
+    <tr><td>Lambda</td><td>100万回/月まで無料</td><td>6 回 → 無料</td></tr>
+    <tr><td>CloudWatch ダッシュボード</td><td>$3.00/ダッシュボード/月</td><td>数時間で destroy すれば $0.01 未満</td></tr>
+    <tr><td>CloudWatch アラーム</td><td>$0.10/アラーム/月 × 3</td><td>$0.30/月相当、数時間なら $0.001 未満</td></tr>
+  </tbody>
+</table>
+
+<p><strong>合計目安: ほぼ無料〜数セント。KMS の 7 日保留期間分（$0.007/日）が最大のコスト。</strong></p>
+
+<hr>
+
+<h2>後片付けの確認</h2>
+
+<p>destroy 後に以下のチェックリストを確認する。</p>
+
+<ul>
+  <li><label><input type="checkbox" disabled> <code>make sandbox-down-phase10</code> が <code>Destroy complete! Resources: 32 destroyed.</code> で終了している</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール → SNS → トピック で <code>phase10-orders</code> および <code>phase10-orders.fifo</code> が存在しない</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール → SQS で <code>phase10-</code> プレフィックスのキューが存在しない</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール → Lambda で <code>phase10-notifier</code> が存在しない</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール → KMS → カスタマー管理キー で <code>alias/phase10-sns</code> が <strong>削除保留中（7 日）</strong> になっている（これは正常。7 日後に自動削除される）</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール → CloudWatch → ダッシュボード で <code>phase10-sns</code> が存在しない</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール → CloudWatch → アラーム で <code>phase10-*-dlq-not-empty</code> が存在しない</label></li>
+  <li><label><input type="checkbox" disabled> AWS コンソール → CloudWatch → ロググループ で <code>/aws/lambda/phase10-notifier</code> が存在しない（<code>retention_in_days = 1</code> なので翌日以降に自動削除されるが、手動削除でもよい）</label></li>
+  <li><label><input type="checkbox" disabled> Cost Explorer で <code>Sandbox=phase10</code> タグでフィルタし、想定外の課金がないことを確認する</label></li>
+</ul>
+
+<div class="foot">← <a href="index.html">Phase 10 ルーター</a> ／ <a href="main.md">Markdown 目次</a><br>実 AWS の apply/destroy はご自身で実行してください（Claude は実行しません）。</div>
+</main></body></html>

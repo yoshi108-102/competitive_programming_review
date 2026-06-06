@@ -6,6 +6,7 @@ Step Functions
 
 ## 教材
 
+- [handson.md](handson.md) — Phase 8 ハンズオン — Step Functions sandbox
 - [preview-step-functions.md](preview-step-functions.md) — Phase 8 プレビュー教材: Step Functions
 
 ## ハンズオン — 実 AWS sandbox
@@ -17,5 +18,7 @@ Step Functions
 3. `make sandbox-load-phase8` — start-execution で実行を開始
 4. `make sandbox-watch-phase8` — 実行開始/成功/失敗数・所要時間＋コンソールのビジュアル実行（反映 1〜2 分）
 5. `make sandbox-down-phase8` — terraform destroy（課金停止）
+
+詳しい手順・期待出力・観察チェックリスト・トラブルシュート → [handson.html](handson.html) ／ [handson.md](handson.md)
 
 

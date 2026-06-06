@@ -6,6 +6,7 @@ SQS
 
 ## 教材
 
+- [handson.md](handson.md) — Phase 3 ハンズオン — SQS sandbox
 - [preview-sqs.md](preview-sqs.md) — Phase 3 プレビュー教材: SQS
 
 ## ハンズオン — 実 AWS sandbox
@@ -17,5 +18,7 @@ SQS
 3. `make sandbox-load-phase3` — メッセージを送信（一部は故意に失敗させ DLQ へ送る）
 4. `make sandbox-watch-phase3` — キュー深さ / 滞留時間 / 送受信数 / DLQ（--period 300）（キュー系メトリクスは 5 分粒度 → load 後 5 分待ってから watch）
 5. `make sandbox-down-phase3` — terraform destroy（課金停止）
+
+詳しい手順・期待出力・観察チェックリスト・トラブルシュート → [handson.html](handson.html) ／ [handson.md](handson.md)
 
 

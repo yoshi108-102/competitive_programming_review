@@ -1,58 +1,52 @@
 # Phase 5: CloudFront + WAF Sandbox
 
-## この Sandbox は何を作るか
+CloudFront (CDN) と WAF v2 を組み合わせた静的コンテンツ配信環境を構築し、エッジキャッシュの動作・WAF ルール評価・CloudWatch メトリクス観測を体験する sandbox です。
 
-Amazon CloudFront (CDN) と AWS WAF v2 を組み合わせた静的コンテンツ配信環境を構築し、
-エッジキャッシュの動作・WAF ルール評価・CloudWatch メトリクス観測を体験するための sandbox です。
-
-**全リソースを us-east-1 に統一** しています。これは AWS の制約による必然的な設計です。
-
-- WAF の `scope = "CLOUDFRONT"` は us-east-1 にしか作成できない
-- CloudFront のメトリクス (`AWS/CloudFront` 名前空間) は us-east-1 の CloudWatch にしか送られない
+**全リソースを us-east-1 に統一**しています。WAF の `scope=CLOUDFRONT` および CloudFront メトリクスは us-east-1 固定の AWS 制約によるものです。
 
 ---
 
-## 主要リソース一覧
+## この Sandbox が作るもの
 
-| リソース | 目的 | 主な設定 |
+| リソース | 名前 | 目的 |
 |---|---|---|
-| `aws_s3_bucket.origin` | 静的コンテンツ配信元 | `force_destroy = true`、Block Public Access 全4項目 |
-| `aws_s3_bucket.cf_logs` | CloudFront アクセスログ格納 | ACL `log-delivery-write` (CF 標準ログ配信要件) |
-| `aws_cloudfront_origin_access_control` | OAC (SigV4 署名) | `signing_behavior = "always"`、OAI の後継・推奨方式 |
-| `aws_cloudfront_distribution` | CDN 本体 | `PriceClass_100`（NA+EU のみ）、HTTPS 強制、TLSv1.2_2021 |
-| `aws_wafv2_web_acl` | WAF ルールセット | AWSManagedRulesCommonRuleSet + Rate-based (IP, 1000 req/5 min) |
-| `aws_cloudwatch_log_group.waf` | WAF ログ | 名前 `aws-waf-logs-phase5` 必須（AWS 仕様）、保持 1 日 |
-| `aws_wafv2_web_acl_logging_configuration` | WAF → CloudWatch Logs 連携 | - |
-| `aws_cloudwatch_dashboard.phase5` | メトリクス可視化 | CF Requests / Error Rates / WAF Allowed vs Blocked / WAF Block ログ |
-| `aws_cloudwatch_metric_alarm.cf_5xx` | 5xx エラー率監視 | `5xxErrorRate > 5%` で ALARM、`treat_missing_data = "notBreaching"` |
+| `aws_s3_bucket` (origin) | `atcoder-phase5-origin-<suffix>` | 静的コンテンツ配信元（Block Public Access + OAC 経由のみ） |
+| `aws_s3_bucket` (cf_logs) | `atcoder-phase5-cf-logs-<suffix>` | CloudFront 標準アクセスログ格納（ACL: log-delivery-write） |
+| `aws_cloudfront_origin_access_control` | `phase5-oac-<suffix>` | OAC (SigV4 署名・OAI の後継推奨方式) |
+| `aws_cloudfront_distribution` | `*.cloudfront.net` 自動割当 | CDN 本体。PriceClass_100（NA+EU）、HTTPS 強制、TLSv1.2_2021 |
+| `aws_wafv2_web_acl` | `phase5-waf` | AWSManagedRulesCommonRuleSet + RateLimit（IP, 1000 req/5 min） |
+| `aws_cloudwatch_log_group` | `aws-waf-logs-phase5` | WAF ログ（名前プレフィックス必須・保持 1 日） |
+| `aws_wafv2_web_acl_logging_configuration` | — | WAF → CloudWatch Logs 連携 |
+| `aws_cloudwatch_dashboard` | `phase5-dashboard` | CF Requests/Error Rates + WAF Allowed vs Blocked + WAF Block ログ |
+| `aws_cloudwatch_metric_alarm` | `phase5-cf-5xx-error-rate` | 5xxErrorRate > 5% で ALARM |
 
-S3 バケットポリシーは OAC 専用に設定されています。
-`Principal.Service = "cloudfront.amazonaws.com"` と `Condition.StringEquals."AWS:SourceArn"` で
-このディストリビューションの ARN を明示的に限定しているため、他の CloudFront 経由のアクセスも遮断されます
-（Confused Deputy 攻撃への対策）。
+S3 バケットポリシーは OAC + `AWS:SourceArn` 条件で Confused Deputy 攻撃を防ぐ構成です。
 
 ---
 
-## 使い方
+## クイックコマンド一覧
 
 ```bash
-# 1. Terraform 初期化 + 構文検証 (課金なし)
+# 1. 構文検証（課金なし・1〜2 分）
 make sandbox-test-phase5
 
-# 2. リソース作成 (課金開始 — CF 作成に 10〜15 分かかります)
+# 2. リソース作成（課金開始・CloudFront 作成に 10〜15 分）
 make sandbox-up-phase5
 
-# 3. index.html をアップロード & リクエスト群を生成 (WAF/CF メトリクスを発生させる)
-#    SQLi パターン・レートバースト・Bot UA など複数シナリオを実行します
+# 3. index.html アップロード + 6 シナリオのリクエスト生成（3〜5 分）
+#    正常 50 回 / 404 × 10 / SQLi ブロック / レートバースト 120 並列 / Bot UA / Invalidation
 make sandbox-load-phase5
 
-# 4. メトリクスを確認 (load 後 3〜5 分待ってから実行)
-#    CF / WAF の CloudWatch メトリクスをコンソール Deep Link 付きで表示します
+# 4. CloudWatch メトリクス確認（3 分待機 + 取得）
 make sandbox-watch-phase5
 
-# 5. リソース削除 (CF 削除に 30〜45 分かかります)
+# 5. リソース削除（CloudFront 削除に 30〜45 分）
 make sandbox-down-phase5
 ```
+
+詳しい手順・期待される出力例・観察チェックリスト・トラブルシュートは:
+
+**`../../../docs/learning/phase5/handson.md`** を参照してください。
 
 ---
 
@@ -60,19 +54,18 @@ make sandbox-down-phase5
 
 | 項目 | 補足 |
 |---|---|
-| CloudFront の作成・削除 | 各 **10〜15 分 / 30〜45 分** かかります。途中で Ctrl-C しないこと |
-| `sandbox-down-all` 実行前に Phase 5 を個別 destroy することを推奨 | CF の長い削除時間がブロックになるため |
-| CloudFront メトリクス | **us-east-1 のみ**。東京リージョンのコンソールでは表示されません |
+| CloudFront 作成 | **10〜15 分**かかります（apply 直後の curl は `NoSuchDistribution` になる場合あり） |
+| CloudFront 削除 | **30〜45 分**かかります。Ctrl-C で中断すると手動削除が必要になります |
+| WAF コスト | Web ACL $5/月 + ルール $1/本/月。1 時間以内に destroy すれば合計 **$0.02 未満** |
+| CF メトリクスのリージョン | **us-east-1 のみ**。東京リージョンのコンソールでは表示されません |
 | WAF ロググループ名 | `aws-waf-logs-` プレフィックスが **AWS 仕様で必須**。変えると apply エラー |
-| KMS キー（extra-credit） | SSE-KMS に切り替えた場合、KMS キー削除に **7 日間の待機期間**あり |
-| WAF コスト構造 | Web ACL $5/月 + ルール $1/本/月 + $0.60/100 万 req。Bot Control は追加 $10/100 万 WCU |
+| 残存確認 | `aws resourcegroupstaggingapi get-resources --region us-east-1 --tag-filters Key=Sandbox,Values=phase5` |
+| `sandbox-down-all` 実行前の注意 | CF の長い削除時間がブロッカーになるため Phase 5 を先に個別 destroy 推奨 |
 
 ---
 
-## 設計書・学習教材へのリンク
+## 設計書・学習教材
 
-- 設計書: `docs/superpowers/specs/2026-05-31-aws-phase-sandboxes-design.md` (Phase 5 節: 行 4799〜5789)
-- プレビュー教材: `docs/learning/phase5/preview-cloudfront-waf.md`
-  - コアコンセプト（キャッシュ仕組み、WAF ルール評価順序）
-  - よくある落とし穴・誤解
-  - 関連・発展サービス / セキュリティ課題と対策 / インフラ応用パターン（脱線3節）
+- ハンズオン詳細: `docs/learning/phase5/handson.md` / `handson.html`
+- 設計書: `docs/superpowers/specs/2026-05-31-aws-phase-sandboxes-design.md`（Phase 5 節: 行 4799〜5789）
+- プレビュー教材: `docs/learning/phase5/preview-cloudfront-waf.md`（キャッシュ仕組み・WAF ルール評価順序・よくある落とし穴）

@@ -6,6 +6,7 @@ SNS
 
 ## 教材
 
+- [handson.md](handson.md) — Phase 10 ハンズオン — SNS sandbox
 - [preview-sns.md](preview-sns.md) — Phase 10 プレビュー教材: SNS — Pub/Sub ファンアウト通知
 
 ## ハンズオン — 実 AWS sandbox
@@ -17,5 +18,7 @@ SNS
 3. `make sandbox-load-phase10` — topic に publish（属性付きでフィルタを試す）
 4. `make sandbox-watch-phase10` — 発行 / 配信 / 失敗数、フィルタポリシーの効き（反映 数分）
 5. `make sandbox-down-phase10` — terraform destroy（課金停止）
+
+詳しい手順・期待出力・観察チェックリスト・トラブルシュート → [handson.html](handson.html) ／ [handson.md](handson.md)
 
 
