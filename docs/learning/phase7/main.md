@@ -6,8 +6,8 @@ EventBridge
 
 ## 教材
 
-- [handson.md](handson.md) — Phase 7 ハンズオン — EventBridge sandbox
-- [preview-eventbridge.md](preview-eventbridge.md) — Phase 7 プレビュー教材: EventBridge — スケジュール & イベントバス
+- [Phase 7 ハンズオン — EventBridge sandbox](handson.md)
+- [Phase 7 プレビュー教材: EventBridge — スケジュール & イベントバス](preview-eventbridge.md)
 
 ## ハンズオン — 実 AWS sandbox
 

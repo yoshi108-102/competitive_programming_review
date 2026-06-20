@@ -33,7 +33,7 @@
 **参考**:
 - [Lambda Proxy Integration - AWS Docs](https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html)
 
-**関連ノート**: [phase1/02-lambda-proxy-integration-and-cors.md](phase1/02-lambda-proxy-integration-and-cors.md) — A. Lambda Proxy Integration の返り値形
+**関連ノート**: [phase1/task2/02-lambda-proxy-integration-and-cors.md](phase1/task2/02-lambda-proxy-integration-and-cors.md) — A. Lambda Proxy Integration の返り値形
 
 ---
 

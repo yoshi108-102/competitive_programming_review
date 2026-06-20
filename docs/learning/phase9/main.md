@@ -6,8 +6,8 @@ X-Ray
 
 ## 教材
 
-- [handson.md](handson.md) — Phase 9 ハンズオン — X-Ray sandbox
-- [preview-xray.md](preview-xray.md) — Phase 9 プレビュー教材: X-Ray — 分散トレースを読む
+- [Phase 9 ハンズオン — X-Ray sandbox](handson.md)
+- [Phase 9 プレビュー教材: X-Ray — 分散トレースを読む](preview-xray.md)
 
 ## ハンズオン — 実 AWS sandbox
 

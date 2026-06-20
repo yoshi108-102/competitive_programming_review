@@ -6,8 +6,8 @@ CloudFront / WAF
 
 ## 教材
 
-- [handson.md](handson.md) — Phase 5 ハンズオン — CloudFront + WAF sandbox
-- [preview-cloudfront-waf.md](preview-cloudfront-waf.md) — Phase 5 プレビュー教材: CloudFront + WAF — エッジ配信とファイアウォール
+- [Phase 5 ハンズオン — CloudFront + WAF sandbox](handson.md)
+- [Phase 5 プレビュー教材: CloudFront + WAF — エッジ配信とファイアウォール](preview-cloudfront-waf.md)
 
 ## ハンズオン — 実 AWS sandbox
 

@@ -6,8 +6,8 @@ SNS
 
 ## 教材
 
-- [handson.md](handson.md) — Phase 10 ハンズオン — SNS sandbox
-- [preview-sns.md](preview-sns.md) — Phase 10 プレビュー教材: SNS — Pub/Sub ファンアウト通知
+- [Phase 10 ハンズオン — SNS sandbox](handson.md)
+- [Phase 10 プレビュー教材: SNS — Pub/Sub ファンアウト通知](preview-sns.md)
 
 ## ハンズオン — 実 AWS sandbox
 

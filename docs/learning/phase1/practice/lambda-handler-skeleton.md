@@ -198,7 +198,7 @@ def lambda_handler(event, context):
 ## 関連
 
 - 議論・Q&A: （`lesson` 中に発生したら `reference/` 配下にリンクが追加されます）
-- 関連教材: [Task 3 / 01 - Lambda Proxy Integration](../02-lambda-proxy-integration-and-cors.md), [Task 3 / 03 - shared/response.py 設計](shared-response-helper-design.md), [Task 4 - shared/db.py](../03-boto3-resource-vs-client.md)
+- 関連教材: [Task 3 / 01 - Lambda Proxy Integration](../task2/02-lambda-proxy-integration-and-cors.md), [Task 3 / 03 - shared/response.py 設計](shared-response-helper-design.md), [Task 4 - shared/db.py](../task2/03-boto3-resource-vs-client.md)
 
 ---
 

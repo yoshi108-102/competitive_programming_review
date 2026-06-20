@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 1 / Task 1 — 基礎（DynamoDB / Terraform / IAM）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--accent:#2cb696;--ink:#202124;--muted:#6b6f76;--line:#e8e8e6;--bg:#fff;--soft:#f7f7f5}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.9;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.topbar{border-bottom:1px solid var(--line)}
+.topbar .in{max-width:760px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;gap:10px;font-size:14px;color:var(--ink)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--accent);display:inline-block}
+.back{margin-left:auto;font-size:13px}
+.wrap{max-width:760px;margin:0 auto;padding:30px 20px 80px}
+.eyebrow{color:var(--accent);font-weight:700;font-size:13px;letter-spacing:.08em}
+h1{font-size:27px;line-height:1.4;margin:8px 0 10px}
+.lead{color:var(--muted);font-size:15px;margin:0}
+.pills{margin-top:12px;display:flex;gap:7px;flex-wrap:wrap}
+.pill{display:inline-block;font-size:12px;color:var(--muted);background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:3px 11px}
+.card{border:1px solid var(--line);border-radius:12px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin:20px 0}
+.cta{display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid var(--accent)}
+.cta .t{font-weight:700;font-size:16px}.cta .s{color:var(--muted);font-size:13px;margin-top:2px}
+.btn{flex:0 0 auto;background:var(--accent);color:#fff;border-radius:8px;padding:10px 16px;font-weight:700;font-size:14px;white-space:nowrap}
+.btn:hover{opacity:.9;text-decoration:none}
+.sec{font-size:12px;letter-spacing:.08em;color:var(--muted);font-weight:700;margin:36px 0 8px}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:var(--soft);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+ul.mat{list-style:none;padding:0;margin:0;display:grid;gap:8px}
+ul.mat li{border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:14px}
+ul.mat li .d{color:var(--muted);font-size:12px;margin-top:2px}
+.foot{margin-top:48px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b>&nbsp;— Phase 1 / Task 1<a class="back" href="../index.html">← Phase 1 ルーターへ戻る</a></div></div>
+<div class="wrap">
+  <p class="eyebrow">PHASE 1 / TASK 1</p>
+  <h1>基礎 — DynamoDB / Terraform / IAM</h1>
+  <p class="lead">DynamoDB キー設計、Terraform 基礎、IAM、Bootstrap、設計原則（完了・採点済み）</p>
+  <div class="pills"><span class="pill">📖 教材 9 本</span><span class="pill">🔎 reference 6 本</span><span class="pill">✅ 完了・採点済み</span></div>
+
+  <a class="card cta" href="../index.html">
+    <div><div class="t">← Phase 1 ルーター</div><div class="s">他のトピック・テスト UI・実 AWS ハンズオンへの入口</div></div>
+    <span class="btn">戻る →</span>
+  </a>
+
+  <p class="sec">教材</p>
+  <ul class="mat">
+    <li><a href="./01-dynamodb-keys.html">DynamoDB キー設計</a><a href="./01-dynamodb-keys.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./02-terraform-code-walkthrough.html">Terraform 既存コード解説</a><a href="./02-terraform-code-walkthrough.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./03-module-design-patterns.html">Terraform モジュール分割の設計パターン</a><a href="./03-module-design-patterns.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./04-dynamodb-item-design.html">DynamoDB のアイテム設計（スキーマレスの制約と自由度）</a><a href="./04-dynamodb-item-design.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./05-user-id-identity.html">ユーザー ID の正体（Cognito sub vs AtCoder handle）</a><a href="./05-user-id-identity.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./06-dynamodb-module-implementation.html">DynamoDB モジュール実装の設計判断ログ</a><a href="./06-dynamodb-module-implementation.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./07-terraform-bootstrap.html">Terraform Bootstrap の鶏と卵問題</a><a href="./07-terraform-bootstrap.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./08-terraform-state-locking.html">Terraform の状態ロック機構</a><a href="./08-terraform-state-locking.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./09-dynamodb-as-hashtable.html">DynamoDB = 分散ハッシュテーブルという視点</a><a href="./09-dynamodb-as-hashtable.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+  </ul>
+
+  <p class="sec">reference（深掘り）</p>
+  <ul class="mat">
+    <li><a href="./reference/aws-authentication.html">AWS 認証のベストプラクティス（2026 年現在）</a><a href="./reference/aws-authentication.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./reference/dynamo-paper-dht.html">Dynamo 論文と分散ハッシュテーブル（DHT）の内部実装</a><a href="./reference/dynamo-paper-dht.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./reference/dynamodb-keys-vs-rdb.html">DynamoDB キー設計 vs RDB — 比較リファレンス</a><a href="./reference/dynamodb-keys-vs-rdb.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./reference/iam-overview.html">AWS IAM（Identity and Access Management）概要</a><a href="./reference/iam-overview.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./reference/terraform-basics.html">Terraform 基礎</a><a href="./reference/terraform-basics.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+    <li><a href="./reference/terraform-defaults-vs-python-defaults.html">Terraform variable の <code>default</code> と Python 関数 default 引数の違い</a><a href="./reference/terraform-defaults-vs-python-defaults.md" style="font-size:12px;color:var(--muted);margin-left:8px">md</a><div class="d">note 風 HTML 教材（Markdown twin）</div></li>
+  </ul>
+
+  <div class="foot">Markdown 目次は <a href="./main.md">main.md</a> ／ Phase ルーターは <a href="../index.html">../index.html</a><br>これは学習用ページです。実 AWS の <code>apply</code> / <code>destroy</code> はご自身で実行してください（Claude は実行しません）。</div>
+</div>
+</body>
+</html>

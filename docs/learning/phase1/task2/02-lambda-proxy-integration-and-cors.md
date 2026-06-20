@@ -544,13 +544,13 @@ iframe は「ページ内ブラウザ」で、独立した `window` / `document`
 
 ## 関連
 
-- 前のトピック: [practice/pytest-fixtures-for-aws.md](practice/pytest-fixtures-for-aws.md) — Lambda テスト基盤
-- 議論・Q&A: [practice/reference/cors-error-server-side-visibility.md](practice/reference/cors-error-server-side-visibility.md) — CORS エラー時にサーバ（CloudWatch）に届いているのか
-- 議論・Q&A: [practice/reference/cors-only-blocks-reads-not-writes.md](practice/reference/cors-only-blocks-reads-not-writes.md) — CORS は「読み取り」しか防がない / CSRF は別の層
-- 議論・Q&A: [practice/reference/samesite-cookie-and-csrf-defense.md](practice/reference/samesite-cookie-and-csrf-defense.md) — SameSite Cookie の Lax デフォルト化 / Site vs Origin / JWT 方式との比較
-- 議論・Q&A: [practice/reference/why-cors-exists-three-actors.md](practice/reference/why-cors-exists-three-actors.md) — 「自分で許可して自分で防ぐ」ではない / サーバ・ブラウザ・ユーザーの3者構造
-- 議論・Q&A: [practice/reference/cors-rules-are-universal-not-per-site.md](practice/reference/cors-rules-are-universal-not-per-site.md) — Preflight = ハンドシグナル / ブラウザのCORSルールはサイト独立のホワイトリスト方式
-- 議論・Q&A: [practice/reference/preflight-bypass-via-simple-post.md](practice/reference/preflight-bypass-via-simple-post.md) — シンプル POST で preflight を回避する設計のトレードオフ / 主防御は別の層
+- 前のトピック: [practice/pytest-fixtures-for-aws.md](../practice/pytest-fixtures-for-aws.md) — Lambda テスト基盤
+- 議論・Q&A: [practice/reference/cors-error-server-side-visibility.md](../practice/reference/cors-error-server-side-visibility.md) — CORS エラー時にサーバ（CloudWatch）に届いているのか
+- 議論・Q&A: [practice/reference/cors-only-blocks-reads-not-writes.md](../practice/reference/cors-only-blocks-reads-not-writes.md) — CORS は「読み取り」しか防がない / CSRF は別の層
+- 議論・Q&A: [practice/reference/samesite-cookie-and-csrf-defense.md](../practice/reference/samesite-cookie-and-csrf-defense.md) — SameSite Cookie の Lax デフォルト化 / Site vs Origin / JWT 方式との比較
+- 議論・Q&A: [practice/reference/why-cors-exists-three-actors.md](../practice/reference/why-cors-exists-three-actors.md) — 「自分で許可して自分で防ぐ」ではない / サーバ・ブラウザ・ユーザーの3者構造
+- 議論・Q&A: [practice/reference/cors-rules-are-universal-not-per-site.md](../practice/reference/cors-rules-are-universal-not-per-site.md) — Preflight = ハンドシグナル / ブラウザのCORSルールはサイト独立のホワイトリスト方式
+- 議論・Q&A: [practice/reference/preflight-bypass-via-simple-post.md](../practice/reference/preflight-bypass-via-simple-post.md) — シンプル POST で preflight を回避する設計のトレードオフ / 主防御は別の層
 - 次のトピック候補（未作成）: `json.dumps(..., default=str)` の役割（DynamoDB の Decimal / datetime 対応）、`{ data, meta }` 統一形式の設計思想
 - 関連する将来 Task: Task 9 (Lambda モジュール) で API Gateway 統合設定、Phase 5 (CloudFront/WAF) でオリジン限定と CSP
 
@@ -593,7 +593,7 @@ Lambda内部で加工されるため、HTTPレスポンスの形に加工され�
 **参考**:
 - [Cross-Origin Resource Sharing (CORS) - MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS)
 
-**関連ノート**: [practice/reference/cors-error-server-side-visibility.md](practice/reference/cors-error-server-side-visibility.md)
+**関連ノート**: [practice/reference/cors-error-server-side-visibility.md](../practice/reference/cors-error-server-side-visibility.md)
 
 **回答**:
 矛盾していない、CORSエラーはあくまでブラウザ側の読み取り時に発生するエラーにすぎないので、DB側での処理には影響しない。リクエストが正しければ問題なくDBの処理が走る。なお、プリフライトリクエストの時点でシャットアウトされた場合はリクエスト自体が届かない場合もある。
@@ -606,7 +606,7 @@ Lambda内部で加工されるため、HTTPレスポンスの形に加工され�
 **参考**:
 - [Origin header - MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Origin)
 
-**関連ノート**: [practice/reference/why-cors-exists-three-actors.md](practice/reference/why-cors-exists-three-actors.md)
+**関連ノート**: [practice/reference/why-cors-exists-three-actors.md](../practice/reference/why-cors-exists-three-actors.md)
 
 **回答**:
 curlなどを使う場合にはOriginの値を任意に偽装することが可能であるため、脆弱性が高い構成になってしまうため。
@@ -622,7 +622,7 @@ curlなどを使う場合にはOriginの値を任意に偽装することが可�
 - [Cross-Site Request Forgery Prevention Cheat Sheet - OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)
 - [SameSite cookies - MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite)
 
-**関連ノート**: [practice/reference/cors-only-blocks-reads-not-writes.md](practice/reference/cors-only-blocks-reads-not-writes.md), [practice/reference/samesite-cookie-and-csrf-defense.md](practice/reference/samesite-cookie-and-csrf-defense.md)
+**関連ノート**: [practice/reference/cors-only-blocks-reads-not-writes.md](../practice/reference/cors-only-blocks-reads-not-writes.md), [practice/reference/samesite-cookie-and-csrf-defense.md](../practice/reference/samesite-cookie-and-csrf-defense.md)
 
 **回答**:
 

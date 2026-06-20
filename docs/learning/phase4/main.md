@@ -6,8 +6,8 @@ CloudWatch
 
 ## 教材
 
-- [handson.md](handson.md) — Phase 4 ハンズオン — CloudWatch sandbox
-- [preview-cloudwatch.md](preview-cloudwatch.md) — Phase 4 プレビュー教材: CloudWatch — メトリクス・ログ・アラーム
+- [Phase 4 ハンズオン — CloudWatch sandbox](handson.md)
+- [Phase 4 プレビュー教材: CloudWatch — メトリクス・ログ・アラーム](preview-cloudwatch.md)
 
 ## ハンズオン — 実 AWS sandbox
 

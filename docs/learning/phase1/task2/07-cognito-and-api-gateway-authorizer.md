@@ -177,5 +177,5 @@ aws cognito-idp admin-set-user-password \
 
 ## 関連
 
-- 実装: [practice/frontend-api-client.md](practice/frontend-api-client.md) (Amplify v6 で fetchAuthSession から idToken 取得), [practice/terraform-apply-walkthrough.md](practice/terraform-apply-walkthrough.md) (admin-create-user の手順)
+- 実装: [practice/frontend-api-client.md](../practice/frontend-api-client.md) (Amplify v6 で fetchAuthSession から idToken 取得), [practice/terraform-apply-walkthrough.md](../practice/terraform-apply-walkthrough.md) (admin-create-user の手順)
 - 関連トピック: [02-lambda-proxy-integration-and-cors.md](02-lambda-proxy-integration-and-cors.md) (`Authorization: Bearer` × CORS preflight の関係), [06-api-gateway-rest-api-structure.md](06-api-gateway-rest-api-structure.md) (Authorizer の REST API への組み込み)

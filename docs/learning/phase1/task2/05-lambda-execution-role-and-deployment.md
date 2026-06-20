@@ -177,7 +177,7 @@ uv pip install --target ./build -r build/requirements.txt
 ```
 
 その後アプリコードを `cp -r shared lambdas ./build/` でコピーして、`build/` を ZIP 化。
-詳細は `Makefile` の `build` ターゲット参照（[practice/terraform-apply-walkthrough.md](practice/terraform-apply-walkthrough.md) も）。
+詳細は `Makefile` の `build` ターゲット参照（[practice/terraform-apply-walkthrough.md](../practice/terraform-apply-walkthrough.md) も）。
 
 ## 7. Boto3 同梱の判断
 
@@ -214,6 +214,6 @@ pip install --platform manylinux2014_x86_64 --only-binary=:all: --target ./build
 
 ## 関連
 
-- 実装パターン: [practice/lambda-handler-skeleton.md](practice/lambda-handler-skeleton.md)
-- デプロイ手順: [practice/terraform-apply-walkthrough.md](practice/terraform-apply-walkthrough.md)
+- 実装パターン: [practice/lambda-handler-skeleton.md](../practice/lambda-handler-skeleton.md)
+- デプロイ手順: [practice/terraform-apply-walkthrough.md](../practice/terraform-apply-walkthrough.md)
 - 関連トピック: [03-boto3-resource-vs-client.md](03-boto3-resource-vs-client.md), [06-api-gateway-rest-api-structure.md](06-api-gateway-rest-api-structure.md)

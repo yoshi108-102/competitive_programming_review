@@ -37,7 +37,7 @@ ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;lef
 .foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style>
 </head>
 <body>
-<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 教材 · <a href="index.html">← ルーター</a></div></div>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 教材 · <a href="../index.html">← ルーター</a></div></div>
 <main class="wrap">
 
 <h1>Lambda の HTTP レスポンス形式と CORS / SOP の関係</h1>
@@ -752,13 +752,13 @@ bank.com が「ログイン済みユーザーからの送金」と誤認</code><
 <h2>関連</h2>
 
 <ul>
-  <li>前のトピック: <a href="practice/pytest-fixtures-for-aws.md">practice/pytest-fixtures-for-aws.md</a> — Lambda テスト基盤</li>
-  <li>議論・Q&amp;A: <a href="practice/reference/cors-error-server-side-visibility.md">practice/reference/cors-error-server-side-visibility.md</a> — CORS エラー時にサーバ（CloudWatch）に届いているのか</li>
-  <li>議論・Q&amp;A: <a href="practice/reference/cors-only-blocks-reads-not-writes.md">practice/reference/cors-only-blocks-reads-not-writes.md</a> — CORS は「読み取り」しか防がない / CSRF は別の層</li>
-  <li>議論・Q&amp;A: <a href="practice/reference/samesite-cookie-and-csrf-defense.md">practice/reference/samesite-cookie-and-csrf-defense.md</a> — SameSite Cookie の Lax デフォルト化 / Site vs Origin / JWT 方式との比較</li>
-  <li>議論・Q&amp;A: <a href="practice/reference/why-cors-exists-three-actors.md">practice/reference/why-cors-exists-three-actors.md</a> — 「自分で許可して自分で防ぐ」ではない / サーバ・ブラウザ・ユーザーの3者構造</li>
-  <li>議論・Q&amp;A: <a href="practice/reference/cors-rules-are-universal-not-per-site.md">practice/reference/cors-rules-are-universal-not-per-site.md</a> — Preflight = ハンドシグナル / ブラウザのCORSルールはサイト独立のホワイトリスト方式</li>
-  <li>議論・Q&amp;A: <a href="practice/reference/preflight-bypass-via-simple-post.md">practice/reference/preflight-bypass-via-simple-post.md</a> — シンプル POST で preflight を回避する設計のトレードオフ / 主防御は別の層</li>
+  <li>前のトピック: <a href="../practice/pytest-fixtures-for-aws.md">practice/pytest-fixtures-for-aws.md</a> — Lambda テスト基盤</li>
+  <li>議論・Q&amp;A: <a href="../practice/reference/cors-error-server-side-visibility.md">practice/reference/cors-error-server-side-visibility.md</a> — CORS エラー時にサーバ（CloudWatch）に届いているのか</li>
+  <li>議論・Q&amp;A: <a href="../practice/reference/cors-only-blocks-reads-not-writes.md">practice/reference/cors-only-blocks-reads-not-writes.md</a> — CORS は「読み取り」しか防がない / CSRF は別の層</li>
+  <li>議論・Q&amp;A: <a href="../practice/reference/samesite-cookie-and-csrf-defense.md">practice/reference/samesite-cookie-and-csrf-defense.md</a> — SameSite Cookie の Lax デフォルト化 / Site vs Origin / JWT 方式との比較</li>
+  <li>議論・Q&amp;A: <a href="../practice/reference/why-cors-exists-three-actors.md">practice/reference/why-cors-exists-three-actors.md</a> — 「自分で許可して自分で防ぐ」ではない / サーバ・ブラウザ・ユーザーの3者構造</li>
+  <li>議論・Q&amp;A: <a href="../practice/reference/cors-rules-are-universal-not-per-site.md">practice/reference/cors-rules-are-universal-not-per-site.md</a> — Preflight = ハンドシグナル / ブラウザのCORSルールはサイト独立のホワイトリスト方式</li>
+  <li>議論・Q&amp;A: <a href="../practice/reference/preflight-bypass-via-simple-post.md">practice/reference/preflight-bypass-via-simple-post.md</a> — シンプル POST で preflight を回避する設計のトレードオフ / 主防御は別の層</li>
   <li>次のトピック候補（未作成）: <code>json.dumps(..., default=str)</code> の役割（DynamoDB の Decimal / datetime 対応）、<code>{ data, meta }</code> 統一形式の設計思想</li>
   <li>関連する将来 Task: Task 9 (Lambda モジュール) で API Gateway 統合設定、Phase 5 (CloudFront/WAF) でオリジン限定と CSP</li>
 </ul>
@@ -805,7 +805,7 @@ bank.com が「ログイン済みユーザーからの送金」と誤認</code><
   <li><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS">Cross-Origin Resource Sharing (CORS) - MDN Web Docs</a></li>
 </ul>
 
-<p><strong>関連ノート</strong>: <a href="practice/reference/cors-error-server-side-visibility.md">practice/reference/cors-error-server-side-visibility.md</a></p>
+<p><strong>関連ノート</strong>: <a href="../practice/reference/cors-error-server-side-visibility.md">practice/reference/cors-error-server-side-visibility.md</a></p>
 
 <p><strong>回答</strong>:<br>
 矛盾していない、CORSエラーはあくまでブラウザ側の読み取り時に発生するエラーにすぎないので、DB側での処理には影響しない。リクエストが正しければ問題なくDBの処理が走る。なお、プリフライトリクエストの時点でシャットアウトされた場合はリクエスト自体が届かない場合もある。</p>
@@ -821,7 +821,7 @@ bank.com が「ログイン済みユーザーからの送金」と誤認</code><
   <li><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Origin">Origin header - MDN Web Docs</a></li>
 </ul>
 
-<p><strong>関連ノート</strong>: <a href="practice/reference/why-cors-exists-three-actors.md">practice/reference/why-cors-exists-three-actors.md</a></p>
+<p><strong>関連ノート</strong>: <a href="../practice/reference/why-cors-exists-three-actors.md">practice/reference/why-cors-exists-three-actors.md</a></p>
 
 <p><strong>回答</strong>:<br>
 curlなどを使う場合にはOriginの値を任意に偽装することが可能であるため、脆弱性が高い構成になってしまうため。</p>
@@ -840,7 +840,7 @@ curlなどを使う場合にはOriginの値を任意に偽装することが可�
   <li><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite">SameSite cookies - MDN Web Docs</a></li>
 </ul>
 
-<p><strong>関連ノート</strong>: <a href="practice/reference/cors-only-blocks-reads-not-writes.md">practice/reference/cors-only-blocks-reads-not-writes.md</a>, <a href="practice/reference/samesite-cookie-and-csrf-defense.md">practice/reference/samesite-cookie-and-csrf-defense.md</a></p>
+<p><strong>関連ノート</strong>: <a href="../practice/reference/cors-only-blocks-reads-not-writes.md">practice/reference/cors-only-blocks-reads-not-writes.md</a>, <a href="../practice/reference/samesite-cookie-and-csrf-defense.md">practice/reference/samesite-cookie-and-csrf-defense.md</a></p>
 
 <p><strong>回答</strong>:</p>
 
@@ -874,7 +874,7 @@ curlなどを使う場合にはOriginの値を任意に偽装することが可�
 </ol>
 <p class="note warn">⚠ phase1 は本番スタックを観測するダッシュボードのみ作成（本番アプリは別途デプロイ済みが前提）。</p>
 </section>
-<div class="foot">← <a href="index.html">Phase 1 ルーター</a> ／ <a href="main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+<div class="foot">← <a href="../index.html">Phase 1 ルーター</a> ／ <a href="../main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
 </main>
 </body>
 </html>

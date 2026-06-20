@@ -37,7 +37,7 @@ ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;lef
 .foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px;line-height:1.8}</style>
 </head>
 <body>
-<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 教材 · <a href="index.html">← ルーター</a></div></div>
+<div class="topbar"><div class="in"><span class="dot"></span><b>AWS 学習</b> · Phase 1 教材 · <a href="../index.html">← ルーター</a></div></div>
 <main class="wrap">
 
 <h1>05. Lambda 実行ロールとデプロイパッケージ</h1>
@@ -212,7 +212,7 @@ uv pip install --target ./build -r build/requirements.txt
 # → ./build/{boto3,botocore,requests,...}/  が生まれる</code></pre>
 
 <p>その後アプリコードを <code>cp -r shared lambdas ./build/</code> でコピーして、<code>build/</code> を ZIP 化。
-詳細は <code>Makefile</code> の <code>build</code> ターゲット参照（<a href="practice/terraform-apply-walkthrough.md">practice/terraform-apply-walkthrough.md</a> も）。</p>
+詳細は <code>Makefile</code> の <code>build</code> ターゲット参照（<a href="../practice/terraform-apply-walkthrough.md">practice/terraform-apply-walkthrough.md</a> も）。</p>
 
 <h2>7. Boto3 同梱の判断</h2>
 
@@ -267,8 +267,8 @@ uv pip install --target ./build -r build/requirements.txt
 <h2>関連</h2>
 
 <ul>
-  <li>実装パターン: <a href="practice/lambda-handler-skeleton.md">practice/lambda-handler-skeleton.md</a></li>
-  <li>デプロイ手順: <a href="practice/terraform-apply-walkthrough.md">practice/terraform-apply-walkthrough.md</a></li>
+  <li>実装パターン: <a href="../practice/lambda-handler-skeleton.md">practice/lambda-handler-skeleton.md</a></li>
+  <li>デプロイ手順: <a href="../practice/terraform-apply-walkthrough.md">practice/terraform-apply-walkthrough.md</a></li>
   <li>関連トピック: <a href="03-boto3-resource-vs-client.md">03-boto3-resource-vs-client.md</a>, <a href="06-api-gateway-rest-api-structure.md">06-api-gateway-rest-api-structure.md</a></li>
 </ul>
 
@@ -284,7 +284,7 @@ uv pip install --target ./build -r build/requirements.txt
 </ol>
 <p class="note warn">⚠ phase1 は本番スタックを観測するダッシュボードのみ作成（本番アプリは別途デプロイ済みが前提）。</p>
 </section>
-<div class="foot">← <a href="index.html">Phase 1 ルーター</a> ／ <a href="main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
+<div class="foot">← <a href="../index.html">Phase 1 ルーター</a> ／ <a href="../main.md">Markdown 目次</a><br>これは学習用ページです。実 AWS の apply/destroy はご自身で実行してください。</div>
 </main>
 </body>
 </html>

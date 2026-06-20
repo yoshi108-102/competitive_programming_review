@@ -6,8 +6,8 @@ SQS
 
 ## 教材
 
-- [handson.md](handson.md) — Phase 3 ハンズオン — SQS sandbox
-- [preview-sqs.md](preview-sqs.md) — Phase 3 プレビュー教材: SQS
+- [Phase 3 ハンズオン — SQS sandbox](handson.md)
+- [Phase 3 プレビュー教材: SQS](preview-sqs.md)
 
 ## ハンズオン — 実 AWS sandbox
 

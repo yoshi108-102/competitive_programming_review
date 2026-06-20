@@ -6,8 +6,8 @@ Step Functions
 
 ## 教材
 
-- [handson.md](handson.md) — Phase 8 ハンズオン — Step Functions sandbox
-- [preview-step-functions.md](preview-step-functions.md) — Phase 8 プレビュー教材: Step Functions
+- [Phase 8 ハンズオン — Step Functions sandbox](handson.md)
+- [Phase 8 プレビュー教材: Step Functions](preview-step-functions.md)
 
 ## ハンズオン — 実 AWS sandbox
 

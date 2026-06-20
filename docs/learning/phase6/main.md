@@ -6,8 +6,8 @@ Bedrock (Claude)
 
 ## 教材
 
-- [handson.md](handson.md) — Phase 6 ハンズオン — Bedrock (Claude) sandbox
-- [preview-bedrock.md](preview-bedrock.md) — Phase 6 プレビュー教材: Bedrock — Claude を呼ぶ Messages API 体験
+- [Phase 6 ハンズオン — Bedrock (Claude) sandbox](handson.md)
+- [Phase 6 プレビュー教材: Bedrock — Claude を呼ぶ Messages API 体験](preview-bedrock.md)
 
 ## ハンズオン — 実 AWS sandbox
 

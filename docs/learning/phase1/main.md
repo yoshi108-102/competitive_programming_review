@@ -11,12 +11,12 @@ Phase 1 全体は 18 の実装 Task に分かれているが、**学習ノート
 | # | トピック | 内容 |
 |---|---|---|
 | 1 | [task1/](task1/) | DynamoDB キー設計、Terraform 基礎、IAM、Bootstrap、設計原則（**完了・採点済み**） |
-| 2 | [Lambda Proxy Integration と CORS](02-lambda-proxy-integration-and-cors.md) | Lambda の戻り値三要素、`body=str` 制約、CORS / SOP / Clickjacking / CSRF |
-| 3 | [Boto3 Resource API vs Client API](03-boto3-resource-vs-client.md) | 2 系統の SDK、Resource はメンテナンスモード、スレッドセーフティ |
-| 4 | [DynamoDB Decimal とページネーション](04-dynamodb-decimal-and-pagination.md) | Number = Decimal の理由、1MB 制限、LastEvaluatedKey、Boto3 Paginators |
-| 5 | [Lambda 実行ロールとデプロイパッケージ](05-lambda-execution-role-and-deployment.md) | IAM Trust/Permission、CloudWatch Logs、aws_lambda_permission、ZIP の中身 |
-| 6 | [API Gateway REST API 構造](06-api-gateway-rest-api-structure.md) | Resource/Method/Integration/Deployment/Stage、AWS_PROXY、CORS preflight |
-| 7 | [Cognito と API Gateway Authorizer](07-cognito-and-api-gateway-authorizer.md) | User Pool/Client、JWT (idToken vs accessToken)、Cognito Authorizer 連携 |
+| 2 | [Lambda Proxy Integration と CORS](task2/02-lambda-proxy-integration-and-cors.md) | Lambda の戻り値三要素、`body=str` 制約、CORS / SOP / Clickjacking / CSRF |
+| 3 | [Boto3 Resource API vs Client API](task2/03-boto3-resource-vs-client.md) | 2 系統の SDK、Resource はメンテナンスモード、スレッドセーフティ |
+| 4 | [DynamoDB Decimal とページネーション](task2/04-dynamodb-decimal-and-pagination.md) | Number = Decimal の理由、1MB 制限、LastEvaluatedKey、Boto3 Paginators |
+| 5 | [Lambda 実行ロールとデプロイパッケージ](task2/05-lambda-execution-role-and-deployment.md) | IAM Trust/Permission、CloudWatch Logs、aws_lambda_permission、ZIP の中身 |
+| 6 | [API Gateway REST API 構造](task2/06-api-gateway-rest-api-structure.md) | Resource/Method/Integration/Deployment/Stage、AWS_PROXY、CORS preflight |
+| 7 | [Cognito と API Gateway Authorizer](task2/07-cognito-and-api-gateway-authorizer.md) | User Pool/Client、JWT (idToken vs accessToken)、Cognito Authorizer 連携 |
 
 ## 実装 Q&A・参考メモ
 
@@ -109,7 +109,7 @@ MVP（実 AWS デプロイ + フロント結合）が動いた後に `/learning-
 - [Boto3 DynamoDB customization](https://docs.aws.amazon.com/boto3/latest/reference/customizations/dynamodb.html)
 - [Python `json.dumps`](https://docs.python.org/3/library/json.html#json.dumps)
 
-**関連ノート**: [04-dynamodb-decimal-and-pagination.md](04-dynamodb-decimal-and-pagination.md), [practice/json-dumps-default-str.md](practice/json-dumps-default-str.md)
+**関連ノート**: [04-dynamodb-decimal-and-pagination.md](task2/04-dynamodb-decimal-and-pagination.md), [practice/json-dumps-default-str.md](practice/json-dumps-default-str.md)
 
 **回答**:
 
@@ -173,7 +173,7 @@ Topic 2 のクイズで「わからない」だった論点の再出題。
 - [Simple requests - MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS#simple_requests)
 - [CSRF Prevention - OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)
 
-**関連ノート**: [02-lambda-proxy-integration-and-cors.md](02-lambda-proxy-integration-and-cors.md), [practice/reference/cors-only-blocks-reads-not-writes.md](practice/reference/cors-only-blocks-reads-not-writes.md), [practice/reference/preflight-bypass-via-simple-post.md](practice/reference/preflight-bypass-via-simple-post.md)
+**関連ノート**: [02-lambda-proxy-integration-and-cors.md](task2/02-lambda-proxy-integration-and-cors.md), [practice/reference/cors-only-blocks-reads-not-writes.md](practice/reference/cors-only-blocks-reads-not-writes.md), [practice/reference/preflight-bypass-via-simple-post.md](practice/reference/preflight-bypass-via-simple-post.md)
 
 **回答**:
 

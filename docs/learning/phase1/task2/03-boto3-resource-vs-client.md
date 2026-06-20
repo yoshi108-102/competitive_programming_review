@@ -225,7 +225,7 @@ Resource 版は **Python の dict をそのまま渡せる**点と、**Decimal �
 
 - 議論・Q&A: （`lesson` 中に発生したら `reference/` 配下にリンクが追加されます）
 - 次の教材: [02-dynamodb-pagination-and-paginators.md](02-dynamodb-pagination-and-paginators.md) — DynamoDB の 1 MB 制限、LastEvaluatedKey、Boto3 Paginators
-- 関連 Task: [Phase 1 / Task 3 / 02 (Decimal 問題)](practice/json-dumps-default-str.md)
+- 関連 Task: [Phase 1 / Task 3 / 02 (Decimal 問題)](../practice/json-dumps-default-str.md)
 
 ---
 

@@ -31,12 +31,12 @@ Phase 1 実装計画: `plans/phase1-mvp-implementation.md`
 学習ノートは AWS トピック単位に再構成済み (`docs/learning/phase1/`):
 
 - `task1/` — DynamoDB / Terraform / IAM の基礎（**完了・採点済み**）
-- `02-lambda-proxy-integration-and-cors.md` — Lambda 戻り値仕様 + CORS
-- `03-boto3-resource-vs-client.md` — Boto3 SDK
-- `04-dynamodb-decimal-and-pagination.md` — Decimal の素性 + 1MB / LastEvaluatedKey
-- `05-lambda-execution-role-and-deployment.md` — IAM 実行ロール + ZIP デプロイ
-- `06-api-gateway-rest-api-structure.md` — REST API + Authorizer + CORS preflight
-- `07-cognito-and-api-gateway-authorizer.md` — Cognito + JWT (idToken vs accessToken)
+- `task2/02-lambda-proxy-integration-and-cors.md` — Lambda 戻り値仕様 + CORS
+- `task2/03-boto3-resource-vs-client.md` — Boto3 SDK
+- `task2/04-dynamodb-decimal-and-pagination.md` — Decimal の素性 + 1MB / LastEvaluatedKey
+- `task2/05-lambda-execution-role-and-deployment.md` — IAM 実行ロール + ZIP デプロイ
+- `task2/06-api-gateway-rest-api-structure.md` — REST API + Authorizer + CORS preflight
+- `task2/07-cognito-and-api-gateway-authorizer.md` — Cognito + JWT (idToken vs accessToken)
 - `practice/` — 実装 Q&A、設計ノート、参考メモ
 - `main.md` — 目次 + Task 2+3 まとめクイズ（採点保留）
 
@@ -80,7 +80,7 @@ make destroy    # 課金停止
 
 ### 実物の知見（メモ）
 
-- **Boto3 は float を拒否し Decimal を要求する**: AtCoder Problems API レスポンスの `point` は float なので `_floats_to_decimal()` ヘルパで変換。教材 `04-dynamodb-decimal-and-pagination.md` の伏線回収。
+- **Boto3 は float を拒否し Decimal を要求する**: AtCoder Problems API レスポンスの `point` は float なので `_floats_to_decimal()` ヘルパで変換。教材 `task2/04-dynamodb-decimal-and-pagination.md` の伏線回収。
 
 ### Task 1 完了（2026-04-18 採点済み）
 
